@@ -1,0 +1,173 @@
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { listTemplates } from "@/lib/templates.functions";
+import { createProject, createUploadUrl } from "@/lib/projects.functions";
+import { startFullPipeline } from "@/lib/jobs.functions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/_authenticated/projects/new")({
+  component: NewProject,
+  head: () => ({ meta: [{ title: "New project — OncoVideo" }] }),
+});
+
+function NewProject() {
+  const router = useRouter();
+  const listFn = useServerFn(listTemplates);
+  const createFn = useServerFn(createProject);
+  const uploadFn = useServerFn(createUploadUrl);
+  const startFn = useServerFn(startFullPipeline);
+  const tpls = useQuery({ queryKey: ["templates"], queryFn: () => listFn() });
+
+  const [title, setTitle] = useState("");
+  const [topic, setTopic] = useState("");
+  const [tplId, setTplId] = useState<string>("");
+  const [file, setFile] = useState<File | null>(null);
+  const [overrides, setOverrides] = useState({
+    audience: "", brand_voice: "", visual_style: "",
+    target_platform: "YouTube", content_type: "Educational",
+    render_intent: "youtube_education", visual_density: "medium", retention_priority: "high",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const tpl = (tpls.data ?? []).find(t => t.id === tplId);
+
+  const onSubmit = async () => {
+    if (!title || !file || !tplId) return toast.error("Title, template and video are required.");
+    setBusy(true);
+    try {
+      const { path, token } = await uploadFn({ data: { filename: file.name } });
+      const { error: upErr } = await supabase.storage.from("videos").uploadToSignedUrl(path, token, file);
+      if (upErr) throw upErr;
+      const ctx = {
+        audience: overrides.audience || (tpl?.default_audience ?? null),
+        specialty: tpl?.specialty ?? null,
+        brand_voice: overrides.brand_voice || (tpl?.default_brand_voice ?? null),
+        target_platform: overrides.target_platform,
+        content_type: overrides.content_type,
+        visual_style: overrides.visual_style || (tpl?.default_visual_style ?? null),
+        scene_patterns: (tpl?.default_scene_patterns as string[]) ?? [],
+        infographic_types: (tpl?.default_infographic_types as string[]) ?? [],
+        broll_types: (tpl?.default_broll_types as string[]) ?? [],
+        thumbnail_style: (tpl?.default_thumbnail_style as Record<string, unknown>) ?? {},
+        render_intent: overrides.render_intent,
+        visual_density: overrides.visual_density,
+        retention_priority: overrides.retention_priority,
+      };
+      const { id } = await createFn({
+        data: {
+          title, topic, specialty_template_id: tplId,
+          video_path: path, duration_seconds: null, context: ctx,
+        },
+      });
+      await startFn({ data: { projectId: id } });
+      toast.success("Project created. Analysis started.");
+      router.navigate({ to: "/projects/$id", params: { id } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create project");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-10 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">New project</h1>
+        <p className="text-muted-foreground text-sm mt-1">Pick a specialty template, upload your video, and we'll handle the rest.</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Specialty template</CardTitle>
+          <CardDescription>Pre-fills audience, voice, visual style and asset patterns.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={tplId} onValueChange={setTplId}>
+            <SelectTrigger><SelectValue placeholder="Choose a template…" /></SelectTrigger>
+            <SelectContent>
+              {(tpls.data ?? []).map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.template_name}{t.is_builtin ? "" : " (custom)"}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {tpl && (
+            <div className="mt-3 text-xs text-muted-foreground space-y-1">
+              <div><b>Audience:</b> {tpl.default_audience}</div>
+              <div><b>Voice:</b> {tpl.default_brand_voice}</div>
+              <div><b>Visual style:</b> {tpl.default_visual_style}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Project details</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Oral cancer: signs you should never ignore" /></div>
+          <div><Label>Topic / brief</Label><Textarea value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What this video covers, the key message, and the call-to-action." /></div>
+          <div><Label>Video file</Label><Input type="file" accept="video/*,audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Knowledge overrides <span className="text-muted-foreground text-xs">(optional)</span></CardTitle>
+          <CardDescription>Override template defaults for this project only.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid sm:grid-cols-2 gap-3">
+          <div><Label>Audience</Label><Input value={overrides.audience} placeholder={tpl?.default_audience ?? ""} onChange={(e) => setOverrides({ ...overrides, audience: e.target.value })} /></div>
+          <div><Label>Brand voice</Label><Input value={overrides.brand_voice} placeholder={tpl?.default_brand_voice ?? ""} onChange={(e) => setOverrides({ ...overrides, brand_voice: e.target.value })} /></div>
+          <div><Label>Visual style</Label><Input value={overrides.visual_style} placeholder={tpl?.default_visual_style ?? ""} onChange={(e) => setOverrides({ ...overrides, visual_style: e.target.value })} /></div>
+          <div><Label>Target platform</Label><Input value={overrides.target_platform} onChange={(e) => setOverrides({ ...overrides, target_platform: e.target.value })} /></div>
+          <div><Label>Render intent</Label>
+            <Select value={overrides.render_intent} onValueChange={(v) => setOverrides({ ...overrides, render_intent: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="youtube_education">YouTube Education</SelectItem>
+                <SelectItem value="patient_education">Patient Education</SelectItem>
+                <SelectItem value="hospital_branding">Hospital Branding</SelectItem>
+                <SelectItem value="ted_talk">TED Talk Mode</SelectItem>
+                <SelectItem value="netflix_doc">Netflix Documentary</SelectItem>
+                <SelectItem value="maximum_retention">Maximum Retention</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Visual density</Label>
+            <Select value={overrides.visual_density} onValueChange={(v) => setOverrides({ ...overrides, visual_density: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Retention priority</Label>
+            <Select value={overrides.retention_priority} onValueChange={(v) => setOverrides({ ...overrides, retention_priority: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="maximum">Maximum</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button size="lg" onClick={onSubmit} disabled={busy} className="w-full">
+        {busy ? "Uploading…" : "Create project & start AI pipeline"}
+      </Button>
+    </div>
+  );
+}
