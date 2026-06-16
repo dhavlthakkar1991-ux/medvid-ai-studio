@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
@@ -13,10 +14,11 @@ export const startFullPipeline = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
-    // Fire-and-forget background trigger
-    const req = (globalThis as any).Request ? null : null;
-    const origin = process.env.SUPABASE_URL ? "" : "";
-    void fetch(`${origin}/api/jobs/run/${job.id}`, { method: "POST" }).catch(() => {});
+    // Fire the background runner. Build an absolute URL from the inbound request.
+    const req = getRequest();
+    const url = new URL(req!.url);
+    const runnerUrl = `${url.origin}/api/jobs/run/${job.id}`;
+    void fetch(runnerUrl, { method: "POST" }).catch(() => {});
     return { jobId: job.id };
   });
 
