@@ -7,6 +7,22 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    optimizeDeps: {
+      include: [
+        "@lovable.dev/cloud-auth-js",
+        "@radix-ui/react-label",
+        "@radix-ui/react-select",
+        "@radix-ui/react-slot",
+        "@radix-ui/react-tabs",
+        "@tanstack/history",
+        "@tanstack/router-core",
+        "@tanstack/router-core/ssr/client",
+        "@tanstack/router-core/ssr/server",
+        "zod",
+      ],
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
