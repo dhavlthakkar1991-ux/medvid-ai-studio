@@ -33,11 +33,11 @@ export function validateScenePlan(data: any): ValidationResult {
   const warns: string[] = [];
   items.forEach((s, i) => {
     const hasTitle = isStr(s?.title);
-    const hasObjective = isStr(s?.objective) || isStr(s?.prompt);
-    const hasNarration = isStr(s?.narration_text) || isStr(s?.prompt);
+    const hasObjective = isStr(s?.objective);
+    const hasNarration = isStr(s?.narration_text);
     if (!hasTitle) errs.push(`scene[${i}].title missing`);
-    if (!hasObjective) errs.push(`scene[${i}].objective missing`);
-    if (!hasNarration) warns.push(`scene[${i}].narration_text missing`);
+    if (!hasObjective) errs.push(`scene[${i}].objective required`);
+    if (!hasNarration) errs.push(`scene[${i}].narration_text required`);
     if (!isStr(s?.t) && !isNum(s?.start_seconds)) errs.push(`scene[${i}].time missing`);
   });
   return errs.length ? fail(errs, warns) : ok(warns);
@@ -106,9 +106,14 @@ export function validateSeo(data: any): ValidationResult {
   const s = data?.seo;
   if (!s) return fail(["seo: missing"]);
   const errs: string[] = [];
-  if (!Array.isArray(s.titles) || s.titles.length === 0) errs.push("seo.titles empty");
-  if (!isStr(s.description)) errs.push("seo.description empty");
-  if (!Array.isArray(s.tags) || s.tags.length < 5) errs.push("seo.tags too few");
+  const hasTitle =
+    (Array.isArray(s.titles) && s.titles.some((t: unknown) => isStr(t))) ||
+    isStr(s.title);
+  if (!hasTitle) errs.push("seo.title required");
+  if (!isStr(s.description)) errs.push("seo.description required");
+  if (!Array.isArray(s.tags) || s.tags.length === 0 || !s.tags.some((t: unknown) => isStr(t))) {
+    errs.push("seo.tags required");
+  }
   return errs.length ? fail(errs) : ok();
 }
 

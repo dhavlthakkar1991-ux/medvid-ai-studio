@@ -46,9 +46,9 @@ All times are mm:ss strings. Keep medical content accurate, evidence-based, and 
 
 const TASK_PROMPTS: Record<TaskKey, string> = {
   chapters: `Segment the transcript into 4–8 educational chapters with mm:ss start/end timestamps inside the duration.`,
-  scene_plan: `Plan 6–14 scenes (talking-head, infographic, b-roll, callout, chapter-card). Each: t (mm:ss), kind, title, prompt.`,
+  scene_plan: `Plan 6–14 scenes (talking-head, infographic, b-roll, callout, chapter-card). Each scene MUST include: t (mm:ss), kind, title, scene_number, narration_text (verbatim or close paraphrase of the transcript slice for that scene — REQUIRED, non-empty), objective (one-sentence editorial purpose — REQUIRED, non-empty). Timestamps are advisory only; the pipeline derives final scene timing from transcript segments.`,
   visual_storyboard: `Produce a 8–20 step visual storyboard. Each step: time, visual_type, title, screen_layout, asset_prompt (vivid, image/video generation ready), animation, priority, duration_seconds. Tune to specialty and visual_density.`,
-  broll: `Suggest 5–12 B-roll cutaways. Each: t, prompt (what to show), asset_prompt (cinematic generation-ready prompt), keywords.`,
+  broll: `Suggest 5–12 B-roll cutaways. Each item MUST have EXACTLY these fields: scene_number (1-based, matching scene_plan), keyword (<=4 words), search_prompt (cinematic generation-ready description), placement_reason (why this clip supports the narration), recommended_start (mm:ss), recommended_end (mm:ss). Do NOT emit legacy fields (prompt, asset_prompt, keywords[], t).`,
   infographics: `Suggest 4–10 medical infographics aligned to the chapters. Each: t, type, title, bullets (3–6), asset_prompt.`,
   thumbnails: `Suggest 3 high-CTR thumbnail concepts. Each: concept, layout, text (≤6 words), palette (hex[]), asset_prompt.`,
   seo: `Produce SEO package for YouTube: 5 titles (≤70 chars), description (≤500 chars), 12–20 tags, chapters_text (HH:MM:SS lines), pinned_comment.`,

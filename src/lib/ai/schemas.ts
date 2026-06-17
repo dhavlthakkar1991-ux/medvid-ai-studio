@@ -57,12 +57,12 @@ export const ScenePlanSchema = z.object({
     t: z.string().describe("mm:ss"),
     kind: z.string(),
     title: z.string(),
-    prompt: z.string(),
+    prompt: z.string().optional().default(""),
     scene_number: z.coerce.number().optional(),
     start_seconds: z.coerce.number().optional(),
     end_seconds: z.coerce.number().optional(),
-    narration_text: z.string().optional().default(""),
-    objective: z.string().optional().default(""),
+    narration_text: z.string().min(1, "narration_text required"),
+    objective: z.string().min(1, "objective required"),
   })),
 });
 
@@ -82,17 +82,12 @@ export const VisualStoryboardSchema = z.object({
 
 export const BrollSchema = z.object({
   broll: z.array(z.object({
-    t: z.string().optional().default(""),
-    scene_number: z.coerce.number().optional(),
-    keyword: z.string().optional().default(""),
-    search_prompt: z.string().optional().default(""),
-    placement_reason: z.string().optional().default(""),
-    recommended_start: z.string().optional().default(""),
-    recommended_end: z.string().optional().default(""),
-    // legacy fields, preserved for back-compat:
-    prompt: z.string().optional().default(""),
-    asset_prompt: z.string().optional().default(""),
-    keywords: z.array(z.string()).optional().default([]),
+    scene_number: z.coerce.number(),
+    keyword: z.string().min(1),
+    search_prompt: z.string().min(1),
+    placement_reason: z.string().min(1),
+    recommended_start: z.string().min(1).describe("mm:ss"),
+    recommended_end: z.string().min(1).describe("mm:ss"),
   })),
 });
 
