@@ -1,5 +1,49 @@
 import { z } from "zod";
 
+const normalizeToken = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+const VisualTypeSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = normalizeToken(value);
+  if (normalized.includes("infographic")) return "Medical Infographic";
+  if (normalized.includes("anatomy") || normalized.includes("diagram") || normalized.includes("chart") || normalized.includes("graph")) return "Diagram";
+  if (normalized.includes("b_roll") || normalized.includes("broll") || normalized.includes("speaker") || normalized.includes("talking_head")) return "B-Roll";
+  if (normalized.includes("chapter")) return "Chapter Card";
+  if (normalized.includes("callout")) return "Callout";
+  if (normalized.includes("split")) return "Split Screen";
+  return value;
+}, z.enum(["Medical Infographic", "B-Roll", "Diagram", "Chapter Card", "Callout", "Split Screen"]));
+
+const ScreenLayoutSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = normalizeToken(value);
+  if (normalized.includes("two_thirds") || normalized.includes("split")) return "Split Screen";
+  if (normalized.includes("pip") || normalized.includes("picture_in_picture")) return "PiP";
+  if (normalized.includes("lower_third")) return "Lower Third";
+  if (normalized.includes("full") || normalized.includes("speaker") || normalized.includes("infographic") || normalized.includes("anatomy")) return "Full";
+  return value;
+}, z.enum(["Full", "Split Screen", "PiP", "Lower Third"]));
+
+const AnimationSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = normalizeToken(value);
+  if (normalized.includes("zoom")) return "Zoom";
+  if (normalized.includes("fade") || normalized.includes("reveal") || normalized.includes("highlight")) return "Fade";
+  if (normalized.includes("slide") || normalized.includes("wipe") || normalized.includes("pan")) return "Slide In Right";
+  if (normalized.includes("none") || normalized.includes("static")) return "None";
+  return value;
+}, z.enum(["Slide In Right", "Fade", "Zoom", "None"]));
+
+const PrioritySchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = normalizeToken(value);
+  if (normalized.includes("critical") || normalized.includes("urgent") || normalized.includes("max")) return "maximum";
+  if (normalized.includes("high")) return "high";
+  if (normalized.includes("med")) return "medium";
+  if (normalized.includes("low")) return "low";
+  return value;
+}, z.enum(["low", "medium", "high", "maximum"]));
+
 export const ChaptersSchema = z.object({
   chapters: z.array(z.object({
     title: z.string(),
@@ -20,13 +64,13 @@ export const ScenePlanSchema = z.object({
 export const VisualStoryboardSchema = z.object({
   visual_storyboard: z.array(z.object({
     time: z.string(),
-    visual_type: z.enum(["Medical Infographic", "B-Roll", "Diagram", "Chapter Card", "Callout", "Split Screen"]),
+    visual_type: VisualTypeSchema,
     title: z.string(),
-    screen_layout: z.enum(["Full", "Split Screen", "PiP", "Lower Third"]),
+    screen_layout: ScreenLayoutSchema,
     asset_prompt: z.string(),
-    animation: z.enum(["Slide In Right", "Fade", "Zoom", "None"]),
-    priority: z.enum(["low", "medium", "high", "maximum"]),
-    duration_seconds: z.number(),
+    animation: AnimationSchema,
+    priority: PrioritySchema,
+    duration_seconds: z.coerce.number(),
   })),
 });
 
