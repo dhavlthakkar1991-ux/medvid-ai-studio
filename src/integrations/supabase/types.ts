@@ -521,6 +521,76 @@ export type Database = {
           },
         ]
       }
+      layout_decisions: {
+        Row: {
+          action_id: string | null
+          attention_focus: string
+          created_at: string
+          doctor_size: string
+          doctor_visibility: string
+          end_time: number
+          id: string
+          layout_name: string
+          project_id: string
+          rationale: string | null
+          scene_id: string | null
+          start_time: number
+          updated_at: string
+        }
+        Insert: {
+          action_id?: string | null
+          attention_focus?: string
+          created_at?: string
+          doctor_size?: string
+          doctor_visibility?: string
+          end_time?: number
+          id?: string
+          layout_name?: string
+          project_id: string
+          rationale?: string | null
+          scene_id?: string | null
+          start_time?: number
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string | null
+          attention_focus?: string
+          created_at?: string
+          doctor_size?: string
+          doctor_visibility?: string
+          end_time?: number
+          id?: string
+          layout_name?: string
+          project_id?: string
+          rationale?: string | null
+          scene_id?: string | null
+          start_time?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "layout_decisions_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "edit_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "layout_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "layout_decisions_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       layout_templates: {
         Row: {
           config: Json
@@ -813,14 +883,19 @@ export type Database = {
           asset_source: string
           asset_type: string
           asset_url: string | null
+          attention_focus: string | null
           caption_style: string
           created_at: string
+          doctor_size: string | null
+          doctor_visibility: string | null
           edit_action_id: string | null
           id: string
           layer: number | null
           layout_id: string | null
+          layout_name: string | null
           priority: number | null
           project_id: string
+          rationale: string | null
           render_order: number
           scene_id: string | null
           status: string
@@ -838,14 +913,19 @@ export type Database = {
           asset_source?: string
           asset_type?: string
           asset_url?: string | null
+          attention_focus?: string | null
           caption_style?: string
           created_at?: string
+          doctor_size?: string | null
+          doctor_visibility?: string | null
           edit_action_id?: string | null
           id?: string
           layer?: number | null
           layout_id?: string | null
+          layout_name?: string | null
           priority?: number | null
           project_id: string
+          rationale?: string | null
           render_order?: number
           scene_id?: string | null
           status?: string
@@ -863,14 +943,19 @@ export type Database = {
           asset_source?: string
           asset_type?: string
           asset_url?: string | null
+          attention_focus?: string | null
           caption_style?: string
           created_at?: string
+          doctor_size?: string | null
+          doctor_visibility?: string | null
           edit_action_id?: string | null
           id?: string
           layer?: number | null
           layout_id?: string | null
+          layout_name?: string | null
           priority?: number | null
           project_id?: string
+          rationale?: string | null
           render_order?: number
           scene_id?: string | null
           status?: string
