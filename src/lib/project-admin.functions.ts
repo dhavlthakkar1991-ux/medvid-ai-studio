@@ -172,6 +172,7 @@ export const deleteProject = createServerFn({ method: "POST" })
       await supabaseAdmin.from("scene_transcript_map").delete().in("scene_id", sceneIds);
     }
 
+    const admin = supabaseAdmin as any;
     for (const t of [
       "edit_actions",
       "render_manifest",
@@ -192,7 +193,7 @@ export const deleteProject = createServerFn({ method: "POST" })
       "analysis_versions",
       "project_context",
     ]) {
-      await supabaseAdmin.from(t).delete().eq("project_id", pid);
+      await admin.from(t).delete().eq("project_id", pid);
     }
 
     // Delete uploaded video from storage.
