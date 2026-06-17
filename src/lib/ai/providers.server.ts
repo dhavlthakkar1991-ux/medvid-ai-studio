@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { z, type ZodSchema } from "zod";
 import type { LLMProviderId, TranscriptionProviderId, Usage } from "./types";
 
@@ -64,6 +64,20 @@ export async function generateJSON<T>(
   const modelId = normalizeModel(provider, opts.model);
 
   try {
+    if (provider === "gemini") {
+      const result = await generateText({
+        model: gateway(modelId),
+        system: opts.system + "\n\nRespond with ONLY valid minified JSON matching the requested schema. No markdown, no commentary.",
+        prompt: opts.prompt,
+      });
+      const parsed = extractJson(result.text);
+      const data = opts.schema.parse(parsed) as T;
+      const usage: Usage = {
+        inputTokens: result.usage?.inputTokens ?? 0,
+        outputTokens: result.usage?.outputTokens ?? 0,
+      };
+      return { data, usage, provider: cfg.name, model: opts.model };
+    }
     const result = await generateObject({
       model: gateway(modelId),
       schema: opts.schema,
@@ -80,6 +94,26 @@ export async function generateJSON<T>(
     if (msg.includes("429")) throw new Error("AI rate limit reached. Please retry in a moment.");
     if (msg.includes("402")) throw new Error("AI credits exhausted. Add credits in workspace settings.");
     throw new Error(`AI call failed (${provider}/${opts.model}): ${msg}`);
+  }
+}
+
+function extractJson(response: string): unknown {
+  let cleaned = response.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const startIdx = cleaned.search(/[\{\[]/);
+  if (startIdx === -1) throw new Error("No JSON found in response");
+  const opener = cleaned[startIdx];
+  const closer = opener === "[" ? "]" : "}";
+  const endIdx = cleaned.lastIndexOf(closer);
+  if (endIdx === -1) throw new Error("Unterminated JSON in response");
+  cleaned = cleaned.substring(startIdx, endIdx + 1);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    cleaned = cleaned
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(cleaned);
   }
 }
 
