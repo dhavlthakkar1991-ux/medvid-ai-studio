@@ -136,6 +136,49 @@ export const ShortsSchema = z.object({
   })),
 });
 
+const ACTION_TYPES = [
+  "show_broll",
+  "show_infographic",
+  "show_text_overlay",
+  "show_callout",
+  "show_lower_third",
+  "picture_in_picture",
+  "split_screen",
+  "zoom_crop",
+  "ken_burns",
+  "highlight_keyword",
+  "kinetic_typography",
+  "show_statistic",
+  "show_medical_diagram",
+  "show_clinical_image",
+  "show_thumbnail_frame",
+  "show_transition",
+  "show_logo",
+  "show_cta",
+] as const;
+
+const ActionTypeSchema = z.preprocess((v) => {
+  if (typeof v !== "string") return v;
+  const n = v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  return (ACTION_TYPES as readonly string[]).includes(n) ? n : "show_callout";
+}, z.enum(ACTION_TYPES));
+
+export const EditorialDecisionsSchema = z.object({
+  edit_actions: z.array(z.object({
+    scene_number: z.coerce.number().optional(),
+    action_type: ActionTypeSchema,
+    start_time: z.coerce.number(),
+    end_time: z.coerce.number(),
+    layer: z.coerce.number().int().min(0).max(7).default(1),
+    priority: z.coerce.number().int().min(1).max(10).default(5),
+    layout: z.string().optional().default("full_screen"),
+    transition_in: z.string().optional().default("fade"),
+    transition_out: z.string().optional().default("fade"),
+    asset_query: z.string().optional().default(""),
+    reason: z.string().optional().default(""),
+  })),
+});
+
 export const TaskSchemas = {
   chapters: ChaptersSchema,
   scene_plan: ScenePlanSchema,
@@ -145,6 +188,7 @@ export const TaskSchemas = {
   thumbnails: ThumbnailsSchema,
   seo: SeoSchema,
   shorts: ShortsSchema,
+  editorial_decisions: EditorialDecisionsSchema,
 } as const;
 
 export type TaskKey = keyof typeof TaskSchemas;
