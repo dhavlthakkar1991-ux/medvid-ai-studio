@@ -128,7 +128,23 @@ function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
     }
     // Unwrap single-element array containing the expected object
     if (Array.isArray(parsed) && parsed.length === 1 && typeof parsed[0] === "object") {
-      return parsed[0];
+      parsed = parsed[0];
+    }
+    // Fill in any missing array-typed fields with [] so Zod doesn't reject them.
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const obj = parsed as Record<string, unknown>;
+      for (const key of keys) {
+        const field: any = shape[key];
+        const fieldDef = field?._def;
+        const typeName =
+          fieldDef?.typeName ??
+          fieldDef?.innerType?._def?.typeName ??
+          fieldDef?.schema?._def?.typeName;
+        if (typeName === "ZodArray" && obj[key] === undefined) {
+          obj[key] = [];
+        }
+      }
+      return obj;
     }
   }
   return parsed;
