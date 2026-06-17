@@ -375,7 +375,26 @@ export async function transcribeAudio(
   audio: Blob,
   filename: string,
 ): Promise<TranscriptResult> {
-  if (provider === "lovable") return transcribeWithLovable(audio, filename);
+  if (provider === "lovable") {
+    // Lovable AI Gateway rejects inline media larger than ~30MB. If the file
+    // is too big, transparently fall back to a provider that supports large
+    // uploads (Gemini File API → OpenAI/Groq whisper).
+    const LOVABLE_INLINE_LIMIT = 25 * 1024 * 1024;
+    if (audio.size <= LOVABLE_INLINE_LIMIT) {
+      try {
+        return await transcribeWithLovable(audio, filename);
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (!msg.includes("413") && !/cannot exceed/i.test(msg)) throw e;
+      }
+    }
+    if (userKeys.gemini) return transcribeWithGemini(userKeys.gemini, audio, filename);
+    if (userKeys.openai) return transcribeAudio("openai", userKeys, audio, filename);
+    if (userKeys.groq) return transcribeAudio("groq", userKeys, audio, filename);
+    throw new Error(
+      `Video is ${(audio.size / 1024 / 1024).toFixed(1)}MB — exceeds Lovable AI's 30MB inline limit. Add a Gemini, OpenAI, or Groq key in Settings → AI to transcribe larger files.`,
+    );
+  }
   if (provider === "gemini") return transcribeWithGemini(userKeys.gemini ?? "", audio, filename);
   if (provider === "assemblyai" || provider === "deepgram") {
     throw new Error(`Transcription provider "${provider}" is not yet implemented in Phase 1.`);
