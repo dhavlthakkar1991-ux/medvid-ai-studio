@@ -205,10 +205,6 @@ function ProjectView() {
           );
         })}
 
-        <TabsContent value="cost">
-          {/* health tab rendered just below */}
-        </TabsContent>
-
         <TabsContent value="health">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
