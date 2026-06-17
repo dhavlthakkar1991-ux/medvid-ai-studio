@@ -548,6 +548,56 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          critical_failures: Json
+          duration_ms: number | null
+          failures_count: number
+          id: string
+          pipeline_version: string
+          project_id: string
+          started_at: string
+          status: string
+          warnings_count: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          critical_failures?: Json
+          duration_ms?: number | null
+          failures_count?: number
+          id?: string
+          pipeline_version?: string
+          project_id: string
+          started_at?: string
+          status?: string
+          warnings_count?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          critical_failures?: Json
+          duration_ms?: number | null
+          failures_count?: number
+          id?: string
+          pipeline_version?: string
+          project_id?: string
+          started_at?: string
+          status?: string
+          warnings_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1140,6 +1190,87 @@ export type Database = {
             columns: ["scene_id"]
             isOneToOne: false
             referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_executions: {
+        Row: {
+          attempts: Json
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          fallback_stage: string | null
+          fallback_used: boolean
+          id: string
+          model: string | null
+          pipeline_run_id: string | null
+          project_id: string
+          provider: string | null
+          retry_count: number
+          started_at: string
+          status: string
+          task_name: string
+          validation_errors: Json
+          validation_passed: boolean | null
+          validation_warnings: Json
+        }
+        Insert: {
+          attempts?: Json
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          fallback_stage?: string | null
+          fallback_used?: boolean
+          id?: string
+          model?: string | null
+          pipeline_run_id?: string | null
+          project_id: string
+          provider?: string | null
+          retry_count?: number
+          started_at?: string
+          status?: string
+          task_name: string
+          validation_errors?: Json
+          validation_passed?: boolean | null
+          validation_warnings?: Json
+        }
+        Update: {
+          attempts?: Json
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          fallback_stage?: string | null
+          fallback_used?: boolean
+          id?: string
+          model?: string | null
+          pipeline_run_id?: string | null
+          project_id?: string
+          provider?: string | null
+          retry_count?: number
+          started_at?: string
+          status?: string
+          task_name?: string
+          validation_errors?: Json
+          validation_passed?: boolean | null
+          validation_warnings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_executions_pipeline_run_id_fkey"
+            columns: ["pipeline_run_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_executions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
