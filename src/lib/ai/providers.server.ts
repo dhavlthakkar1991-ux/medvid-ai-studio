@@ -308,12 +308,42 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
   return { text, words: [], language: null, provider: "gemini", durationSeconds: 0 };
 }
 
+async function transcribeWithLovable(audio: Blob, filename: string): Promise<TranscriptResult> {
+  const apiKey = process.env.LOVABLE_API_KEY ?? "";
+  if (!apiKey) throw new Error("Lovable AI is not configured. Contact support.");
+  const mediaType = getMediaMimeType(audio, filename);
+  const gateway = createOpenAICompatible({
+    name: "lovable",
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    headers: {
+      "Lovable-API-Key": apiKey,
+      "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+    },
+  });
+  const result = await generateText({
+    model: gateway("google/gemini-2.5-flash"),
+    temperature: 0,
+    maxOutputTokens: 8192,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: "Transcribe the spoken words in this media file. Return only the verbatim transcript text, with no summary or commentary." },
+        { type: "file", data: new Uint8Array(await audio.arrayBuffer()), mediaType, filename },
+      ],
+    }],
+  });
+  const text = result.text.trim();
+  if (!text) throw new Error("Transcription failed (Lovable AI): empty transcript returned.");
+  return { text, words: [], language: null, provider: "lovable", durationSeconds: 0 };
+}
+
 export async function transcribeAudio(
   provider: TranscriptionProviderId,
   userKeys: Record<string, string>,
   audio: Blob,
   filename: string,
 ): Promise<TranscriptResult> {
+  if (provider === "lovable") return transcribeWithLovable(audio, filename);
   if (provider === "gemini") return transcribeWithGemini(userKeys.gemini ?? "", audio, filename);
   if (provider === "assemblyai" || provider === "deepgram") {
     throw new Error(`Transcription provider "${provider}" is not yet implemented in Phase 1.`);
