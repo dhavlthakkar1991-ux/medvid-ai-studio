@@ -27,6 +27,8 @@ const ContextSchema = z.object({
   render_intent: z.string().nullable(),
   visual_density: z.string().nullable(),
   retention_priority: z.string().nullable(),
+  presenter_name: z.string().nullable().optional(),
+  grounding_mode: z.string().nullable().optional(),
 });
 
 const CreateProjectInput = z.object({
@@ -35,6 +37,10 @@ const CreateProjectInput = z.object({
   specialty_template_id: z.string().nullable(),
   video_path: z.string().nullable(),
   duration_seconds: z.number().nullable(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+  fps: z.number().nullable().optional(),
+  file_size: z.number().nullable().optional(),
   context: ContextSchema,
 });
 
@@ -51,12 +57,20 @@ export const createProject = createServerFn({ method: "POST" })
         specialty_template_id: data.specialty_template_id,
         video_path: data.video_path,
         duration_seconds: data.duration_seconds,
+        width: data.width ?? null,
+        height: data.height ?? null,
+        fps: data.fps ?? null,
+        file_size: data.file_size ?? null,
         status: "draft",
       })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    const ctxRow = { project_id: p.id, ...data.context } as any;
+    const ctxRow = {
+      project_id: p.id,
+      ...data.context,
+      grounding_mode: data.context.grounding_mode ?? "strict",
+    } as any;
     const { error: cerr } = await context.supabase.from("project_context").insert(ctxRow);
     if (cerr) throw new Error(cerr.message);
     return { id: p.id };
