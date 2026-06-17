@@ -163,20 +163,48 @@ const ActionTypeSchema = z.preprocess((v) => {
   return (ACTION_TYPES as readonly string[]).includes(n) ? n : "show_callout";
 }, z.enum(ACTION_TYPES));
 
+const TimeSecondsSchema = z.preprocess((value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (value == null) return undefined;
+  if (typeof value !== "string") return undefined;
+  const s = value.trim();
+  if (!s) return undefined;
+  if (/^nan$/i.test(s)) return undefined;
+  if (/^-?\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  // mm:ss or hh:mm:ss
+  const parts = s.split(":").map((p) => p.trim());
+  if (parts.length >= 2 && parts.length <= 3 && parts.every((p) => /^\d+(\.\d+)?$/.test(p))) {
+    let secs = 0;
+    for (const p of parts) secs = secs * 60 + Number(p);
+    return Number.isFinite(secs) ? secs : undefined;
+  }
+  return undefined;
+}, z.number().optional());
+
 export const EditorialDecisionsSchema = z.object({
-  edit_actions: z.array(z.object({
-    scene_number: z.coerce.number().optional(),
-    action_type: ActionTypeSchema,
-    start_time: z.coerce.number(),
-    end_time: z.coerce.number(),
-    layer: z.coerce.number().int().min(0).max(7).default(1),
-    priority: z.coerce.number().int().min(1).max(10).default(5),
-    layout: z.string().optional().default("full_screen"),
-    transition_in: z.string().optional().default("fade"),
-    transition_out: z.string().optional().default("fade"),
-    asset_query: z.string().optional().default(""),
-    reason: z.string().optional().default(""),
-  })),
+  edit_actions: z.array(
+    z.object({
+      scene_number: z.coerce.number().optional(),
+      action_type: ActionTypeSchema,
+      start_time: TimeSecondsSchema,
+      end_time: TimeSecondsSchema,
+      layer: z.coerce.number().int().min(0).max(7).default(1),
+      priority: z.coerce.number().int().min(1).max(10).default(5),
+      layout: z.string().optional().default("full_screen"),
+      transition_in: z.string().optional().default("fade"),
+      transition_out: z.string().optional().default("fade"),
+      asset_query: z.string().optional().default(""),
+      reason: z.string().optional().default(""),
+    }).transform((it) => {
+      const start = typeof it.start_time === "number" ? it.start_time : NaN;
+      let end = typeof it.end_time === "number" ? it.end_time : NaN;
+      if (!Number.isFinite(end) || end <= start) end = Number.isFinite(start) ? start + 2 : NaN;
+      return { ...it, start_time: start, end_time: end };
+    })
+  ).transform((arr) => arr.filter((it) => Number.isFinite(it.start_time) && Number.isFinite(it.end_time))),
 });
 
 export const TaskSchemas = {
