@@ -71,7 +71,7 @@ export async function generateJSON<T>(
         prompt: opts.prompt,
       });
       const parsed = extractJson(result.text);
-      const data = opts.schema.parse(parsed) as T;
+      const data = opts.schema.parse(coerceToSchemaShape(parsed, opts.schema)) as T;
       const usage: Usage = {
         inputTokens: result.usage?.inputTokens ?? 0,
         outputTokens: result.usage?.outputTokens ?? 0,
