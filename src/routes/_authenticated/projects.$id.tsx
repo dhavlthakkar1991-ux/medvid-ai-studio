@@ -782,6 +782,93 @@ function ProjectView() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="layout">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Layout Decisions {canonQ.data && <Badge variant="outline" className="ml-2">{(canonQ.data as any).layoutDecisions?.length ?? 0} decisions</Badge>}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canonQ.data || (canonQ.data.editActions?.length ?? 0) === 0}
+                onClick={async () => {
+                  try {
+                    toast.info("Generating layout decisions…");
+                    await regenLayoutFn({ data: { projectId: id } });
+                    qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+                    qc.invalidateQueries({ queryKey: ["project-health", id] });
+                    toast.success("Layout decisions regenerated.");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed");
+                  }
+                }}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />Regenerate
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!canonQ.data || ((canonQ.data as any).layoutDecisions?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">No layout decisions yet. Generate Editorial Decisions, then click Regenerate.</p>
+              ) : (() => {
+                const sceneById = new Map<string, any>((canonQ.data.scenes as any[]).map((s: any) => [s.id, s]));
+                const actById = new Map<string, any>((canonQ.data.editActions as any[]).map((a: any) => [a.id, a]));
+                const lds = (canonQ.data as any).layoutDecisions as any[];
+                return (
+                  <div className="overflow-auto max-h-[60vh]">
+                    <table className="w-full text-xs">
+                      <thead className="text-muted-foreground border-b border-border">
+                        <tr>
+                          <th className="text-left py-1 pr-3">Scene</th>
+                          <th className="text-left py-1 pr-3">Action</th>
+                          <th className="text-left py-1 pr-3">Start</th>
+                          <th className="text-left py-1 pr-3">End</th>
+                          <th className="text-left py-1 pr-3">Layout</th>
+                          <th className="text-left py-1 pr-3">Doctor</th>
+                          <th className="text-left py-1 pr-3">Size</th>
+                          <th className="text-left py-1 pr-3">Focus</th>
+                          <th className="text-left py-1 pr-3">Rationale</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lds
+                          .slice()
+                          .sort((a, b) => Number(a.start_time) - Number(b.start_time))
+                          .map((l: any) => {
+                            const a = l.action_id ? actById.get(l.action_id) : null;
+                            const s = l.scene_id ? sceneById.get(l.scene_id) : null;
+                            return (
+                              <tr key={l.id} className="border-b border-border/50 align-top">
+                                <td className="py-1 pr-3">{s ? s.scene_number : "—"}</td>
+                                <td className="py-1 pr-3">
+                                  {a?.action_type
+                                    ? <Badge variant="outline" className="text-[10px]">{a.action_type}</Badge>
+                                    : "—"}
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">{Number(l.start_time).toFixed(2)}s</td>
+                                <td className="py-1 pr-3 tabular-nums">{Number(l.end_time).toFixed(2)}s</td>
+                                <td className="py-1 pr-3">{l.layout_name}</td>
+                                <td className="py-1 pr-3">
+                                  <Badge
+                                    variant={l.doctor_visibility === "hidden" ? "secondary" : "outline"}
+                                    className="text-[10px]"
+                                  >{l.doctor_visibility}</Badge>
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">{l.doctor_size}</td>
+                                <td className="py-1 pr-3">{l.attention_focus}</td>
+                                <td className="py-1 pr-3 max-w-md truncate" title={l.rationale ?? ""}>{l.rationale ?? "—"}</td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
