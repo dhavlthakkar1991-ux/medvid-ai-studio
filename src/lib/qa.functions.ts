@@ -9,7 +9,7 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
-    const [{ data: runs }, { data: executions }, { data: editActions }, { data: project }] = await Promise.all([
+    const [{ data: runs }, { data: executions }, { data: editActions }, { data: layoutDecisions }, { data: project }] = await Promise.all([
       sb
       .from("pipeline_runs")
       .select("*")
@@ -23,6 +23,7 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
       .order("started_at", { ascending: false })
       .limit(200),
       sb.from("edit_actions").select("action_type, start_time, end_time, source").eq("project_id", data.projectId),
+      sb.from("layout_decisions").select("layout_name, doctor_visibility, doctor_size, attention_focus, start_time, end_time").eq("project_id", data.projectId),
       sb.from("projects").select("duration_seconds").eq("id", data.projectId).maybeSingle(),
     ]);
     const latestRunId = runs?.[0]?.id ?? null;
@@ -70,6 +71,23 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
     }
     const aiCount = eas.filter((a) => a.source === "ai").length;
 
+    // Presence + layout-diversity metrics from layout_decisions.
+    const lds = (layoutDecisions ?? []) as Array<{ layout_name: string; doctor_visibility: string; doctor_size: string; attention_focus: string; start_time: number; end_time: number }>;
+    const sumDur = (filterFn: (l: typeof lds[number]) => boolean) =>
+      lds.filter(filterFn).reduce((s, l) => s + Math.max(0, Number(l.end_time) - Number(l.start_time)), 0);
+    const totalLdDur = sumDur(() => true);
+    const visibleDur = sumDur((l) => l.doctor_visibility === "visible" || l.doctor_visibility === "reduced");
+    const layoutCounts: Record<string, number> = {};
+    for (const l of lds) layoutCounts[l.layout_name] = (layoutCounts[l.layout_name] ?? 0) + 1;
+    const totalLd = lds.length || 1;
+    const pct = (n: number) => (totalLd > 0 ? n / totalLd : 0);
+    const fullScreenN = lds.filter((l) => l.layout_name.startsWith("full_screen")).length;
+    const pipN = lds.filter((l) => l.layout_name.includes("pip") || l.layout_name.includes("picture_in_picture") || l.layout_name === "doctor_with_clinical_image" || l.layout_name === "doctor_with_infographic" || l.layout_name === "doctor_with_broll").length;
+    const splitN = lds.filter((l) => l.layout_name === "split_screen" || l.layout_name === "top_bottom").length;
+    const infographicN = lds.filter((l) => l.attention_focus === "infographic").length;
+    const clinicalN = lds.filter((l) => l.attention_focus === "clinical_image" || l.attention_focus === "diagram").length;
+    const distinctLayouts = Object.keys(layoutCounts).length;
+
     return {
       latestRun: runs?.[0] ?? null,
       recentRuns: runs ?? [],
@@ -83,6 +101,18 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
         aiCount,
         backfillCount: eas.length - aiCount,
         actionTypeSummary: summary,
+      },
+      presence: {
+        totalLayoutDecisions: lds.length,
+        doctorPresencePct: totalLdDur > 0 ? visibleDur / totalLdDur : 0,
+        distinctLayouts,
+        layoutDiversityPct: Math.min(1, distinctLayouts / 8),
+        fullScreenPct: pct(fullScreenN),
+        pipPct: pct(pipN),
+        splitScreenPct: pct(splitN),
+        infographicPct: pct(infographicN),
+        clinicalImagePct: pct(clinicalN),
+        layoutCounts,
       },
     };
   });
