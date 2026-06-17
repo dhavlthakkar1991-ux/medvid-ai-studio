@@ -91,6 +91,142 @@ export type Database = {
           },
         ]
       }
+      asset_candidates: {
+        Row: {
+          asset_type: string
+          candidate_data: Json
+          created_at: string
+          id: string
+          priority: number
+          project_id: string
+          provider: string
+          scene_id: string | null
+          search_query: string
+          status: string
+          storyboard_item_id: string | null
+        }
+        Insert: {
+          asset_type: string
+          candidate_data?: Json
+          created_at?: string
+          id?: string
+          priority?: number
+          project_id: string
+          provider?: string
+          scene_id?: string | null
+          search_query: string
+          status?: string
+          storyboard_item_id?: string | null
+        }
+        Update: {
+          asset_type?: string
+          candidate_data?: Json
+          created_at?: string
+          id?: string
+          priority?: number
+          project_id?: string
+          provider?: string
+          scene_id?: string | null
+          search_query?: string
+          status?: string
+          storyboard_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_candidates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_candidates_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_candidates_storyboard_item_id_fkey"
+            columns: ["storyboard_item_id"]
+            isOneToOne: false
+            referencedRelation: "storyboard_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          asset_type: string
+          created_at: string
+          description: string | null
+          duration_seconds: number | null
+          height: number | null
+          id: string
+          metadata: Json
+          project_id: string
+          scene_id: string | null
+          source_type: string
+          status: string
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          url: string | null
+          width: number | null
+        }
+        Insert: {
+          asset_type: string
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          height?: number | null
+          id?: string
+          metadata?: Json
+          project_id: string
+          scene_id?: string | null
+          source_type: string
+          status?: string
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+          width?: number | null
+        }
+        Update: {
+          asset_type?: string
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          height?: number | null
+          id?: string
+          metadata?: Json
+          project_id?: string
+          scene_id?: string | null
+          source_type?: string
+          status?: string
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       broll_items: {
         Row: {
           asset_status: string
@@ -544,6 +680,48 @@ export type Database = {
         }
         Relationships: []
       }
+      scene_assets: {
+        Row: {
+          asset_id: string
+          created_at: string
+          id: string
+          is_primary: boolean
+          render_order: number
+          scene_id: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          render_order?: number
+          scene_id: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          render_order?: number
+          scene_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scene_assets_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scene_transcript_map: {
         Row: {
           id: string
@@ -793,6 +971,83 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timeline_instructions: {
+        Row: {
+          asset_id: string | null
+          caption_enabled: boolean
+          created_at: string
+          duration: number
+          id: string
+          layer: number
+          project_id: string
+          render_order: number
+          scene_id: string | null
+          storyboard_item_id: string | null
+          timeline_end: number
+          timeline_start: number
+          transition: string
+        }
+        Insert: {
+          asset_id?: string | null
+          caption_enabled?: boolean
+          created_at?: string
+          duration?: number
+          id?: string
+          layer?: number
+          project_id: string
+          render_order?: number
+          scene_id?: string | null
+          storyboard_item_id?: string | null
+          timeline_end?: number
+          timeline_start?: number
+          transition?: string
+        }
+        Update: {
+          asset_id?: string | null
+          caption_enabled?: boolean
+          created_at?: string
+          duration?: number
+          id?: string
+          layer?: number
+          project_id?: string
+          render_order?: number
+          scene_id?: string | null
+          storyboard_item_id?: string | null
+          timeline_end?: number
+          timeline_start?: number
+          transition?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timeline_instructions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_instructions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_instructions_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_instructions_storyboard_item_id_fkey"
+            columns: ["storyboard_item_id"]
+            isOneToOne: false
+            referencedRelation: "storyboard_items"
             referencedColumns: ["id"]
           },
         ]
