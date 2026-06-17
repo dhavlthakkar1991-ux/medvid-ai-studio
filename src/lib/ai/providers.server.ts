@@ -186,6 +186,11 @@ function fillMissingSchemaDefaults(value: unknown, schema: any): unknown {
   for (const [key, fieldSchema] of Object.entries(shape)) {
     if (obj[key] === undefined) obj[key] = defaultForSchema(fieldSchema);
 
+    // Coerce object → [object] when schema expects an array.
+    if (getSchemaTypeName(fieldSchema) === "ZodArray" && obj[key] && !Array.isArray(obj[key])) {
+      obj[key] = typeof obj[key] === "object" ? [obj[key]] : [];
+    }
+
     const nestedShape = getObjectShape(fieldSchema);
     if (nestedShape && obj[key] && typeof obj[key] === "object" && !Array.isArray(obj[key])) {
       fillMissingSchemaDefaults(obj[key], fieldSchema);
