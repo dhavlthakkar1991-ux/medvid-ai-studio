@@ -61,7 +61,7 @@ export async function runTaskForProject(
   userId: string,
   projectId: string,
   task: TaskKey,
-  options?: { pipelineRunId?: string | null },
+  options?: { pipelineRunId?: string | null; executionId?: string | null },
 ) {
   // Load context + transcript + ai_settings + template
   const [{ data: project }, { data: ctx }, { data: tx }, { data: settings }] = await Promise.all([
@@ -173,6 +173,7 @@ export async function runTaskForProject(
     // Total failure — still record the execution before throwing.
     await recordExecution({
       supabase, projectId, pipelineRunId: options?.pipelineRunId ?? null,
+      executionId: options?.executionId ?? null,
       task, provider, model, startedAt,
       status: "failed", retryCount, fallbackStage, validation: lastValidation,
       attempts, errorMessage: attempts[attempts.length - 1]?.errors?.[0] ?? "no_output",
@@ -253,6 +254,7 @@ export async function runTaskForProject(
 
   await recordExecution({
     supabase, projectId, pipelineRunId: options?.pipelineRunId ?? null,
+    executionId: options?.executionId ?? null,
     task, provider: res.provider, model: res.model, startedAt,
     status: lastValidation.valid ? "completed" : "completed_with_warnings",
     retryCount, fallbackStage, validation: lastValidation, attempts,
