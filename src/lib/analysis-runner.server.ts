@@ -4,6 +4,35 @@ import { TASK_DEFAULT_MODELS, BUDGET_MODEL, type LLMProviderId } from "./ai/type
 import { buildContextPrompt } from "./ai/context.server";
 import { estimateCost } from "./ai/pricing";
 
+const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
+  lovable: "google/gemini-2.5-flash",
+  gemini: "google/gemini-2.5-flash",
+  openai: "openai/gpt-4o-mini",
+  openrouter: "openai/gpt-4o-mini",
+  anthropic: "anthropic/claude-3-5-sonnet-latest",
+  groq: "llama-3.3-70b-versatile",
+  deepseek: "deepseek-chat",
+};
+
+const PROVIDER_PREFIX: Record<LLMProviderId, string | null> = {
+  lovable: null,
+  openrouter: null,
+  gemini: "google/",
+  openai: "openai/",
+  anthropic: "anthropic/",
+  groq: null,
+  deepseek: null,
+};
+
+function coerceModelForProvider(provider: LLMProviderId, model: string): string {
+  const prefix = PROVIDER_PREFIX[provider];
+  if (!prefix) return model;
+  if (model.startsWith(prefix)) return model;
+  // mismatched prefix (e.g. openai/gpt-5 on gemini) → fall back to provider default
+  if (model.includes("/")) return PROVIDER_DEFAULT_MODEL[provider];
+  return model;
+}
+
 const SYSTEM_BASE = `You are OncoVideo AI — an expert medical video producer assisting doctors and educators.
 You produce strictly structured JSON. Never include markdown, prose, or explanations outside the schema.
 All times are mm:ss strings. Keep medical content accurate, evidence-based, and patient-safe.`;
@@ -44,7 +73,8 @@ export async function runTaskForProject(
   const overrides = (settings?.model_overrides as Record<string, string>) ?? {};
   const provider = ((settings?.default_llm_provider as LLMProviderId) ?? "lovable");
   const budget = !!settings?.budget_mode;
-  const model = budget ? BUDGET_MODEL : (overrides[task] || TASK_DEFAULT_MODELS[task]);
+  const rawModel = budget ? BUDGET_MODEL : (overrides[task] || TASK_DEFAULT_MODELS[task]);
+  const model = coerceModelForProvider(provider, rawModel);
   const userKeys = (settings?.provider_keys as Record<string, string>) ?? {};
 
   const schema = TaskSchemas[task];
