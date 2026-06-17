@@ -149,7 +149,13 @@ export async function runAnalysisJob(jobId: string) {
         })
         .select("id")
         .single();
-      if (claimError || !claimed) throw new Error(claimError?.message ?? "Could not claim pipeline task.");
+      if (claimError || !claimed) {
+        // Another runner invocation claimed this task first. Return cleanly; the
+        // browser poller will pick up the next progress update instead of
+        // launching duplicate AI calls.
+        await setState("analyzing", 20 + Math.round((doneCount / ALL_TASKS.length) * 70));
+        return { body: `claimed:${task}`, status: 200 };
+      }
       try {
         await runTaskForProject(supabaseAdmin, project.user_id, project.id, task, { pipelineRunId, executionId: claimed.id });
       } catch (error) {
