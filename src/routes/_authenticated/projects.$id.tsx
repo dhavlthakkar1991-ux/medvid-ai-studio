@@ -479,8 +479,11 @@ function ProjectView() {
                         <th className="text-left py-1 pr-3">#</th>
                         <th className="text-left py-1 pr-3">Start</th>
                         <th className="text-left py-1 pr-3">End</th>
+                        <th className="text-left py-1 pr-3">Layer</th>
+                        <th className="text-left py-1 pr-3">Action</th>
                         <th className="text-left py-1 pr-3">Type</th>
                         <th className="text-left py-1 pr-3">Source</th>
+                        <th className="text-left py-1 pr-3">Priority</th>
                         <th className="text-left py-1 pr-3">Query</th>
                         <th className="text-left py-1 pr-3">Status</th>
                         <th className="text-left py-1 pr-3">Scene</th>
@@ -492,8 +495,11 @@ function ProjectView() {
                           <td className="py-1 pr-3">{m.render_order}</td>
                           <td className="py-1 pr-3 tabular-nums">{Number(m.timeline_start).toFixed(2)}s</td>
                           <td className="py-1 pr-3 tabular-nums">{Number(m.timeline_end).toFixed(2)}s</td>
+                          <td className="py-1 pr-3 tabular-nums">{m.layer ?? "—"}</td>
+                          <td className="py-1 pr-3">{m.action_type ? <Badge variant="outline" className="text-[10px]">{m.action_type}</Badge> : "—"}</td>
                           <td className="py-1 pr-3">{m.asset_type}</td>
                           <td className="py-1 pr-3">{m.asset_source}</td>
+                          <td className="py-1 pr-3 tabular-nums">{m.priority ?? "—"}</td>
                           <td className="py-1 pr-3 max-w-md truncate" title={m.asset_query}>{m.asset_query}</td>
                           <td className="py-1 pr-3"><Badge variant="outline">{m.status}</Badge></td>
                           <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{m.scene_id?.slice(0, 8)}</td>
