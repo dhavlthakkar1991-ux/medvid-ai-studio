@@ -729,7 +729,9 @@ export type Database = {
           broll_types: Json
           content_type: string | null
           created_at: string
+          grounding_mode: string
           infographic_types: Json
+          presenter_name: string | null
           project_id: string
           render_intent: string | null
           retention_priority: string | null
@@ -747,7 +749,9 @@ export type Database = {
           broll_types?: Json
           content_type?: string | null
           created_at?: string
+          grounding_mode?: string
           infographic_types?: Json
+          presenter_name?: string | null
           project_id: string
           render_intent?: string | null
           retention_priority?: string | null
@@ -765,7 +769,9 @@ export type Database = {
           broll_types?: Json
           content_type?: string | null
           created_at?: string
+          grounding_mode?: string
           infographic_types?: Json
+          presenter_name?: string | null
           project_id?: string
           render_intent?: string | null
           retention_priority?: string | null
@@ -791,6 +797,9 @@ export type Database = {
         Row: {
           created_at: string
           duration_seconds: number | null
+          file_size: number | null
+          fps: number | null
+          height: number | null
           id: string
           specialty_template_id: string | null
           status: string
@@ -799,10 +808,14 @@ export type Database = {
           updated_at: string
           user_id: string
           video_path: string | null
+          width: number | null
         }
         Insert: {
           created_at?: string
           duration_seconds?: number | null
+          file_size?: number | null
+          fps?: number | null
+          height?: number | null
           id?: string
           specialty_template_id?: string | null
           status?: string
@@ -811,10 +824,14 @@ export type Database = {
           updated_at?: string
           user_id: string
           video_path?: string | null
+          width?: number | null
         }
         Update: {
           created_at?: string
           duration_seconds?: number | null
+          file_size?: number | null
+          fps?: number | null
+          height?: number | null
           id?: string
           specialty_template_id?: string | null
           status?: string
@@ -823,6 +840,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           video_path?: string | null
+          width?: number | null
         }
         Relationships: [
           {
