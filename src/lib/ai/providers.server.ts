@@ -117,6 +117,23 @@ function extractJson(response: string): unknown {
   }
 }
 
+function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
+  // Schemas are { someKey: Array<...> }. If the model returned just the array, wrap it.
+  const def: any = (schema as any)._def;
+  const shape = def?.shape?.() ?? def?.shape;
+  if (shape && typeof shape === "object") {
+    const keys = Object.keys(shape);
+    if (Array.isArray(parsed) && keys.length === 1) {
+      return { [keys[0]]: parsed };
+    }
+    // Unwrap single-element array containing the expected object
+    if (Array.isArray(parsed) && parsed.length === 1 && typeof parsed[0] === "object") {
+      return parsed[0];
+    }
+  }
+  return parsed;
+}
+
 /* ============ Transcription ============ */
 
 export type TranscriptResult = {
