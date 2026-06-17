@@ -1,0 +1,1 @@
+ALTER TABLE public.render_manifest ADD COLUMN IF NOT EXISTS priority integer;
