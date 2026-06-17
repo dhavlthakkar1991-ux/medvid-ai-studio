@@ -125,7 +125,7 @@ export async function runLayoutDecisionsForProject(
     supabase.from("projects").select("*").eq("id", projectId).single(),
     supabase.from("project_context").select("*").eq("project_id", projectId).maybeSingle(),
     supabase.from("ai_settings").select("*").eq("user_id", userId).maybeSingle(),
-    supabase.from("edit_actions").select("id, scene_id, scene_number:scene_id, action_type, start_time, end_time, asset_query, parameters").eq("project_id", projectId).order("start_time", { ascending: true }),
+    supabase.from("edit_actions").select("id, scene_id, action_type, start_time, end_time, asset_query, parameters").eq("project_id", projectId).order("start_time", { ascending: true }),
   ]);
   if (!project) throw new Error("Project not found");
 
