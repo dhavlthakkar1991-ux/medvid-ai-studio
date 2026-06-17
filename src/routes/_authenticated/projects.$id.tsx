@@ -36,6 +36,34 @@ const TASK_LABELS: Record<string, string> = {
   shorts: "Shorts",
 };
 
+const OUTCOME_LABEL: Record<string, string> = {
+  primary: "Primary Prompt",
+  retry_1: "Retry 1",
+  retry_2: "Retry 2",
+  fallback_prompt: "Fallback Prompt",
+  fallback_generator: "Fallback Generator",
+};
+
+function outcomeStage(t: { retry_count?: number; fallback_used?: boolean; fallback_stage?: string | null }): string {
+  if (t.fallback_used && t.fallback_stage) return OUTCOME_LABEL[t.fallback_stage] ?? t.fallback_stage;
+  const r = Number(t.retry_count) || 0;
+  if (r === 0) return OUTCOME_LABEL.primary;
+  if (r === 1) return OUTCOME_LABEL.retry_1;
+  return OUTCOME_LABEL.retry_2;
+}
+
+function recoverySource(t: { fallback_used?: boolean }): "AI" | "Recovery" {
+  return t.fallback_used ? "Recovery" : "AI";
+}
+
+const QUALITY_SUMMARY_TASKS: Array<{ key: string; label: string }> = [
+  { key: "scene_plan", label: "Scene Plan" },
+  { key: "visual_storyboard", label: "Storyboard" },
+  { key: "broll", label: "B-Roll" },
+  { key: "editorial_decisions", label: "Editorial" },
+  { key: "seo", label: "SEO" },
+];
+
 function ProjectView() {
   const { id } = useParams({ from: "/_authenticated/projects/$id" });
   const navigate = useNavigate();
