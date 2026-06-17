@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
@@ -14,12 +13,31 @@ export const startFullPipeline = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
-    // Fire the background runner. Build an absolute URL from the inbound request.
-    const req = getRequest();
-    const url = new URL(req!.url);
-    const runnerUrl = `${url.origin}/api/jobs/run/${job.id}`;
-    void fetch(runnerUrl, { method: "POST" }).catch(() => {});
-    return { jobId: job.id };
+    const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+    const token = await createJobRunnerToken(job.id);
+
+    const runnerUrl = `/api/public/jobs/run/${job.id}?token=${encodeURIComponent(token)}`;
+    return { jobId: job.id, runnerUrl };
+  });
+
+export const runQueuedJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ jobId: z.string() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { data: job, error } = await context.supabase
+      .from("jobs")
+      .select("id, state, project_id, projects!inner(user_id)")
+      .eq("id", data.jobId)
+      .single();
+    if (error) throw new Error(error.message);
+    const project = job.projects as unknown as { user_id: string };
+    if (project.user_id !== context.userId) throw new Error("Not authorized to run this job.");
+    if (job.state !== "queued" && job.state !== "failed") return { ok: true };
+
+    const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+    const token = await createJobRunnerToken(job.id);
+    const runnerUrl = `/api/public/jobs/run/${job.id}?token=${encodeURIComponent(token)}`;
+    return { ok: true, runnerUrl };
   });
 
 export const getJobStatus = createServerFn({ method: "GET" })

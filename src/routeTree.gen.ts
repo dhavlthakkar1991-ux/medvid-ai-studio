@@ -19,6 +19,7 @@ import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authentic
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 import { Route as ApiJobsRunJobIdRouteImport } from './routes/api/jobs/run.$jobId'
+import { Route as ApiPublicJobsRunJobIdRouteImport } from './routes/api/public/jobs/run.$jobId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -72,6 +73,11 @@ const ApiJobsRunJobIdRoute = ApiJobsRunJobIdRouteImport.update({
   path: '/api/jobs/run/$jobId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsRunJobIdRoute = ApiPublicJobsRunJobIdRouteImport.update({
+  id: '/api/public/jobs/run/$jobId',
+  path: '/api/public/jobs/run/$jobId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
+  '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
+  '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
+  '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/settings/brand'
     | '/settings/templates'
     | '/api/jobs/run/$jobId'
+    | '/api/public/jobs/run/$jobId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -131,6 +141,7 @@ export interface FileRouteTypes {
     | '/settings/brand'
     | '/settings/templates'
     | '/api/jobs/run/$jobId'
+    | '/api/public/jobs/run/$jobId'
   id:
     | '__root__'
     | '/'
@@ -143,6 +154,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/templates'
     | '/api/jobs/run/$jobId'
+    | '/api/public/jobs/run/$jobId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -150,6 +162,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiJobsRunJobIdRoute: typeof ApiJobsRunJobIdRoute
+  ApiPublicJobsRunJobIdRoute: typeof ApiPublicJobsRunJobIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -224,6 +237,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiJobsRunJobIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/run/$jobId': {
+      id: '/api/public/jobs/run/$jobId'
+      path: '/api/public/jobs/run/$jobId'
+      fullPath: '/api/public/jobs/run/$jobId'
+      preLoaderRoute: typeof ApiPublicJobsRunJobIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -254,6 +274,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiJobsRunJobIdRoute: ApiJobsRunJobIdRoute,
+  ApiPublicJobsRunJobIdRoute: ApiPublicJobsRunJobIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

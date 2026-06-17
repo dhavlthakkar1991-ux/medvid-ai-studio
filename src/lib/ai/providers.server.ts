@@ -93,16 +93,93 @@ export type TranscriptResult = {
   durationSeconds: number;
 };
 
-function getTranscriptionEndpoint(provider: TranscriptionProviderId, userKeys: Record<string, string>) {
-  switch (provider) {
-    case "openai":
-      return { url: "https://api.openai.com/v1/audio/transcriptions", apiKey: userKeys.openai ?? "", model: "whisper-1" };
-    case "groq":
-      return { url: "https://api.groq.com/openai/v1/audio/transcriptions", apiKey: userKeys.groq ?? "", model: "whisper-large-v3-turbo" };
-    case "assemblyai":
-    case "deepgram":
-      throw new Error(`Transcription provider "${provider}" is not yet implemented in Phase 1.`);
+type WhisperTranscriptionProviderId = Extract<TranscriptionProviderId, "openai" | "groq">;
+
+function getTranscriptionEndpoint(provider: WhisperTranscriptionProviderId, userKeys: Record<string, string>) {
+  if (provider === "openai") return { url: "https://api.openai.com/v1/audio/transcriptions", apiKey: userKeys.openai ?? "", model: "whisper-1" };
+  return { url: "https://api.groq.com/openai/v1/audio/transcriptions", apiKey: userKeys.groq ?? "", model: "whisper-large-v3-turbo" };
+}
+
+function getMediaMimeType(audio: Blob, filename: string) {
+  if (audio.type) return audio.type;
+  const ext = filename.split(".").pop()?.toLowerCase();
+  if (ext === "mp3") return "audio/mpeg";
+  if (ext === "wav") return "audio/wav";
+  if (ext === "m4a") return "audio/mp4";
+  if (ext === "webm") return "video/webm";
+  if (ext === "mov") return "video/quicktime";
+  return "video/mp4";
+}
+
+async function transcribeWithGemini(apiKey: string, audio: Blob, filename: string): Promise<TranscriptResult> {
+  if (!apiKey) throw new Error('No API key configured for transcription provider "gemini". Add it in Settings → AI.');
+  const mimeType = getMediaMimeType(audio, filename);
+  const bytes = await audio.arrayBuffer();
+  const uploadStart = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(bytes.byteLength),
+      "X-Goog-Upload-Header-Content-Type": mimeType,
+    },
+    body: JSON.stringify({ file: { display_name: filename } }),
+  });
+  if (!uploadStart.ok) throw new Error(`Transcription failed (gemini upload): ${uploadStart.status} ${(await uploadStart.text()).slice(0, 200)}`);
+  const uploadUrl = uploadStart.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("Transcription failed (gemini): upload URL missing.");
+
+  const uploadFinish = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": mimeType,
+      "X-Goog-Upload-Offset": "0",
+      "X-Goog-Upload-Command": "upload, finalize",
+    },
+    body: bytes,
+  });
+  if (!uploadFinish.ok) throw new Error(`Transcription failed (gemini file): ${uploadFinish.status} ${(await uploadFinish.text()).slice(0, 200)}`);
+  const uploaded = await uploadFinish.json();
+  let file = uploaded.file ?? uploaded;
+  if (!file?.uri) throw new Error("Transcription failed (gemini): uploaded file URI missing.");
+
+  for (let attempt = 0; file.state && file.state !== "ACTIVE" && attempt < 30; attempt++) {
+    if (file.state === "FAILED") throw new Error("Transcription failed (gemini): uploaded file processing failed.");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const statusRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(apiKey)}`);
+    if (!statusRes.ok) throw new Error(`Transcription failed (gemini status): ${statusRes.status} ${(await statusRes.text()).slice(0, 200)}`);
+    const statusJson = await statusRes.json();
+    file = statusJson.file ?? statusJson;
   }
+  if (file.state && file.state !== "ACTIVE") throw new Error("Transcription failed (gemini): uploaded file was not ready in time.");
+
+  const abort = new AbortController();
+  const timeoutId = setTimeout(() => abort.abort(), 120000);
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    signal: abort.signal,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: "Transcribe the spoken words in this media file. Return only the verbatim transcript text, with no summary or commentary." },
+          { file_data: { mime_type: file.mimeType ?? mimeType, file_uri: file.uri } },
+        ],
+      }],
+      generationConfig: { temperature: 0 },
+    }),
+  }).finally(() => clearTimeout(timeoutId));
+  if (!res.ok) throw new Error(`Transcription failed (gemini): ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const json = await res.json();
+  const text = (json.candidates ?? [])
+    .flatMap((c: any) => c.content?.parts ?? [])
+    .map((p: any) => p.text)
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  if (!text) throw new Error("Transcription failed (gemini): empty transcript returned.");
+  return { text, words: [], language: null, provider: "gemini", durationSeconds: 0 };
 }
 
 export async function transcribeAudio(
@@ -111,6 +188,10 @@ export async function transcribeAudio(
   audio: Blob,
   filename: string,
 ): Promise<TranscriptResult> {
+  if (provider === "gemini") return transcribeWithGemini(userKeys.gemini ?? "", audio, filename);
+  if (provider === "assemblyai" || provider === "deepgram") {
+    throw new Error(`Transcription provider "${provider}" is not yet implemented in Phase 1.`);
+  }
   const ep = getTranscriptionEndpoint(provider, userKeys);
   if (!ep.apiKey) {
     throw new Error(`No API key configured for transcription provider "${provider}". Add it in Settings → AI.`);
