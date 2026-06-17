@@ -50,6 +50,7 @@ const TASK_PROMPTS: Record<TaskKey, string> = {
   thumbnails: `Suggest 3 high-CTR thumbnail concepts. Each: concept, layout, text (≤6 words), palette (hex[]), asset_prompt.`,
   seo: `Produce SEO package for YouTube: 5 titles (≤70 chars), description (≤500 chars), 12–20 tags, chapters_text (HH:MM:SS lines), pinned_comment.`,
   shorts: `Pick 3–5 short clip ideas (15–60s windows). Each: start (mm:ss), end (mm:ss), hook (≤80 chars), caption, asset_prompt.`,
+  editorial_decisions: `You are a professional medical video editor. The source is a doctor's talking-head video (Track 0). For every meaningful moment, decide what to layer on top. Produce 8–30 edit_actions covering the video. Each item: scene_number (1-based, matching scene_plan), action_type (one of: show_broll, show_infographic, show_text_overlay, show_callout, show_lower_third, picture_in_picture, split_screen, zoom_crop, ken_burns, highlight_keyword, kinetic_typography, show_statistic, show_medical_diagram, show_clinical_image, show_thumbnail_frame, show_transition, show_logo, show_cta), start_time (seconds, numeric), end_time (seconds, numeric), layer (1=b-roll, 2=infographics, 3=motion graphics, 4=captions, 5=PiP, 6=branding, 7=transitions), priority (1-10), layout (full_screen, pip_right, pip_left, split_screen, doctor_with_infographic, doctor_with_broll, doctor_with_callout, top_bottom, picture_in_picture), transition_in/transition_out (cut, fade, crossfade, slide, push, zoom, blur, whip, medical_hud), asset_query (concrete search/generation prompt), reason (why this enhances the narration). Preserve the doctor's narration and timing — never replace, only enhance.`,
 };
 
 export async function runTaskForProject(
@@ -182,6 +183,10 @@ export async function runTaskForProject(
       await compileTimelineForProject(supabase, projectId);
       await buildRenderManifestForProject(supabase, projectId);
     }
+    // Editorial decisions overwrite edit_actions; rebuild manifest from the new actions.
+    if (task === "editorial_decisions") {
+      await buildRenderManifestForProject(supabase, projectId);
+    }
   } catch (e) {
     console.warn(`normalize/timeline build failed for ${task}`, e);
   }
@@ -210,4 +215,5 @@ export const ALL_TASKS: TaskKey[] = [
   "thumbnails",
   "seo",
   "shorts",
+  "editorial_decisions",
 ];

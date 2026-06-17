@@ -8,6 +8,7 @@ export const TASKS = [
   "thumbnails",
   "seo",
   "shorts",
+  "editorial_decisions",
 ] as const;
 export type Task = (typeof TASKS)[number];
 
@@ -27,6 +28,7 @@ export const TASK_DEFAULT_MODELS: Record<Exclude<Task, "full">, string> = {
   thumbnails: "google/gemini-2.5-flash",
   seo: "openai/gpt-5",
   shorts: "google/gemini-2.5-flash",
+  editorial_decisions: "google/gemini-2.5-pro",
 };
 
 export const BUDGET_MODEL = "google/gemini-2.5-flash";

@@ -287,6 +287,112 @@ export type Database = {
           },
         ]
       }
+      edit_actions: {
+        Row: {
+          action_type: string
+          asset_query: string | null
+          created_at: string
+          duration: number
+          end_time: number
+          id: string
+          layer: number
+          layout_id: string | null
+          parameters: Json
+          priority: number
+          project_id: string
+          scene_id: string | null
+          source: string
+          start_time: number
+          storyboard_item_id: string | null
+          transition_in_id: string | null
+          transition_out_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          asset_query?: string | null
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          layer?: number
+          layout_id?: string | null
+          parameters?: Json
+          priority?: number
+          project_id: string
+          scene_id?: string | null
+          source?: string
+          start_time?: number
+          storyboard_item_id?: string | null
+          transition_in_id?: string | null
+          transition_out_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          asset_query?: string | null
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          layer?: number
+          layout_id?: string | null
+          parameters?: Json
+          priority?: number
+          project_id?: string
+          scene_id?: string | null
+          source?: string
+          start_time?: number
+          storyboard_item_id?: string | null
+          transition_in_id?: string | null
+          transition_out_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edit_actions_layout_id_fkey"
+            columns: ["layout_id"]
+            isOneToOne: false
+            referencedRelation: "layout_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edit_actions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edit_actions_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edit_actions_storyboard_item_id_fkey"
+            columns: ["storyboard_item_id"]
+            isOneToOne: false
+            referencedRelation: "storyboard_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edit_actions_transition_in_id_fkey"
+            columns: ["transition_in_id"]
+            isOneToOne: false
+            referencedRelation: "transition_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edit_actions_transition_out_id_fkey"
+            columns: ["transition_out_id"]
+            isOneToOne: false
+            referencedRelation: "transition_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       infographic_items: {
         Row: {
           asset_prompt: string
@@ -387,6 +493,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      layout_templates: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      motion_templates: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -570,6 +730,7 @@ export type Database = {
       }
       render_manifest: {
         Row: {
+          action_type: string | null
           asset_id: string | null
           asset_query: string
           asset_source: string
@@ -577,7 +738,10 @@ export type Database = {
           asset_url: string | null
           caption_style: string
           created_at: string
+          edit_action_id: string | null
           id: string
+          layer: number | null
+          layout_id: string | null
           project_id: string
           render_order: number
           scene_id: string | null
@@ -586,8 +750,11 @@ export type Database = {
           timeline_end: number
           timeline_start: number
           transition: string
+          transition_in_id: string | null
+          transition_out_id: string | null
         }
         Insert: {
+          action_type?: string | null
           asset_id?: string | null
           asset_query?: string
           asset_source?: string
@@ -595,7 +762,10 @@ export type Database = {
           asset_url?: string | null
           caption_style?: string
           created_at?: string
+          edit_action_id?: string | null
           id?: string
+          layer?: number | null
+          layout_id?: string | null
           project_id: string
           render_order?: number
           scene_id?: string | null
@@ -604,8 +774,11 @@ export type Database = {
           timeline_end?: number
           timeline_start?: number
           transition?: string
+          transition_in_id?: string | null
+          transition_out_id?: string | null
         }
         Update: {
+          action_type?: string | null
           asset_id?: string | null
           asset_query?: string
           asset_source?: string
@@ -613,7 +786,10 @@ export type Database = {
           asset_url?: string | null
           caption_style?: string
           created_at?: string
+          edit_action_id?: string | null
           id?: string
+          layer?: number | null
+          layout_id?: string | null
           project_id?: string
           render_order?: number
           scene_id?: string | null
@@ -622,6 +798,8 @@ export type Database = {
           timeline_end?: number
           timeline_start?: number
           transition?: string
+          transition_in_id?: string | null
+          transition_out_id?: string | null
         }
         Relationships: [
           {
@@ -629,6 +807,20 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_edit_action_id_fkey"
+            columns: ["edit_action_id"]
+            isOneToOne: false
+            referencedRelation: "edit_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_layout_id_fkey"
+            columns: ["layout_id"]
+            isOneToOne: false
+            referencedRelation: "layout_templates"
             referencedColumns: ["id"]
           },
           {
@@ -650,6 +842,20 @@ export type Database = {
             columns: ["storyboard_item_id"]
             isOneToOne: false
             referencedRelation: "storyboard_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_transition_in_id_fkey"
+            columns: ["transition_in_id"]
+            isOneToOne: false
+            referencedRelation: "transition_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_transition_out_id_fkey"
+            columns: ["transition_out_id"]
+            isOneToOne: false
+            referencedRelation: "transition_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1146,6 +1352,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      transition_templates: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       usage_logs: {
         Row: {

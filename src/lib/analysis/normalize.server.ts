@@ -258,6 +258,52 @@ export async function normalizeTaskOutput(
   if (task === "broll") return normalizeBroll(supabase, projectId, data);
   if (task === "infographics") return normalizeInfographics(supabase, projectId, data);
   if (task === "thumbnails") return normalizeThumbnails(supabase, projectId, data);
+  if (task === "editorial_decisions") return normalizeEditorialDecisions(supabase, projectId, data);
+}
+
+/* ============= Editorial decisions → edit_actions ============= */
+export async function normalizeEditorialDecisions(
+  supabase: SupabaseLike,
+  projectId: string,
+  data: any,
+) {
+  const items = Array.isArray(data?.edit_actions) ? data.edit_actions : [];
+  if (items.length === 0) return;
+
+  const [scenes, layouts, transitions] = await Promise.all([
+    loadScenes(supabase, projectId),
+    supabase.from("layout_templates").select("id, name"),
+    supabase.from("transition_templates").select("id, name"),
+  ]);
+  const layoutByName = new Map<string, string>(((layouts.data ?? []) as any[]).map((r) => [r.name, r.id]));
+  const transitionByName = new Map<string, string>(((transitions.data ?? []) as any[]).map((r) => [r.name, r.id]));
+
+  const rows = items.map((raw: any) => {
+    const start = Number(raw.start_time) || 0;
+    const end = Number(raw.end_time) || start;
+    const scene = resolveSceneByNumberOrTime(scenes, Number(raw.scene_number) || undefined, start);
+    return {
+      project_id: projectId,
+      scene_id: scene?.id ?? null,
+      storyboard_item_id: null,
+      action_type: String(raw.action_type || "show_callout"),
+      start_time: start,
+      end_time: end,
+      duration: Math.max(0, end - start),
+      layer: Number.isFinite(Number(raw.layer)) ? Number(raw.layer) : 1,
+      priority: Number.isFinite(Number(raw.priority)) ? Number(raw.priority) : 5,
+      layout_id: layoutByName.get(String(raw.layout || "full_screen")) ?? layoutByName.get("full_screen") ?? null,
+      transition_in_id: transitionByName.get(String(raw.transition_in || "fade")) ?? transitionByName.get("fade") ?? null,
+      transition_out_id: transitionByName.get(String(raw.transition_out || "fade")) ?? transitionByName.get("fade") ?? null,
+      asset_query: String(raw.asset_query || ""),
+      source: "ai",
+      parameters: { reason: raw.reason ?? "" },
+    };
+  });
+
+  // Replace AI-sourced rows; preserve backfill until first AI run, then drop them.
+  await supabase.from("edit_actions").delete().eq("project_id", projectId);
+  if (rows.length > 0) await supabase.from("edit_actions").insert(rows);
 }
 
 /* ============= Transcript segmentation ============= */
