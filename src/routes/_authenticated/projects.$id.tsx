@@ -446,9 +446,8 @@ function ProjectView() {
                         const m = (healthQ.data!.taskMetrics ?? {})[t.task_name];
                         const atts = Array.isArray(t.attempts) ? t.attempts : [];
                         const reasons = whyFallback(t);
-                        return (
-                        <>
-                        <tr key={t.id} className="border-b border-border/50 align-top">
+                        return [
+                        (<tr key={t.id} className="border-b border-border/50 align-top">
                           <td className="py-1 pr-3 font-medium">{t.task_name}</td>
                           <td className="py-1 pr-3">
                             <Badge variant="outline" className="capitalize">{String(t.status).replace(/_/g, " ")}</Badge>
@@ -481,8 +480,8 @@ function ProjectView() {
                           <td className="py-1 pr-3 tabular-nums">
                             {m ? `${Math.round(m.aiSuccessRate * 100)}% (${m.aiSuccess}/${m.total})` : "—"}
                           </td>
-                        </tr>
-                        <tr key={`${t.id}-diag`} className="border-b border-border/50">
+                        </tr>),
+                        (<tr key={`${t.id}-diag`} className="border-b border-border/50">
                           <td colSpan={11} className="py-1 pr-3">
                             <details className="group">
                               <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground select-none">
@@ -549,9 +548,8 @@ function ProjectView() {
                               </div>
                             </details>
                           </td>
-                        </tr>
-                        </>
-                        );
+                        </tr>),
+                        ];
                       })}
                     </tbody>
                   </table>
