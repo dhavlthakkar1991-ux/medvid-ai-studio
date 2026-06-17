@@ -217,6 +217,49 @@ function ProjectView() {
         </Card>
       )}
 
+      {healthQ.data && healthQ.data.taskExecutions.length > 0 && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base">Quality Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {QUALITY_SUMMARY_TASKS.map(({ key, label }) => {
+                const t = (healthQ.data!.taskExecutions as any[]).find((x) => x.task_name === key);
+                if (!t) {
+                  return (
+                    <div key={key} className="rounded-md border border-border p-3">
+                      <div className="text-xs text-muted-foreground">{label}</div>
+                      <div className="text-sm font-medium mt-1">Not generated</div>
+                    </div>
+                  );
+                }
+                const passed = !!t.validation_passed;
+                const errs = Array.isArray(t.validation_errors) ? t.validation_errors.length : 0;
+                const warns = Array.isArray(t.validation_warnings) ? t.validation_warnings.length : 0;
+                return (
+                  <div key={key} className="rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-muted-foreground">{label}</div>
+                      <Badge
+                        variant={passed ? "outline" : "destructive"}
+                        className="text-[10px]"
+                      >
+                        {passed ? "Valid" : `${errs} err`}
+                      </Badge>
+                    </div>
+                    <div className="text-sm font-medium mt-1">{outcomeStage(t)}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      {recoverySource(t)}{warns > 0 ? ` · ${warns} warn` : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="visual_storyboard">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="transcript">Transcript</TabsTrigger>
@@ -286,6 +329,8 @@ function ProjectView() {
                       <tr>
                         <th className="text-left py-1 pr-3">Task</th>
                         <th className="text-left py-1 pr-3">Status</th>
+                        <th className="text-left py-1 pr-3">Outcome</th>
+                        <th className="text-left py-1 pr-3">Source</th>
                         <th className="text-left py-1 pr-3">Validation</th>
                         <th className="text-left py-1 pr-3">Retries</th>
                         <th className="text-left py-1 pr-3">Fallback</th>
@@ -300,6 +345,12 @@ function ProjectView() {
                           <td className="py-1 pr-3 font-medium">{t.task_name}</td>
                           <td className="py-1 pr-3">
                             <Badge variant="outline" className="capitalize">{String(t.status).replace(/_/g, " ")}</Badge>
+                          </td>
+                          <td className="py-1 pr-3">{outcomeStage(t)}</td>
+                          <td className="py-1 pr-3">
+                            <Badge variant={recoverySource(t) === "AI" ? "outline" : "secondary"} className="text-[10px]">
+                              {recoverySource(t)}
+                            </Badge>
                           </td>
                           <td className="py-1 pr-3">
                             {t.validation_passed ? (
