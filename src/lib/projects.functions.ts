@@ -67,7 +67,7 @@ export const getProject = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ context, data }) => {
     const [proj, ctx, tx, vers, jobs, usage] = await Promise.all([
-      context.supabase.from("projects").select("*").eq("id", data.id).single(),
+      context.supabase.from("projects").select("*").eq("id", data.id).maybeSingle(),
       context.supabase.from("project_context").select("*").eq("project_id", data.id).maybeSingle(),
       context.supabase.from("transcripts").select("*").eq("project_id", data.id).maybeSingle(),
       context.supabase.from("analysis_versions").select("*").eq("project_id", data.id).order("created_at", { ascending: false }),
@@ -75,6 +75,7 @@ export const getProject = createServerFn({ method: "GET" })
       context.supabase.from("usage_logs").select("estimated_cost, task, model").eq("project_id", data.id),
     ]);
     if (proj.error) throw new Error(proj.error.message);
+    if (!proj.data) return { project: null, context: null, transcript: null, versions: [], latestJob: null, usage: [] };
     return {
       project: proj.data,
       context: ctx.data,
