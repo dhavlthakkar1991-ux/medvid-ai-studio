@@ -438,10 +438,16 @@ function ProjectView() {
                         <th className="text-left py-1 pr-3">Duration</th>
                         <th className="text-left py-1 pr-3">Provider</th>
                         <th className="text-left py-1 pr-3">Model</th>
+                        <th className="text-left py-1 pr-3">AI Success</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {healthQ.data.taskExecutions.map((t: any) => (
+                      {healthQ.data.taskExecutions.map((t: any) => {
+                        const m = (healthQ.data!.taskMetrics ?? {})[t.task_name];
+                        const atts = Array.isArray(t.attempts) ? t.attempts : [];
+                        const reasons = whyFallback(t);
+                        return (
+                        <>
                         <tr key={t.id} className="border-b border-border/50 align-top">
                           <td className="py-1 pr-3 font-medium">{t.task_name}</td>
                           <td className="py-1 pr-3">
@@ -472,8 +478,81 @@ function ProjectView() {
                           <td className="py-1 pr-3 tabular-nums">{t.duration_ms != null ? `${(t.duration_ms / 1000).toFixed(1)}s` : "—"}</td>
                           <td className="py-1 pr-3">{t.provider}</td>
                           <td className="py-1 pr-3 font-mono text-[10px]">{t.model}</td>
+                          <td className="py-1 pr-3 tabular-nums">
+                            {m ? `${Math.round(m.aiSuccessRate * 100)}% (${m.aiSuccess}/${m.total})` : "—"}
+                          </td>
                         </tr>
-                      ))}
+                        <tr key={`${t.id}-diag`} className="border-b border-border/50">
+                          <td colSpan={11} className="py-1 pr-3">
+                            <details className="group">
+                              <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground select-none">
+                                Diagnostics · {atts.length} attempt{atts.length === 1 ? "" : "s"}
+                                {m ? ` · retry ${Math.round(m.retryRate * 100)}% · fallback ${Math.round(m.fallbackRate * 100)}%` : ""}
+                              </summary>
+                              <div className="mt-2 space-y-3 pl-2 border-l-2 border-border">
+                                {reasons.length > 0 && (
+                                  <div>
+                                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Why Fallback Was Used</div>
+                                    <ol className="text-[11px] space-y-0.5">
+                                      {reasons.map((r, i) => <li key={i}>{r}</li>)}
+                                    </ol>
+                                  </div>
+                                )}
+                                {Array.isArray(t.validation_errors) && t.validation_errors.length > 0 && (
+                                  <div>
+                                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Validation Errors (final)</div>
+                                    <ul className="text-[11px] text-amber-600 list-disc pl-4">
+                                      {t.validation_errors.slice(0, 12).map((e: string, i: number) => <li key={i}>{e}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {atts.map((a: any, i: number) => (
+                                  <div key={i} className="rounded border border-border p-2">
+                                    <div className="flex items-center gap-2 text-[11px]">
+                                      <Badge variant={a.valid ? "outline" : "secondary"} className="text-[10px]">
+                                        {OUTCOME_LABEL[a.stage] ?? a.stage}
+                                      </Badge>
+                                      <span className={a.valid ? "text-emerald-600" : "text-amber-600"}>
+                                        {a.valid ? "valid" : "invalid"}
+                                      </span>
+                                      {a.provider && <span className="text-muted-foreground">· {a.provider}</span>}
+                                      {a.model && <span className="text-muted-foreground font-mono">· {a.model}</span>}
+                                      {a.duration_ms != null && <span className="text-muted-foreground">· {(a.duration_ms / 1000).toFixed(1)}s</span>}
+                                    </div>
+                                    {Array.isArray(a.errors) && a.errors.length > 0 && (
+                                      <ul className="mt-1 text-[10px] text-amber-600 list-disc pl-4">
+                                        {a.errors.slice(0, 8).map((e: string, j: number) => <li key={j}>{e}</li>)}
+                                      </ul>
+                                    )}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                      {a.raw_text && (
+                                        <details>
+                                          <summary className="cursor-pointer text-[10px] text-muted-foreground">Raw AI text</summary>
+                                          <pre className="mt-1 text-[10px] overflow-auto max-h-48 bg-muted/30 rounded p-2 whitespace-pre-wrap">{a.raw_text}</pre>
+                                        </details>
+                                      )}
+                                      {a.raw_parsed !== undefined && (
+                                        <details>
+                                          <summary className="cursor-pointer text-[10px] text-muted-foreground">Raw parsed</summary>
+                                          <pre className="mt-1 text-[10px] overflow-auto max-h-48 bg-muted/30 rounded p-2">{JSON.stringify(a.raw_parsed, null, 2)}</pre>
+                                        </details>
+                                      )}
+                                      {a.normalized !== undefined && (
+                                        <details>
+                                          <summary className="cursor-pointer text-[10px] text-muted-foreground">Normalized</summary>
+                                          <pre className="mt-1 text-[10px] overflow-auto max-h-48 bg-muted/30 rounded p-2">{JSON.stringify(a.normalized, null, 2)}</pre>
+                                        </details>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </td>
+                        </tr>
+                        </>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
