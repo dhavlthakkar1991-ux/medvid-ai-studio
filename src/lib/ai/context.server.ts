@@ -14,6 +14,8 @@ export type ContextRow = {
   render_intent: string | null;
   visual_density: string | null;
   retention_priority: string | null;
+  presenter_name?: string | null;
+  grounding_mode?: string | null;
 };
 
 export type TemplateRow = {
@@ -48,5 +50,27 @@ export function buildContextPrompt(ctx: ContextRow | null, tpl: TemplateRow): st
   lines.push(`- Preferred B-roll types: ${arr(broll)}`);
   const thumb = (ctx?.thumbnail_style && Object.keys(ctx.thumbnail_style as object).length) ? ctx.thumbnail_style : tpl?.default_thumbnail_style;
   if (thumb) lines.push(`- Thumbnail style: ${JSON.stringify(thumb)}`);
+
+  const presenter = (ctx?.presenter_name ?? "").trim();
+  if (presenter) {
+    lines.push("");
+    lines.push("## Presenter (AUTHORITATIVE)");
+    lines.push(`- Name: ${presenter}`);
+    lines.push(`- This is the canonical presenter name. ALWAYS use this exact spelling in titles, lower-thirds, SEO, thumbnails, descriptions, and any text referring to the speaker.`);
+    lines.push(`- The transcription may misspell or mis-hear this name — ignore the transcript's version and use the spelling above.`);
+    lines.push(`- Never invent a different name from transcript audio.`);
+  }
+
+  const grounding = (ctx?.grounding_mode ?? "strict").toLowerCase();
+  lines.push("");
+  lines.push("## Grounding Mode");
+  if (grounding === "open") {
+    lines.push("- Mode: OPEN — you may add adjacent medical concepts when clearly helpful.");
+  } else {
+    lines.push("- Mode: STRICT");
+    lines.push("- Only use facts, conditions, risk factors, treatments, statistics, and concepts that are EXPLICITLY mentioned in the transcript, project context, or specialty template above.");
+    lines.push("- Do NOT introduce medical concepts the speaker did not discuss (e.g. don't add HPV, sun exposure, or oral hygiene if the transcript only discusses tobacco, alcohol, and ulcers).");
+    lines.push("- If a visual or infographic would require an unsupported concept, omit it instead.");
+  }
   return lines.join("\n");
 }

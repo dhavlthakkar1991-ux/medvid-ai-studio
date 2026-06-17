@@ -31,6 +31,8 @@ function NewProject() {
   const [topic, setTopic] = useState("");
   const [tplId, setTplId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
+  const [presenterName, setPresenterName] = useState("");
+  const [groundingMode, setGroundingMode] = useState<"strict" | "open">("strict");
   const [overrides, setOverrides] = useState({
     audience: "", brand_voice: "", visual_style: "",
     target_platform: "YouTube", content_type: "Educational",
@@ -40,10 +42,34 @@ function NewProject() {
 
   const tpl = (tpls.data ?? []).find(t => t.id === tplId);
 
+  // Extract duration + dimensions from the chosen video file (client-side).
+  const extractVideoMeta = (f: File): Promise<{ duration: number | null; width: number | null; height: number | null }> =>
+    new Promise((resolve) => {
+      try {
+        const url = URL.createObjectURL(f);
+        const v = document.createElement("video");
+        v.preload = "metadata";
+        v.src = url;
+        const done = (val: { duration: number | null; width: number | null; height: number | null }) => {
+          URL.revokeObjectURL(url);
+          resolve(val);
+        };
+        v.onloadedmetadata = () => done({
+          duration: Number.isFinite(v.duration) ? Math.round(v.duration) : null,
+          width: v.videoWidth || null,
+          height: v.videoHeight || null,
+        });
+        v.onerror = () => done({ duration: null, width: null, height: null });
+      } catch {
+        resolve({ duration: null, width: null, height: null });
+      }
+    });
+
   const onSubmit = async () => {
     if (!title || !file || !tplId) return toast.error("Title, template and video are required.");
     setBusy(true);
     try {
+      const meta = await extractVideoMeta(file);
       const { path, token } = await uploadFn({ data: { filename: file.name } });
       const { error: upErr } = await supabase.storage.from("videos").uploadToSignedUrl(path, token, file);
       if (upErr) throw upErr;
@@ -61,11 +87,19 @@ function NewProject() {
         render_intent: overrides.render_intent,
         visual_density: overrides.visual_density,
         retention_priority: overrides.retention_priority,
+        presenter_name: presenterName.trim() || null,
+        grounding_mode: groundingMode,
       };
       const { id } = await createFn({
         data: {
           title, topic, specialty_template_id: tplId,
-          video_path: path, duration_seconds: null, context: ctx,
+          video_path: path,
+          duration_seconds: meta.duration,
+          width: meta.width,
+          height: meta.height,
+          fps: null,
+          file_size: file.size,
+          context: ctx,
         },
       });
       const job = await startFn({ data: { projectId: id } });
@@ -115,6 +149,30 @@ function NewProject() {
         <CardContent className="space-y-4">
           <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Oral cancer: signs you should never ignore" /></div>
           <div><Label>Topic / brief</Label><Textarea value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What this video covers, the key message, and the call-to-action." /></div>
+          <div>
+            <Label>Presenter name</Label>
+            <Input
+              value={presenterName}
+              onChange={(e) => setPresenterName(e.target.value)}
+              placeholder="Dr. Dhaval Thakkar"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Authoritative spelling. Overrides whatever transcription hears, and is used in every AI output (SEO, lower-thirds, thumbnails).
+            </p>
+          </div>
+          <div>
+            <Label>Grounding mode</Label>
+            <Select value={groundingMode} onValueChange={(v) => setGroundingMode(v as "strict" | "open")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strict">Strict — only facts mentioned in the transcript</SelectItem>
+                <SelectItem value="open">Open — AI may add adjacent medical concepts</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Strict prevents the AI from introducing topics the speaker didn't actually mention.
+            </p>
+          </div>
           <div><Label>Video file</Label><Input type="file" accept="video/*,audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
         </CardContent>
       </Card>

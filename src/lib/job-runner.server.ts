@@ -99,9 +99,11 @@ export async function runAnalysisJob(jobId: string) {
         language: tx.language,
         provider_used: tx.provider,
       });
-      // Persist duration. Prefer the provider value; otherwise derive from
-      // word timings; otherwise estimate from word count (~2.5 words/sec).
-      let resolvedDuration = Number(tx.durationSeconds) || 0;
+      // Persist duration. Prefer the project value (extracted client-side at
+      // upload from the actual video file), then the provider value, then
+      // word timings, then a word-count estimate (~2.5 words/sec).
+      let resolvedDuration = Number(project.duration_seconds) || 0;
+      if (!resolvedDuration) resolvedDuration = Number(tx.durationSeconds) || 0;
       if (!resolvedDuration && Array.isArray(tx.words) && tx.words.length > 0) {
         resolvedDuration = Number(tx.words[tx.words.length - 1]?.end) || 0;
       }
@@ -109,8 +111,10 @@ export async function runAnalysisJob(jobId: string) {
         const wc = tx.text.trim().split(/\s+/).filter(Boolean).length;
         if (wc > 0) resolvedDuration = Math.max(15, Math.round(wc / 2.5));
       }
-      if (resolvedDuration) {
+      if (resolvedDuration && !Number(project.duration_seconds)) {
         await supabaseAdmin.from("projects").update({ duration_seconds: resolvedDuration }).eq("id", project.id);
+        project.duration_seconds = resolvedDuration;
+      } else if (resolvedDuration) {
         project.duration_seconds = resolvedDuration;
       }
       try {
