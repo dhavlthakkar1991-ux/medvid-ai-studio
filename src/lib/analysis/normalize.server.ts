@@ -56,11 +56,10 @@ export async function normalizeScenePlan(
   const items: any[] = Array.isArray(data?.scene_plan) ? data.scene_plan : [];
   if (items.length === 0) return;
 
-  // Sort by t and derive start/end times. If model gave start/end seconds use them.
+  // Order scenes by AI-supplied scene_number (or t as a tiebreaker). Timestamps
+  // from the AI are advisory — final timing is derived from transcript segments.
   const enriched = items.map((it, i) => {
     const t = mmssToSeconds(it.t);
-    const startProvided = it.start_seconds != null ? Number(it.start_seconds) : undefined;
-    const endProvided = it.end_seconds != null ? Number(it.end_seconds) : undefined;
     return {
       idx: i,
       scene_number: Number(it.scene_number ?? i + 1),
@@ -68,18 +67,41 @@ export async function normalizeScenePlan(
       narration_text: String(it.narration_text ?? ""),
       objective: String(it.objective ?? it.prompt ?? ""),
       t,
-      startProvided,
-      endProvided,
     };
-  }).sort((a, b) => (a.startProvided ?? a.t) - (b.startProvided ?? b.t));
+  }).sort((a, b) => (a.scene_number - b.scene_number) || (a.t - b.t));
 
-  const total = projectDuration > 0 ? projectDuration : enriched[enriched.length - 1]?.t ?? 0;
+  // Derive scene timing from transcript segments — no AI-estimated timestamps.
+  const { data: segs } = await supabase
+    .from("transcript_segments")
+    .select("id, start_time, end_time, segment_index")
+    .eq("project_id", projectId)
+    .order("segment_index", { ascending: true });
+  const segments: Array<{ start_time: number; end_time: number }> = Array.isArray(segs) ? segs : [];
+
+  const N = enriched.length;
+  const total =
+    projectDuration > 0
+      ? projectDuration
+      : segments.length > 0
+      ? segments[segments.length - 1].end_time
+      : enriched[enriched.length - 1]?.t ?? N * 30;
+
   const rows = enriched.map((s, i) => {
-    const next = enriched[i + 1];
-    const start = s.startProvided ?? s.t;
-    const end =
-      s.endProvided ??
-      (next ? (next.startProvided ?? next.t) : total > start ? total : start + 30);
+    let start: number;
+    let end: number;
+    if (segments.length > 0) {
+      // Distribute transcript segments evenly across the scenes.
+      const startIdx = Math.floor((i * segments.length) / N);
+      const endIdxExclusive = Math.max(startIdx + 1, Math.floor(((i + 1) * segments.length) / N));
+      const slice = segments.slice(startIdx, endIdxExclusive);
+      start = slice[0]?.start_time ?? 0;
+      end = slice[slice.length - 1]?.end_time ?? start;
+    } else {
+      // No transcript segmentation available — split the duration evenly.
+      start = (i / N) * total;
+      end = ((i + 1) / N) * total;
+    }
+    if (end <= start) end = start + Math.max(1, total / Math.max(1, N));
     const duration = Math.max(0, end - start);
     return {
       project_id: projectId,
