@@ -6,7 +6,7 @@ import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
-import { getCanonicalProject, rebuildRenderManifest } from "@/lib/render.functions";
+import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson } from "@/lib/render.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,8 @@ function ProjectView() {
   const exportFn = useServerFn(getExportBundle);
   const canonFn = useServerFn(getCanonicalProject);
   const rebuildFn = useServerFn(rebuildRenderManifest);
+  const validateFn = useServerFn(validateTimeline);
+  const exportManifestFn = useServerFn(exportRenderManifestJson);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
 
@@ -110,6 +112,11 @@ function ProjectView() {
     if (kind === "srt") downloadBlob(`${project.title}.srt`, bundle.srt ?? "", "application/x-subrip");
   };
 
+  const onExportManifest = async () => {
+    const bundle = await exportManifestFn({ data: { projectId: id } });
+    downloadBlob(`${project.title}.render-manifest.json`, JSON.stringify(bundle, null, 2), "application/json");
+  };
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -125,6 +132,7 @@ function ProjectView() {
           <Button size="sm" variant="outline" onClick={() => onExport("json")}><FileJson className="h-3 w-3 mr-1" />JSON</Button>
           <Button size="sm" variant="outline" onClick={() => onExport("txt")}><FileText className="h-3 w-3 mr-1" />TXT</Button>
           <Button size="sm" variant="outline" onClick={() => onExport("srt")}><Captions className="h-3 w-3 mr-1" />SRT</Button>
+          <Button size="sm" variant="outline" onClick={onExportManifest}><FileJson className="h-3 w-3 mr-1" />Manifest</Button>
         </div>
       </div>
 
@@ -148,6 +156,8 @@ function ProjectView() {
             <TabsTrigger key={t} value={t}>{TASK_LABELS[t]}</TabsTrigger>
           ))}
           <TabsTrigger value="render_manifest">Render Manifest</TabsTrigger>
+          <TabsTrigger value="assets">Assets</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="cost">Cost</TabsTrigger>
         </TabsList>
 
