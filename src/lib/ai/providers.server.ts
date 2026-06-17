@@ -4,7 +4,13 @@ import { z, type ZodSchema } from "zod";
 import type { LLMProviderId, TranscriptionProviderId, Usage } from "./types";
 
 type LLMOpts = { model: string; system: string; prompt: string; schema: ZodSchema };
-type LLMResult<T> = { data: T; usage: Usage; provider: string; model: string };
+type LLMResult<T> = {
+  data: T;
+  usage: Usage;
+  provider: string;
+  model: string;
+  raw?: { text?: string; parsed?: unknown };
+};
 
 function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, string>): {
   baseURL: string;
@@ -79,12 +85,13 @@ export async function generateJSON<T>(
         maxOutputTokens,
       });
       const parsed = extractJson(result.text);
-      const data = opts.schema.parse(coerceToSchemaShape(parsed, opts.schema)) as T;
+      const coerced = coerceToSchemaShape(parsed, opts.schema);
+      const data = opts.schema.parse(coerced) as T;
       const usage: Usage = {
         inputTokens: result.usage?.inputTokens ?? 0,
         outputTokens: result.usage?.outputTokens ?? 0,
       };
-      return { data, usage, provider: cfg.name, model: opts.model };
+      return { data, usage, provider: cfg.name, model: opts.model, raw: { text: result.text, parsed } };
     }
     const result = await generateObject({
       model: gateway(modelId),
@@ -97,7 +104,13 @@ export async function generateJSON<T>(
       inputTokens: result.usage?.inputTokens ?? 0,
       outputTokens: result.usage?.outputTokens ?? 0,
     };
-    return { data: result.object as T, usage, provider: cfg.name, model: opts.model };
+    return {
+      data: result.object as T,
+      usage,
+      provider: cfg.name,
+      model: opts.model,
+      raw: { parsed: result.object },
+    };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("429")) throw new Error("AI rate limit reached. Please retry in a moment.");
