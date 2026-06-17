@@ -149,6 +149,30 @@ function NewProject() {
         <CardContent className="space-y-4">
           <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Oral cancer: signs you should never ignore" /></div>
           <div><Label>Topic / brief</Label><Textarea value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What this video covers, the key message, and the call-to-action." /></div>
+          <div>
+            <Label>Presenter name</Label>
+            <Input
+              value={presenterName}
+              onChange={(e) => setPresenterName(e.target.value)}
+              placeholder="Dr. Dhaval Thakkar"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Authoritative spelling. Overrides whatever transcription hears, and is used in every AI output (SEO, lower-thirds, thumbnails).
+            </p>
+          </div>
+          <div>
+            <Label>Grounding mode</Label>
+            <Select value={groundingMode} onValueChange={(v) => setGroundingMode(v as "strict" | "open")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strict">Strict — only facts mentioned in the transcript</SelectItem>
+                <SelectItem value="open">Open — AI may add adjacent medical concepts</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Strict prevents the AI from introducing topics the speaker didn't actually mention.
+            </p>
+          </div>
           <div><Label>Video file</Label><Input type="file" accept="video/*,audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
         </CardContent>
       </Card>
