@@ -71,7 +71,7 @@ export async function generateJSON<T>(
         prompt: opts.prompt,
       });
       const parsed = extractJson(result.text);
-      const data = opts.schema.parse(parsed) as T;
+      const data = opts.schema.parse(coerceToSchemaShape(parsed, opts.schema)) as T;
       const usage: Usage = {
         inputTokens: result.usage?.inputTokens ?? 0,
         outputTokens: result.usage?.outputTokens ?? 0,
@@ -115,6 +115,23 @@ function extractJson(response: string): unknown {
       .replace(/[\x00-\x1F\x7F]/g, "");
     return JSON.parse(cleaned);
   }
+}
+
+function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
+  // Schemas are { someKey: Array<...> }. If the model returned just the array, wrap it.
+  const def: any = (schema as any)._def;
+  const shape = def?.shape?.() ?? def?.shape;
+  if (shape && typeof shape === "object") {
+    const keys = Object.keys(shape);
+    if (Array.isArray(parsed) && keys.length === 1) {
+      return { [keys[0]]: parsed };
+    }
+    // Unwrap single-element array containing the expected object
+    if (Array.isArray(parsed) && parsed.length === 1 && typeof parsed[0] === "object") {
+      return parsed[0];
+    }
+  }
+  return parsed;
 }
 
 /* ============ Transcription ============ */
