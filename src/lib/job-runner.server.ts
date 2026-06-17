@@ -14,6 +14,15 @@ export async function runAnalysisJob(jobId: string) {
   const setState = async (state: string, progress: number, error: string | null = null) =>
     supabaseAdmin.from("jobs").update({ state, progress, error }).eq("id", jobId);
 
+  // Create pipeline_run for this execution.
+  const pipelineStartedAt = new Date();
+  const { data: pipelineRun } = await supabaseAdmin
+    .from("pipeline_runs")
+    .insert({ project_id: project.id, pipeline_version: "v2", status: "running" })
+    .select("id")
+    .single();
+  const pipelineRunId: string | null = pipelineRun?.id ?? null;
+
   try {
     await setState("transcribing", 10);
     await supabaseAdmin.from("projects").update({ status: "transcribing" }).eq("id", project.id);
@@ -75,29 +84,64 @@ export async function runAnalysisJob(jobId: string) {
     await setState("analyzing", 40);
     await supabaseAdmin.from("projects").update({ status: "analyzing" }).eq("id", project.id);
 
+    const taskOutcomes: Array<{ task: string; valid: boolean; fallbackUsed: boolean; errored: boolean }> = [];
     for (let i = 0; i < ALL_TASKS.length; i++) {
       const task = ALL_TASKS[i];
       try {
-        await runTaskForProject(supabaseAdmin, project.user_id, project.id, task);
+        const out = await runTaskForProject(supabaseAdmin, project.user_id, project.id, task, { pipelineRunId });
+        taskOutcomes.push({ task, valid: out.validation?.valid ?? true, fallbackUsed: !!out.fallbackUsed, errored: false });
       } catch (error) {
         console.error(`task ${task} failed`, error);
+        taskOutcomes.push({ task, valid: false, fallbackUsed: false, errored: true });
       }
       await setState("analyzing", 40 + Math.round(((i + 1) / ALL_TASKS.length) * 55));
     }
 
-    await setState("completed", 100);
-    await supabaseAdmin.from("projects").update({ status: "completed" }).eq("id", project.id);
     // Final canonical manifest build (defensive; runner already rebuilds after each contributing task).
     try {
       await buildRenderManifestForProject(supabaseAdmin, project.id);
     } catch (e) {
       console.warn("final manifest build failed", e);
     }
+
+    // Decide project + pipeline status.
+    const { CRITICAL_TASKS } = await import("@/lib/qa/validators");
+    const criticalFailures = taskOutcomes
+      .filter((o) => (CRITICAL_TASKS as string[]).includes(o.task) && (o.errored || !o.valid))
+      .map((o) => o.task);
+    const warnings = taskOutcomes.filter((o) => !o.valid || o.fallbackUsed).map((o) => o.task);
+    const projectStatus = criticalFailures.length > 0
+      ? "needs_review"
+      : warnings.length > 0
+        ? "completed_with_warnings"
+        : "completed";
+    await setState("completed", 100);
+    await supabaseAdmin.from("projects").update({ status: projectStatus }).eq("id", project.id);
+
+    const completedAt = new Date();
+    if (pipelineRunId) {
+      await supabaseAdmin.from("pipeline_runs").update({
+        status: projectStatus,
+        completed_at: completedAt.toISOString(),
+        duration_ms: completedAt.getTime() - pipelineStartedAt.getTime(),
+        warnings_count: warnings.length,
+        failures_count: taskOutcomes.filter((o) => o.errored || !o.valid).length,
+        critical_failures: criticalFailures,
+      }).eq("id", pipelineRunId);
+    }
     return { body: "ok", status: 200 };
   } catch (error: any) {
     console.error("job run failed", error);
     await setState("failed", 0, String(error?.message ?? error));
     await supabaseAdmin.from("projects").update({ status: "failed" }).eq("id", project.id);
+    if (pipelineRunId) {
+      const completedAt = new Date();
+      await supabaseAdmin.from("pipeline_runs").update({
+        status: "failed",
+        completed_at: completedAt.toISOString(),
+        duration_ms: completedAt.getTime() - pipelineStartedAt.getTime(),
+      }).eq("id", pipelineRunId);
+    }
     return { body: "failed", status: 500 };
   }
 }
