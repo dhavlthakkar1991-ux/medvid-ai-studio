@@ -154,8 +154,11 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
   }
   if (file.state && file.state !== "ACTIVE") throw new Error("Transcription failed (gemini): uploaded file was not ready in time.");
 
+  const abort = new AbortController();
+  const timeoutId = setTimeout(() => abort.abort(), 120000);
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
+    signal: abort.signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{
@@ -166,7 +169,7 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
       }],
       generationConfig: { temperature: 0 },
     }),
-  });
+  }).finally(() => clearTimeout(timeoutId));
   if (!res.ok) throw new Error(`Transcription failed (gemini): ${res.status} ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
   const text = (json.candidates ?? [])
