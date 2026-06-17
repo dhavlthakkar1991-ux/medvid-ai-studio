@@ -8,13 +8,14 @@ export async function buildRenderManifestForProject(
   supabase: SupabaseLike,
   projectId: string,
 ) {
-  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: infographics }, { data: instructions }, { data: editActions }, { data: project }] = await Promise.all([
+  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: infographics }, { data: instructions }, { data: editActions }, { data: layoutDecisions }, { data: project }] = await Promise.all([
     supabase.from("scenes").select("*").eq("project_id", projectId).order("scene_number", { ascending: true }),
     supabase.from("storyboard_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("broll_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("infographic_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("timeline_instructions").select("*").eq("project_id", projectId).order("render_order", { ascending: true }),
     supabase.from("edit_actions").select("*").eq("project_id", projectId).order("start_time", { ascending: true }),
+    supabase.from("layout_decisions").select("*").eq("project_id", projectId),
     supabase.from("projects").select("duration_seconds").eq("id", projectId).maybeSingle(),
   ]);
 
@@ -38,6 +39,11 @@ export async function buildRenderManifestForProject(
     asset_url: string | null;
     caption_style: string;
     status: string;
+    layout_name: string | null;
+    doctor_visibility: string | null;
+    doctor_size: string | null;
+    attention_focus: string | null;
+    rationale: string | null;
   };
 
   const entries: Entry[] = [];
@@ -47,8 +53,14 @@ export async function buildRenderManifestForProject(
   // infographics on supplementary layers so editorial actions like
   // show_lower_third / kinetic_typography / highlight_keyword survive.
   const eas = Array.isArray(editActions) ? (editActions as any[]) : [];
+  const layoutByActionId = new Map<string, any>();
+  for (const ld of (layoutDecisions ?? []) as any[]) {
+    if (ld.action_id) layoutByActionId.set(ld.action_id as string, ld);
+  }
+  const { defaultLayoutForAction } = await import("../layout/layout-runner.server");
   if (eas.length > 0) {
     for (const ea of eas) {
+      const ld = layoutByActionId.get(ea.id) || defaultLayoutForAction(ea.action_type || "");
       entries.push({
         scene_id: ea.scene_id ?? null,
         storyboard_item_id: ea.storyboard_item_id ?? null,
@@ -69,6 +81,11 @@ export async function buildRenderManifestForProject(
         asset_url: null,
         caption_style: "Full",
         status: "pending",
+        layout_name: ld.layout_name ?? null,
+        doctor_visibility: ld.doctor_visibility ?? null,
+        doctor_size: ld.doctor_size ?? null,
+        attention_focus: ld.attention_focus ?? null,
+        rationale: ld.rationale ?? null,
       });
     }
 
@@ -91,6 +108,9 @@ export async function buildRenderManifestForProject(
         asset_type: "show_broll", asset_source: "enrichment_broll",
         asset_query: it.search_prompt || it.keyword || "", asset_url: null,
         caption_style: "", status: "pending",
+        layout_name: "doctor_with_broll", doctor_visibility: "reduced",
+        doctor_size: "30%", attention_focus: "broll",
+        rationale: "Enrichment: b-roll without explicit editorial decision.",
       });
     }
     for (const it of (infographics ?? []) as any[]) {
@@ -106,6 +126,9 @@ export async function buildRenderManifestForProject(
         asset_type: "show_infographic", asset_source: "enrichment_infographic",
         asset_query: it.asset_prompt || it.title || "", asset_url: null,
         caption_style: "Full", status: "pending",
+        layout_name: "doctor_with_infographic", doctor_visibility: "visible",
+        doctor_size: "30%", attention_focus: "infographic",
+        rationale: "Enrichment: infographic placed beside doctor.",
       });
     }
   } else if (Array.isArray(instructions) && instructions.length > 0) {
@@ -132,6 +155,8 @@ export async function buildRenderManifestForProject(
         asset_url: sb?.asset_url ?? null,
         caption_style: sb?.screen_layout || "Full",
         status: sb?.asset_status || "pending",
+        layout_name: null, doctor_visibility: null, doctor_size: null,
+        attention_focus: null, rationale: null,
       });
     }
   } else {
@@ -156,6 +181,8 @@ export async function buildRenderManifestForProject(
         asset_url: it.asset_url ?? null,
         caption_style: it.screen_layout || "Full",
         status: it.asset_status || "pending",
+        layout_name: null, doctor_visibility: null, doctor_size: null,
+        attention_focus: null, rationale: null,
       });
     }
     for (const it of (broll ?? []) as any[]) {
@@ -179,6 +206,8 @@ export async function buildRenderManifestForProject(
         asset_url: it.asset_url ?? null,
         caption_style: "",
         status: it.asset_status || "pending",
+        layout_name: null, doctor_visibility: null, doctor_size: null,
+        attention_focus: null, rationale: null,
       });
     }
   }

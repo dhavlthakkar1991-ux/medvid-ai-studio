@@ -99,9 +99,12 @@ export async function runAnalysisJob(jobId: string) {
 
     // Final canonical manifest build (defensive; runner already rebuilds after each contributing task).
     try {
+      // Ensure layout decisions exist for every edit_action before final manifest build.
+      const { runLayoutDecisionsForProject } = await import("@/lib/layout/layout-runner.server");
+      await runLayoutDecisionsForProject(supabaseAdmin, project.user_id, project.id);
       await buildRenderManifestForProject(supabaseAdmin, project.id);
     } catch (e) {
-      console.warn("final manifest build failed", e);
+      console.warn("final layout/manifest build failed", e);
     }
 
     // Decide project + pipeline status.

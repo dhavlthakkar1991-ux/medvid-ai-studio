@@ -6,7 +6,7 @@ import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
-import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions } from "@/lib/render.functions";
+import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,7 @@ function ProjectView() {
   const validateFn = useServerFn(validateTimeline);
   const exportManifestFn = useServerFn(exportRenderManifestJson);
   const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
+  const regenLayoutFn = useServerFn(regenerateLayoutDecisions);
   const healthFn = useServerFn(getPipelineHealth);
   const resetFn = useServerFn(resetProject);
   const deleteFn = useServerFn(deleteProject);
@@ -284,6 +285,7 @@ function ProjectView() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
+          <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
           <TabsTrigger value="health">Pipeline Health</TabsTrigger>
           <TabsTrigger value="cost">Cost</TabsTrigger>
         </TabsList>
@@ -367,6 +369,40 @@ function ProjectView() {
                           ))}
                         </div>
                       </div>
+                      {healthQ.data.presence && healthQ.data.presence.totalLayoutDecisions > 0 && (
+                        <div className="space-y-2 pt-2">
+                          <div className="rounded-md border border-border p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="text-xs text-muted-foreground">Doctor Presence</div>
+                              <Badge
+                                variant={healthQ.data.presence.doctorPresencePct >= 0.6 ? "outline" : "destructive"}
+                                className="text-[10px]"
+                              >
+                                {(healthQ.data.presence.doctorPresencePct * 100).toFixed(0)}% · target 60%
+                              </Badge>
+                            </div>
+                            <Progress value={Math.min(100, healthQ.data.presence.doctorPresencePct * 100)} />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1">Composition Mix</div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                              {([
+                                ["Layout Diversity", healthQ.data.presence.layoutDiversityPct],
+                                ["Full Screen", healthQ.data.presence.fullScreenPct],
+                                ["PiP", healthQ.data.presence.pipPct],
+                                ["Split Screen", healthQ.data.presence.splitScreenPct],
+                                ["Infographic", healthQ.data.presence.infographicPct],
+                                ["Clinical Image", healthQ.data.presence.clinicalImagePct],
+                              ] as Array<[string, number]>).map(([label, v]) => (
+                                <div key={label} className="rounded-md border border-border px-2 py-1.5">
+                                  <div className="text-[10px] text-muted-foreground">{label}</div>
+                                  <div className="text-sm font-semibold tabular-nums">{(v * 100).toFixed(0)}%</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 <div className="overflow-auto">
@@ -482,9 +518,14 @@ function ProjectView() {
                         <th className="text-left py-1 pr-3">Layer</th>
                         <th className="text-left py-1 pr-3">Action</th>
                         <th className="text-left py-1 pr-3">Type</th>
+                        <th className="text-left py-1 pr-3">Layout</th>
+                        <th className="text-left py-1 pr-3">Doctor</th>
+                        <th className="text-left py-1 pr-3">Size</th>
+                        <th className="text-left py-1 pr-3">Focus</th>
                         <th className="text-left py-1 pr-3">Source</th>
                         <th className="text-left py-1 pr-3">Priority</th>
                         <th className="text-left py-1 pr-3">Query</th>
+                        <th className="text-left py-1 pr-3">Reason</th>
                         <th className="text-left py-1 pr-3">Status</th>
                         <th className="text-left py-1 pr-3">Scene</th>
                       </tr>
@@ -498,9 +539,14 @@ function ProjectView() {
                           <td className="py-1 pr-3 tabular-nums">{m.layer ?? "—"}</td>
                           <td className="py-1 pr-3">{m.action_type ? <Badge variant="outline" className="text-[10px]">{m.action_type}</Badge> : "—"}</td>
                           <td className="py-1 pr-3">{m.asset_type}</td>
+                          <td className="py-1 pr-3">{m.layout_name ?? "—"}</td>
+                          <td className="py-1 pr-3">{m.doctor_visibility ?? "—"}</td>
+                          <td className="py-1 pr-3">{m.doctor_size ?? "—"}</td>
+                          <td className="py-1 pr-3">{m.attention_focus ?? "—"}</td>
                           <td className="py-1 pr-3">{m.asset_source}</td>
                           <td className="py-1 pr-3 tabular-nums">{m.priority ?? "—"}</td>
                           <td className="py-1 pr-3 max-w-md truncate" title={m.asset_query}>{m.asset_query}</td>
+                          <td className="py-1 pr-3 max-w-xs truncate" title={m.rationale ?? ""}>{m.rationale ?? "—"}</td>
                           <td className="py-1 pr-3"><Badge variant="outline">{m.status}</Badge></td>
                           <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{m.scene_id?.slice(0, 8)}</td>
                         </tr>
@@ -728,6 +774,93 @@ function ProjectView() {
                             </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="layout">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Layout Decisions {canonQ.data && <Badge variant="outline" className="ml-2">{(canonQ.data as any).layoutDecisions?.length ?? 0} decisions</Badge>}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canonQ.data || (canonQ.data.editActions?.length ?? 0) === 0}
+                onClick={async () => {
+                  try {
+                    toast.info("Generating layout decisions…");
+                    await regenLayoutFn({ data: { projectId: id } });
+                    qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+                    qc.invalidateQueries({ queryKey: ["project-health", id] });
+                    toast.success("Layout decisions regenerated.");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed");
+                  }
+                }}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />Regenerate
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!canonQ.data || ((canonQ.data as any).layoutDecisions?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">No layout decisions yet. Generate Editorial Decisions, then click Regenerate.</p>
+              ) : (() => {
+                const sceneById = new Map<string, any>((canonQ.data.scenes as any[]).map((s: any) => [s.id, s]));
+                const actById = new Map<string, any>((canonQ.data.editActions as any[]).map((a: any) => [a.id, a]));
+                const lds = (canonQ.data as any).layoutDecisions as any[];
+                return (
+                  <div className="overflow-auto max-h-[60vh]">
+                    <table className="w-full text-xs">
+                      <thead className="text-muted-foreground border-b border-border">
+                        <tr>
+                          <th className="text-left py-1 pr-3">Scene</th>
+                          <th className="text-left py-1 pr-3">Action</th>
+                          <th className="text-left py-1 pr-3">Start</th>
+                          <th className="text-left py-1 pr-3">End</th>
+                          <th className="text-left py-1 pr-3">Layout</th>
+                          <th className="text-left py-1 pr-3">Doctor</th>
+                          <th className="text-left py-1 pr-3">Size</th>
+                          <th className="text-left py-1 pr-3">Focus</th>
+                          <th className="text-left py-1 pr-3">Rationale</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lds
+                          .slice()
+                          .sort((a, b) => Number(a.start_time) - Number(b.start_time))
+                          .map((l: any) => {
+                            const a = l.action_id ? actById.get(l.action_id) : null;
+                            const s = l.scene_id ? sceneById.get(l.scene_id) : null;
+                            return (
+                              <tr key={l.id} className="border-b border-border/50 align-top">
+                                <td className="py-1 pr-3">{s ? s.scene_number : "—"}</td>
+                                <td className="py-1 pr-3">
+                                  {a?.action_type
+                                    ? <Badge variant="outline" className="text-[10px]">{a.action_type}</Badge>
+                                    : "—"}
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">{Number(l.start_time).toFixed(2)}s</td>
+                                <td className="py-1 pr-3 tabular-nums">{Number(l.end_time).toFixed(2)}s</td>
+                                <td className="py-1 pr-3">{l.layout_name}</td>
+                                <td className="py-1 pr-3">
+                                  <Badge
+                                    variant={l.doctor_visibility === "hidden" ? "secondary" : "outline"}
+                                    className="text-[10px]"
+                                  >{l.doctor_visibility}</Badge>
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">{l.doctor_size}</td>
+                                <td className="py-1 pr-3">{l.attention_focus}</td>
+                                <td className="py-1 pr-3 max-w-md truncate" title={l.rationale ?? ""}>{l.rationale ?? "—"}</td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>

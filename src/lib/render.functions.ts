@@ -21,7 +21,7 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       console.warn("edit_actions backfill failed", e);
     }
 
-    const [scenes, storyboard, broll, manifest, segments, candidates, assets, instructions, editActions, layouts, transitions] = await Promise.all([
+    const [scenes, storyboard, broll, manifest, segments, candidates, assets, instructions, editActions, layouts, transitions, layoutDecisions, project] = await Promise.all([
       sb.from("scenes").select("*").eq("project_id", data.projectId).order("scene_number", { ascending: true }),
       sb.from("storyboard_items").select("*").eq("project_id", data.projectId).order("item_index", { ascending: true }),
       sb.from("broll_items").select("*").eq("project_id", data.projectId).order("item_index", { ascending: true }),
@@ -33,6 +33,8 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       sb.from("edit_actions").select("*").eq("project_id", data.projectId).order("start_time", { ascending: true }),
       sb.from("layout_templates").select("id, name"),
       sb.from("transition_templates").select("id, name"),
+      sb.from("layout_decisions").select("*").eq("project_id", data.projectId),
+      sb.from("projects").select("duration_seconds").eq("id", data.projectId).maybeSingle(),
     ]);
     return {
       scenes: scenes.data ?? [],
@@ -46,6 +48,8 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       editActions: editActions.data ?? [],
       layoutTemplates: layouts.data ?? [],
       transitionTemplates: transitions.data ?? [],
+      layoutDecisions: layoutDecisions.data ?? [],
+      projectDuration: Number((project.data as any)?.duration_seconds) || 0,
     };
   });
 
@@ -57,9 +61,11 @@ export const rebuildRenderManifest = createServerFn({ method: "POST" })
     const { compileTimelineForProject } = await import("./render/timeline-compiler.server");
     const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
     const { ensureEditActionsForProject } = await import("./editorial/backfill.server");
+    const { runLayoutDecisionsForProject } = await import("./layout/layout-runner.server");
     await generateAssetCandidatesForProject(context.supabase, data.projectId);
     await compileTimelineForProject(context.supabase, data.projectId);
     await ensureEditActionsForProject(context.supabase, data.projectId);
+    await runLayoutDecisionsForProject(context.supabase, context.userId, data.projectId);
     return buildRenderManifestForProject(context.supabase, data.projectId);
   });
 
@@ -69,6 +75,17 @@ export const regenerateEditorialDecisions = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { runTaskForProject } = await import("./analysis-runner.server");
     return runTaskForProject(context.supabase, context.userId, data.projectId, "editorial_decisions");
+  });
+
+export const regenerateLayoutDecisions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => Input.parse(input))
+  .handler(async ({ context, data }) => {
+    const { runLayoutDecisionsForProject } = await import("./layout/layout-runner.server");
+    const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+    const res = await runLayoutDecisionsForProject(context.supabase, context.userId, data.projectId);
+    await buildRenderManifestForProject(context.supabase, data.projectId);
+    return res;
   });
 
 export const validateTimeline = createServerFn({ method: "POST" })
