@@ -2,6 +2,8 @@ export async function runAnalysisJob(jobId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { transcribeAudio } = await import("@/lib/ai/providers.server");
   const { runTaskForProject, ALL_TASKS } = await import("@/lib/analysis-runner.server");
+  const { writeTranscriptSegments } = await import("@/lib/analysis/normalize.server");
+  const { buildRenderManifestForProject } = await import("@/lib/render/timeline-builder.server");
 
   const { data: job } = await supabaseAdmin.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return { body: "job not found", status: 404 };
@@ -57,6 +59,18 @@ export async function runAnalysisJob(jobId: string) {
     if (tx.durationSeconds) {
       await supabaseAdmin.from("projects").update({ duration_seconds: tx.durationSeconds }).eq("id", project.id);
     }
+    // Populate canonical transcript_segments for the rendering layer.
+    try {
+      await writeTranscriptSegments(
+        supabaseAdmin,
+        project.id,
+        tx.text,
+        tx.words,
+        tx.durationSeconds || Number(project.duration_seconds) || 0,
+      );
+    } catch (e) {
+      console.warn("transcript segmentation failed", e);
+    }
 
     await setState("analyzing", 40);
     await supabaseAdmin.from("projects").update({ status: "analyzing" }).eq("id", project.id);
@@ -73,6 +87,12 @@ export async function runAnalysisJob(jobId: string) {
 
     await setState("completed", 100);
     await supabaseAdmin.from("projects").update({ status: "completed" }).eq("id", project.id);
+    // Final canonical manifest build (defensive; runner already rebuilds after each contributing task).
+    try {
+      await buildRenderManifestForProject(supabaseAdmin, project.id);
+    } catch (e) {
+      console.warn("final manifest build failed", e);
+    }
     return { body: "ok", status: 200 };
   } catch (error: any) {
     console.error("job run failed", error);
