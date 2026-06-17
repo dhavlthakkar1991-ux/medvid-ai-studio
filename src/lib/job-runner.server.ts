@@ -39,7 +39,13 @@ export async function runAnalysisJob(jobId: string) {
           : keys.groq
             ? "groq"
             : preferredProvider;
-    const tx = await transcribeAudio(txProvider as any, keys, blob, project.video_path.split("/").pop()!);
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Transcription timed out. Please retry with a shorter video or a dedicated transcription provider.")), 120000);
+    });
+    const tx = await Promise.race([
+      transcribeAudio(txProvider as any, keys, blob, project.video_path.split("/").pop()!),
+      timeout,
+    ]);
 
     await supabaseAdmin.from("transcripts").upsert({
       project_id: project.id,

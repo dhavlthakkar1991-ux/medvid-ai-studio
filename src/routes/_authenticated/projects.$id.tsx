@@ -53,9 +53,11 @@ function ProjectView() {
   const latestJobForLaunch = q.data?.latestJob;
 
   useEffect(() => {
+    const updatedAt = latestJobForLaunch?.updated_at ? new Date(latestJobForLaunch.updated_at).getTime() : 0;
+    const staleTranscribing = latestJobForLaunch?.state === "transcribing" && updatedAt > 0 && Date.now() - updatedAt > 2 * 60 * 1000;
     if (
       !latestJobForLaunch ||
-      (latestJobForLaunch.state !== "queued" && latestJobForLaunch.state !== "failed") ||
+      (latestJobForLaunch.state !== "queued" && latestJobForLaunch.state !== "failed" && !staleTranscribing) ||
       launchedJobs.current.has(latestJobForLaunch.id)
     ) return;
     launchedJobs.current.add(latestJobForLaunch.id);
