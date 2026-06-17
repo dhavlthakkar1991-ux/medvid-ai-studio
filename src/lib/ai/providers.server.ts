@@ -65,13 +65,18 @@ export async function generateJSON<T>(
   });
   const modelId = normalizeModel(provider, opts.model);
 
+  // GPT-5 (and other reasoning models) reject `max_tokens`; the openai-compatible
+  // adapter sends `maxOutputTokens` as `max_tokens`. Omit it for those models.
+  const isReasoningModel = /(^|\/)(gpt-5|o\d)/i.test(opts.model);
+  const maxOutputTokens = isReasoningModel ? undefined : 8192;
+
   try {
     if (provider === "gemini") {
       const result = await generateText({
         model: gateway(modelId),
         system: opts.system + "\n\nRespond with ONLY valid minified JSON matching the requested schema. No markdown, no commentary.",
         prompt: opts.prompt,
-        maxOutputTokens: 8192,
+        maxOutputTokens,
       });
       const parsed = extractJson(result.text);
       const data = opts.schema.parse(coerceToSchemaShape(parsed, opts.schema)) as T;
@@ -86,7 +91,7 @@ export async function generateJSON<T>(
       schema: opts.schema,
       system: opts.system,
       prompt: opts.prompt,
-      maxOutputTokens: 8192,
+      maxOutputTokens,
     });
     const usage: Usage = {
       inputTokens: result.usage?.inputTokens ?? 0,
