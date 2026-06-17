@@ -58,6 +58,11 @@ export const ScenePlanSchema = z.object({
     kind: z.string(),
     title: z.string(),
     prompt: z.string(),
+    scene_number: z.coerce.number().optional(),
+    start_seconds: z.coerce.number().optional(),
+    end_seconds: z.coerce.number().optional(),
+    narration_text: z.string().optional().default(""),
+    objective: z.string().optional().default(""),
   })),
 });
 
@@ -71,15 +76,23 @@ export const VisualStoryboardSchema = z.object({
     animation: AnimationSchema,
     priority: PrioritySchema,
     duration_seconds: z.coerce.number(),
+    scene_number: z.coerce.number().optional(),
   })),
 });
 
 export const BrollSchema = z.object({
   broll: z.array(z.object({
-    t: z.string(),
-    prompt: z.string(),
-    asset_prompt: z.string(),
-    keywords: z.array(z.string()),
+    t: z.string().optional().default(""),
+    scene_number: z.coerce.number().optional(),
+    keyword: z.string().optional().default(""),
+    search_prompt: z.string().optional().default(""),
+    placement_reason: z.string().optional().default(""),
+    recommended_start: z.string().optional().default(""),
+    recommended_end: z.string().optional().default(""),
+    // legacy fields, preserved for back-compat:
+    prompt: z.string().optional().default(""),
+    asset_prompt: z.string().optional().default(""),
+    keywords: z.array(z.string()).optional().default([]),
   })),
 });
 
