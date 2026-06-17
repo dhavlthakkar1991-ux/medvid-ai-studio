@@ -206,6 +206,80 @@ function ProjectView() {
         })}
 
         <TabsContent value="cost">
+          {/* health tab rendered just below */}
+        </TabsContent>
+
+        <TabsContent value="health">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Pipeline Health
+                {healthQ.data?.latestRun && (
+                  <Badge variant="outline" className="ml-2 capitalize">{healthQ.data.latestRun.status.replace(/_/g, " ")}</Badge>
+                )}
+              </CardTitle>
+              {healthQ.data?.latestRun?.duration_ms != null && (
+                <span className="text-xs text-muted-foreground">
+                  Last run {(healthQ.data.latestRun.duration_ms / 1000).toFixed(1)}s ·
+                  {" "}{healthQ.data.latestRun.failures_count} failures · {healthQ.data.latestRun.warnings_count} warnings
+                </span>
+              )}
+            </CardHeader>
+            <CardContent>
+              {!healthQ.data || healthQ.data.taskExecutions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No pipeline runs recorded yet.</p>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead className="text-muted-foreground border-b border-border">
+                      <tr>
+                        <th className="text-left py-1 pr-3">Task</th>
+                        <th className="text-left py-1 pr-3">Status</th>
+                        <th className="text-left py-1 pr-3">Validation</th>
+                        <th className="text-left py-1 pr-3">Retries</th>
+                        <th className="text-left py-1 pr-3">Fallback</th>
+                        <th className="text-left py-1 pr-3">Duration</th>
+                        <th className="text-left py-1 pr-3">Provider</th>
+                        <th className="text-left py-1 pr-3">Model</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {healthQ.data.taskExecutions.map((t: any) => (
+                        <tr key={t.id} className="border-b border-border/50 align-top">
+                          <td className="py-1 pr-3 font-medium">{t.task_name}</td>
+                          <td className="py-1 pr-3">
+                            <Badge variant="outline" className="capitalize">{String(t.status).replace(/_/g, " ")}</Badge>
+                          </td>
+                          <td className="py-1 pr-3">
+                            {t.validation_passed ? (
+                              <span className="text-emerald-600">Passed</span>
+                            ) : (
+                              <span className="text-amber-600" title={(t.validation_errors ?? []).join("; ")}>
+                                {(t.validation_errors ?? []).length} error(s)
+                              </span>
+                            )}
+                            {Array.isArray(t.validation_warnings) && t.validation_warnings.length > 0 && (
+                              <span className="ml-2 text-muted-foreground" title={t.validation_warnings.join("; ")}>
+                                · {t.validation_warnings.length} warn
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1 pr-3 tabular-nums">{t.retry_count}</td>
+                          <td className="py-1 pr-3">{t.fallback_used ? (t.fallback_stage ?? "yes") : "—"}</td>
+                          <td className="py-1 pr-3 tabular-nums">{t.duration_ms != null ? `${(t.duration_ms / 1000).toFixed(1)}s` : "—"}</td>
+                          <td className="py-1 pr-3">{t.provider}</td>
+                          <td className="py-1 pr-3 font-mono text-[10px]">{t.model}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cost">
           <Card>
             <CardHeader><CardTitle className="text-base">AI usage</CardTitle></CardHeader>
             <CardContent>
