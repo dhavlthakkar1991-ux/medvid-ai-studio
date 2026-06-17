@@ -337,6 +337,38 @@ function ProjectView() {
               {!healthQ.data || healthQ.data.taskExecutions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No pipeline runs recorded yet.</p>
               ) : (
+                <>
+                  {healthQ.data.editorial && (
+                    <div className="mb-4 space-y-3">
+                      <div className="rounded-md border border-border p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs text-muted-foreground">Editorial Coverage</div>
+                          <Badge
+                            variant={healthQ.data.editorial.coverage >= 0.7 ? "outline" : "destructive"}
+                            className="text-[10px]"
+                          >
+                            {(healthQ.data.editorial.coverage * 100).toFixed(0)}% · target 70%
+                          </Badge>
+                        </div>
+                        <Progress value={Math.min(100, healthQ.data.editorial.coverage * 100)} />
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          {healthQ.data.editorial.coveredSeconds.toFixed(1)}s of {healthQ.data.editorial.durationSeconds.toFixed(1)}s ·{" "}
+                          {healthQ.data.editorial.actionCount} actions ({healthQ.data.editorial.aiCount} AI, {healthQ.data.editorial.backfillCount} backfill)
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Action Type Summary</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                          {Object.entries(healthQ.data.editorial.actionTypeSummary).map(([label, count]) => (
+                            <div key={label} className="rounded-md border border-border px-2 py-1.5">
+                              <div className="text-[10px] text-muted-foreground">{label}</div>
+                              <div className="text-sm font-semibold tabular-nums">{count as number}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 <div className="overflow-auto">
                   <table className="w-full text-xs">
                     <thead className="text-muted-foreground border-b border-border">
@@ -390,6 +422,7 @@ function ProjectView() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </CardContent>
           </Card>
