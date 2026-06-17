@@ -26,7 +26,7 @@ export const runQueuedJob = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { data: job, error } = await context.supabase
       .from("jobs")
-      .select("id, state, project_id, projects!inner(user_id)")
+      .select("id, state, updated_at, project_id, projects!inner(user_id)")
       .eq("id", data.jobId)
       .single();
     if (error) throw new Error(error.message);
