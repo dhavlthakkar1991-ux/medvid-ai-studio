@@ -9,7 +9,19 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
-    const [scenes, storyboard, broll, manifest, segments, candidates, assets, instructions] = await Promise.all([
+    // Auto-backfill edit_actions on first read so legacy projects light up immediately.
+    try {
+      const { ensureEditActionsForProject } = await import("./editorial/backfill.server");
+      const result = await ensureEditActionsForProject(sb, data.projectId);
+      if (result.backfilled) {
+        const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+        await buildRenderManifestForProject(sb, data.projectId);
+      }
+    } catch (e) {
+      console.warn("edit_actions backfill failed", e);
+    }
+
+    const [scenes, storyboard, broll, manifest, segments, candidates, assets, instructions, editActions, layouts, transitions] = await Promise.all([
       sb.from("scenes").select("*").eq("project_id", data.projectId).order("scene_number", { ascending: true }),
       sb.from("storyboard_items").select("*").eq("project_id", data.projectId).order("item_index", { ascending: true }),
       sb.from("broll_items").select("*").eq("project_id", data.projectId).order("item_index", { ascending: true }),
@@ -18,6 +30,9 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       sb.from("asset_candidates").select("*").eq("project_id", data.projectId).order("priority", { ascending: true }),
       sb.from("assets").select("*").eq("project_id", data.projectId).order("created_at", { ascending: true }),
       sb.from("timeline_instructions").select("*").eq("project_id", data.projectId).order("render_order", { ascending: true }),
+      sb.from("edit_actions").select("*").eq("project_id", data.projectId).order("start_time", { ascending: true }),
+      sb.from("layout_templates").select("id, name"),
+      sb.from("transition_templates").select("id, name"),
     ]);
     return {
       scenes: scenes.data ?? [],
@@ -28,6 +43,9 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       assetCandidates: candidates.data ?? [],
       assets: assets.data ?? [],
       timelineInstructions: instructions.data ?? [],
+      editActions: editActions.data ?? [],
+      layoutTemplates: layouts.data ?? [],
+      transitionTemplates: transitions.data ?? [],
     };
   });
 
@@ -38,9 +56,19 @@ export const rebuildRenderManifest = createServerFn({ method: "POST" })
     const { generateAssetCandidatesForProject } = await import("./assets/asset-matcher.server");
     const { compileTimelineForProject } = await import("./render/timeline-compiler.server");
     const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+    const { ensureEditActionsForProject } = await import("./editorial/backfill.server");
     await generateAssetCandidatesForProject(context.supabase, data.projectId);
     await compileTimelineForProject(context.supabase, data.projectId);
+    await ensureEditActionsForProject(context.supabase, data.projectId);
     return buildRenderManifestForProject(context.supabase, data.projectId);
+  });
+
+export const regenerateEditorialDecisions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => Input.parse(input))
+  .handler(async ({ context, data }) => {
+    const { runTaskForProject } = await import("./analysis-runner.server");
+    return runTaskForProject(context.supabase, context.userId, data.projectId, "editorial_decisions");
   });
 
 export const validateTimeline = createServerFn({ method: "POST" })
