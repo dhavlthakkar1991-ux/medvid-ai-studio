@@ -5,6 +5,8 @@ import { buildContextPrompt } from "./ai/context.server";
 import { estimateCost } from "./ai/pricing";
 import { normalizeTaskOutput } from "./analysis/normalize.server";
 import { buildRenderManifestForProject } from "./render/timeline-builder.server";
+import { generateAssetCandidatesForProject } from "./assets/asset-matcher.server";
+import { compileTimelineForProject } from "./render/timeline-compiler.server";
 
 const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
   lovable: "google/gemini-2.5-flash",
@@ -171,8 +173,13 @@ export async function runTaskForProject(
       res.data,
       Number(project.duration_seconds) || 0,
     );
-    // Rebuild render manifest whenever a contributing task changes.
+    // After a contributing task changes, regenerate the asset/timeline chain:
+    //   storyboard/broll → asset_candidates → timeline_instructions → render_manifest.
     if (task === "scene_plan" || task === "visual_storyboard" || task === "broll") {
+      if (task === "visual_storyboard" || task === "broll") {
+        await generateAssetCandidatesForProject(supabase, projectId);
+      }
+      await compileTimelineForProject(supabase, projectId);
       await buildRenderManifestForProject(supabase, projectId);
     }
   } catch (e) {
