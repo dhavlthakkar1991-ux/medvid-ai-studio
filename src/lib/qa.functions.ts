@@ -9,7 +9,7 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
-    const [{ data: runs }, { data: executions }, { data: editActions }, { data: layoutDecisions }, { data: project }] = await Promise.all([
+    const [{ data: runs }, { data: executions }, { data: editActions }, { data: layoutDecisions }, { data: project }, { data: transcript }] = await Promise.all([
       sb
       .from("pipeline_runs")
       .select("*")
@@ -25,6 +25,7 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
       sb.from("edit_actions").select("action_type, start_time, end_time, source").eq("project_id", data.projectId),
       sb.from("layout_decisions").select("layout_name, doctor_visibility, doctor_size, attention_focus, start_time, end_time").eq("project_id", data.projectId),
       sb.from("projects").select("duration_seconds").eq("id", data.projectId).maybeSingle(),
+      sb.from("transcripts").select("words").eq("project_id", data.projectId).maybeSingle(),
     ]);
     const latestRunId = runs?.[0]?.id ?? null;
     // Keep only the latest execution per task name (executions are already ordered desc).
@@ -66,7 +67,19 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
 
     // Editorial coverage: union of edit_action intervals / project duration.
     const eas = (editActions ?? []) as Array<{ action_type: string; start_time: number; end_time: number; source: string }>;
-    const duration = Number(project?.duration_seconds) || 0;
+    let duration = Number(project?.duration_seconds) || 0;
+    if (duration <= 0) {
+      // Fallback 1: last word in transcript
+      const words = (transcript?.words as Array<{ end: number }> | null) ?? [];
+      if (Array.isArray(words) && words.length > 0) {
+        const lastEnd = Number(words[words.length - 1]?.end) || 0;
+        if (lastEnd > 0) duration = lastEnd;
+      }
+    }
+    if (duration <= 0 && eas.length > 0) {
+      // Fallback 2: max end_time of edit actions
+      duration = eas.reduce((m, a) => Math.max(m, Number(a.end_time) || 0), 0);
+    }
     let covered = 0;
     if (eas.length > 0) {
       const intervals = eas
