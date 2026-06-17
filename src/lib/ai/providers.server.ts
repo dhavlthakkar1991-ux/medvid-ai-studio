@@ -69,6 +69,7 @@ export async function generateJSON<T>(
       schema: opts.schema,
       system: opts.system,
       prompt: opts.prompt,
+      mode: "json",
     });
     const usage: Usage = {
       inputTokens: result.usage?.inputTokens ?? 0,
