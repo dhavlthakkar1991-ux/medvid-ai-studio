@@ -277,6 +277,7 @@ async function recordExecution(args: {
   supabase: any;
   projectId: string;
   pipelineRunId: string | null;
+  executionId: string | null;
   task: string;
   provider: string;
   model: string;
@@ -289,26 +290,28 @@ async function recordExecution(args: {
   errorMessage: string | null;
 }) {
   const completedAt = new Date();
+  const row = {
+    pipeline_run_id: args.pipelineRunId,
+    project_id: args.projectId,
+    task_name: args.task,
+    provider: args.provider,
+    model: args.model,
+    status: args.status,
+    started_at: args.startedAt.toISOString(),
+    completed_at: completedAt.toISOString(),
+    duration_ms: completedAt.getTime() - args.startedAt.getTime(),
+    retry_count: args.retryCount,
+    fallback_used: !!args.fallbackStage,
+    fallback_stage: args.fallbackStage,
+    validation_passed: args.validation.valid,
+    validation_errors: args.validation.errors,
+    validation_warnings: args.validation.warnings,
+    error_message: args.errorMessage,
+    attempts: args.attempts,
+  };
   try {
-    await args.supabase.from("task_executions").insert({
-      pipeline_run_id: args.pipelineRunId,
-      project_id: args.projectId,
-      task_name: args.task,
-      provider: args.provider,
-      model: args.model,
-      status: args.status,
-      started_at: args.startedAt.toISOString(),
-      completed_at: completedAt.toISOString(),
-      duration_ms: completedAt.getTime() - args.startedAt.getTime(),
-      retry_count: args.retryCount,
-      fallback_used: !!args.fallbackStage,
-      fallback_stage: args.fallbackStage,
-      validation_passed: args.validation.valid,
-      validation_errors: args.validation.errors,
-      validation_warnings: args.validation.warnings,
-      error_message: args.errorMessage,
-      attempts: args.attempts,
-    });
+    if (args.executionId) await args.supabase.from("task_executions").update(row).eq("id", args.executionId);
+    else await args.supabase.from("task_executions").insert(row);
   } catch (e) {
     console.warn("task_executions insert failed", e);
   }
