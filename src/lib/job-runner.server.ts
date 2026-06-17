@@ -122,7 +122,7 @@ export async function runAnalysisJob(jobId: string) {
     // ---- STEP 2: run the next pending analysis task ---------------------
     const { data: execRows } = await supabaseAdmin
       .from("task_executions")
-      .select("task_name, status")
+      .select("id, task_name, status")
       .eq("project_id", project.id)
       .eq("pipeline_run_id", runId);
     const doneSet = new Set(
@@ -136,27 +136,37 @@ export async function runAnalysisJob(jobId: string) {
       const task = pending[0];
       const doneCount = ALL_TASKS.length - pending.length;
       await setState("analyzing", 20 + Math.round((doneCount / ALL_TASKS.length) * 70));
+      const { data: claimed, error: claimError } = await supabaseAdmin
+        .from("task_executions")
+        .insert({
+          pipeline_run_id: runId,
+          project_id: project.id,
+          task_name: task,
+          status: "running",
+          provider: "pending",
+          model: "pending",
+          attempts: [],
+        })
+        .select("id")
+        .single();
+      if (claimError || !claimed) throw new Error(claimError?.message ?? "Could not claim pipeline task.");
       try {
-        await runTaskForProject(supabaseAdmin, project.user_id, project.id, task, { pipelineRunId });
+        await runTaskForProject(supabaseAdmin, project.user_id, project.id, task, { pipelineRunId, executionId: claimed.id });
       } catch (error) {
         console.error(`task ${task} failed`, error);
         // Record a synthetic failed execution so we don't loop on this task.
         try {
-          await supabaseAdmin.from("task_executions").insert({
-            pipeline_run_id: runId,
-            project_id: project.id,
-            task_name: task,
+          await supabaseAdmin.from("task_executions").update({
             provider: "unknown",
             model: "unknown",
             status: "failed",
-            started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
             duration_ms: 0,
             retry_count: 0,
             fallback_used: false,
             error_message: String((error as any)?.message ?? error),
             attempts: [],
-          });
+          }).eq("id", claimed.id);
         } catch {}
       }
       await setState("analyzing", 20 + Math.round(((doneCount + 1) / ALL_TASKS.length) * 70));
