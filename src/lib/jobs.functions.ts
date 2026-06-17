@@ -33,7 +33,7 @@ export const runQueuedJob = createServerFn({ method: "POST" })
     const project = job.projects as unknown as { user_id: string };
     if (project.user_id !== context.userId) throw new Error("Not authorized to run this job.");
     // Job is finished — nothing to fire.
-    if (job.state === "completed") return { ok: true };
+    if (["completed", "completed_with_warnings", "needs_review", "failed"].includes(job.state)) return { ok: true };
     // Otherwise (queued / failed / transcribing / analyzing): always issue a
     // runner URL so the client can advance the next pipeline step.
 
