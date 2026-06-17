@@ -32,9 +32,10 @@ export const runQueuedJob = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const project = job.projects as unknown as { user_id: string };
     if (project.user_id !== context.userId) throw new Error("Not authorized to run this job.");
-    const updatedAt = "updated_at" in job ? new Date(String((job as any).updated_at)).getTime() : 0;
-    const staleTranscribing = job.state === "transcribing" && updatedAt > 0 && Date.now() - updatedAt > 2 * 60 * 1000;
-    if (job.state !== "queued" && job.state !== "failed" && !staleTranscribing) return { ok: true };
+    // Job is finished — nothing to fire.
+    if (job.state === "completed") return { ok: true };
+    // Otherwise (queued / failed / transcribing / analyzing): always issue a
+    // runner URL so the client can advance the next pipeline step.
 
     const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
     const token = await createJobRunnerToken(job.id);
