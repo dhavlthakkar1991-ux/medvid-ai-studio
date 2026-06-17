@@ -64,6 +64,20 @@ const QUALITY_SUMMARY_TASKS: Array<{ key: string; label: string }> = [
   { key: "seo", label: "SEO" },
 ];
 
+const TRACK_LABELS: Record<number, string> = {
+  0: "Track 0 — Talking Head",
+  1: "Track 1 — B-roll",
+  2: "Track 2 — Infographics",
+  3: "Track 3 — Lower Thirds",
+  4: "Track 4 — Kinetic Typography",
+  5: "Track 5 — Keyword Highlights",
+  6: "Track 6 — CTA / End Cards",
+};
+const trackLabel = (n: unknown) => {
+  const v = typeof n === "number" ? n : Number(n);
+  return TRACK_LABELS[v] ?? `Track ${Number.isFinite(v) ? v : "?"}`;
+};
+
 function ProjectView() {
   const { id } = useParams({ from: "/_authenticated/projects/$id" });
   const navigate = useNavigate();
