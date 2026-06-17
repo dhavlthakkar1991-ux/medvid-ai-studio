@@ -224,6 +224,14 @@ export async function runTaskForProject(
       if (actions.length === 0) {
         console.warn("editorial_decisions returned 0 valid edit_actions; skipping manifest rebuild");
       } else {
+        // Run the Presence & Layout Intelligence engine on the new edit_actions
+        // BEFORE rebuilding the manifest so the manifest carries layout/visibility info.
+        try {
+          const { runLayoutDecisionsForProject } = await import("./layout/layout-runner.server");
+          await runLayoutDecisionsForProject(supabase, userId, projectId);
+        } catch (e) {
+          console.warn("layout_decisions run failed", e);
+        }
         await buildRenderManifestForProject(supabase, projectId);
       }
     }
