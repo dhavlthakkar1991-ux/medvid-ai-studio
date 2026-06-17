@@ -7,6 +7,9 @@ import { normalizeTaskOutput } from "./analysis/normalize.server";
 import { buildRenderManifestForProject } from "./render/timeline-builder.server";
 import { generateAssetCandidatesForProject } from "./assets/asset-matcher.server";
 import { compileTimelineForProject } from "./render/timeline-compiler.server";
+import { validateTaskOutput, type TaskValidatorKey, type ValidationResult } from "./qa/validators";
+import { FALLBACK_PROMPTS } from "./qa/fallback-prompts.server";
+import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions } from "./qa/fallback-generators.server";
 
 const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
   lovable: "google/gemini-2.5-flash",
@@ -58,6 +61,7 @@ export async function runTaskForProject(
   userId: string,
   projectId: string,
   task: TaskKey,
+  options?: { pipelineRunId?: string | null },
 ) {
   // Load context + transcript + ai_settings + template
   const [{ data: project }, { data: ctx }, { data: tx }, { data: settings }] = await Promise.all([
@@ -87,62 +91,93 @@ export async function runTaskForProject(
   const system = SYSTEM_BASE + "\n" + ctxPrompt;
   const prompt = `${TASK_PROMPTS[task]}\n\nDuration: ${project.duration_seconds ?? "unknown"}s\nTitle: ${project.title}\nTopic: ${project.topic ?? ""}\n\nTranscript:\n${(tx.full_text as string).slice(0, 18000)}`;
 
-  let res = await generateJSON<any>(provider, userKeys, { model, system, prompt, schema });
+  // --- Execution tracking + recovery chain ---
+  const startedAt = new Date();
+  const validatorKey = task as TaskValidatorKey;
+  const sceneCount = await supabase
+    .from("scenes")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .then((r: any) => r.count ?? 0)
+    .catch(() => 0);
+  const valCtx = { transcriptDuration: Number(project.duration_seconds) || 0, sceneCount };
 
-  // B-roll hardening: never accept fewer than 5 items.
-  if (task === "broll") {
-    const count = Array.isArray(res.data?.broll) ? res.data.broll.length : 0;
-    if (count < 5) {
-      try {
-        const retryPrompt =
-          prompt +
-          `\n\nIMPORTANT: Return AT LEAST 5 b-roll suggestions. Each item MUST include: scene_number (1-based), keyword, search_prompt, placement_reason, recommended_start (mm:ss), recommended_end (mm:ss).`;
-        const retry = await generateJSON<any>(provider, userKeys, { model, system, prompt: retryPrompt, schema });
-        if (Array.isArray(retry.data?.broll) && retry.data.broll.length > count) {
-          res = {
-            ...retry,
-            usage: {
-              inputTokens: res.usage.inputTokens + retry.usage.inputTokens,
-              outputTokens: res.usage.outputTokens + retry.usage.outputTokens,
-            },
-          };
-        }
-      } catch (e) {
-        console.warn("broll retry failed", e);
+  const attempts: Array<{ stage: string; valid: boolean; errors: string[]; warnings: string[]; duration_ms: number; model?: string }> = [];
+  let usage = { inputTokens: 0, outputTokens: 0 };
+  let res: any = null;
+  let lastValidation: ValidationResult = { valid: false, warnings: [], errors: ["not_attempted"] };
+  let fallbackStage: string | null = null;
+  let retryCount = 0;
+
+  const tryStage = async (stage: string, runPrompt: string): Promise<void> => {
+    const t0 = Date.now();
+    try {
+      const out = await generateJSON<any>(provider, userKeys, { model, system, prompt: runPrompt, schema });
+      usage = {
+        inputTokens: usage.inputTokens + (out.usage?.inputTokens ?? 0),
+        outputTokens: usage.outputTokens + (out.usage?.outputTokens ?? 0),
+      };
+      const v = validateTaskOutput(validatorKey, out.data, valCtx);
+      attempts.push({ stage, valid: v.valid, errors: v.errors, warnings: v.warnings, duration_ms: Date.now() - t0, model: out.model });
+      if (v.valid || res == null) res = out;
+      lastValidation = v;
+    } catch (err: any) {
+      attempts.push({ stage, valid: false, errors: [String(err?.message ?? err)], warnings: [], duration_ms: Date.now() - t0 });
+      lastValidation = { valid: false, warnings: [], errors: [String(err?.message ?? err)] };
+    }
+  };
+
+  // Stage 1: primary
+  await tryStage("primary", prompt);
+
+  // Stage 2 & 3: two retries with the primary prompt
+  if (!lastValidation.valid) {
+    retryCount = 1;
+    await tryStage("retry_1", prompt + "\n\nThe previous response failed validation. Fix it and return strictly valid JSON matching the schema. Every required field must be non-empty.");
+  }
+  if (!lastValidation.valid) {
+    retryCount = 2;
+    await tryStage("retry_2", prompt + "\n\nFINAL RETRY. Return ONLY valid JSON matching the schema. No prose, no markdown.");
+  }
+
+  // Stage 4: fallback prompt
+  if (!lastValidation.valid && FALLBACK_PROMPTS[validatorKey]) {
+    fallbackStage = "fallback_prompt";
+    const fb = `${FALLBACK_PROMPTS[validatorKey]}\n\nDuration: ${project.duration_seconds ?? "unknown"}s\nTitle: ${project.title}\nTopic: ${project.topic ?? ""}\n\nTranscript:\n${(tx.full_text as string).slice(0, 12000)}`;
+    await tryStage("fallback_prompt", fb);
+  }
+
+  // Stage 5: deterministic fallback generator
+  if (!lastValidation.valid) {
+    const t0 = Date.now();
+    let gen: any = null;
+    if (task === "scene_plan") gen = await fallbackScenePlan(supabase, projectId, project);
+    else if (task === "broll") gen = await fallbackBroll(supabase, projectId, project);
+    else if (task === "visual_storyboard") gen = await fallbackVisualStoryboard(supabase, projectId, project);
+    else if (task === "editorial_decisions") gen = await fallbackEditorialDecisions(supabase, projectId, project);
+    if (gen) {
+      // Run through schema for normalization (best-effort)
+      let parsed: any = gen;
+      try { parsed = schema.parse(gen); } catch { /* generators are already minimal-valid; ignore */ }
+      const v = validateTaskOutput(validatorKey, parsed, valCtx);
+      attempts.push({ stage: "fallback_generator", valid: v.valid, errors: v.errors, warnings: v.warnings, duration_ms: Date.now() - t0 });
+      if (v.valid) {
+        fallbackStage = "fallback_generator";
+        res = { provider: "fallback", model: "deterministic", data: parsed, usage: { inputTokens: 0, outputTokens: 0 } };
+        lastValidation = v;
       }
     }
-    const final = Array.isArray(res.data?.broll) ? res.data.broll : [];
-    if (final.length < 5) {
-      // Synthesize fallback items from scenes / project so we never persist an empty array.
-      const { data: scenes } = await supabase
-        .from("scenes")
-        .select("scene_number, title, start_time, end_time, narration_text")
-        .eq("project_id", projectId)
-        .order("scene_number", { ascending: true });
-      const base = (scenes ?? []) as Array<{ scene_number: number; title: string; start_time: number; end_time: number; narration_text: string }>;
-      const seeds = base.length > 0 ? base : Array.from({ length: 5 }, (_, i) => ({
-        scene_number: i + 1,
-        title: `${project.topic ?? project.title} — segment ${i + 1}`,
-        start_time: i * 10,
-        end_time: i * 10 + 5,
-        narration_text: "",
-      }));
-      const fmt = (s: number) => {
-        const m = Math.floor(s / 60).toString().padStart(2, "0");
-        const sec = Math.floor(s % 60).toString().padStart(2, "0");
-        return `${m}:${sec}`;
-      };
-      const fallback = seeds.slice(0, Math.max(5, seeds.length)).map((s) => ({
-        scene_number: s.scene_number,
-        keyword: s.title,
-        search_prompt: `Cinematic medical b-roll: ${s.title}`,
-        placement_reason: `Cover narration: ${s.narration_text?.slice(0, 120) || s.title}`,
-        recommended_start: fmt(s.start_time),
-        recommended_end: fmt(s.end_time || s.start_time + 5),
-      }));
-      const merged = [...final, ...fallback].slice(0, Math.max(5, final.length + fallback.length));
-      res = { ...res, data: { broll: merged.slice(0, Math.max(5, merged.length)) } };
-    }
+  }
+
+  if (!res) {
+    // Total failure — still record the execution before throwing.
+    await recordExecution({
+      supabase, projectId, pipelineRunId: options?.pipelineRunId ?? null,
+      task, provider, model, startedAt,
+      status: "failed", retryCount, fallbackStage, validation: lastValidation,
+      attempts, errorMessage: attempts[attempts.length - 1]?.errors?.[0] ?? "no_output",
+    });
+    throw new Error(`task ${task} produced no usable output: ${lastValidation.errors.join("; ")}`);
   }
 
   // Determine next version number
@@ -208,7 +243,65 @@ export async function runTaskForProject(
     estimated_cost: cost,
   });
 
-  return { version: nextVersion, model: res.model, provider: res.provider, cost };
+  await recordExecution({
+    supabase, projectId, pipelineRunId: options?.pipelineRunId ?? null,
+    task, provider: res.provider, model: res.model, startedAt,
+    status: lastValidation.valid ? "completed" : "completed_with_warnings",
+    retryCount, fallbackStage, validation: lastValidation, attempts,
+    errorMessage: null,
+  });
+
+  return {
+    version: nextVersion,
+    model: res.model,
+    provider: res.provider,
+    cost,
+    validation: lastValidation,
+    retryCount,
+    fallbackUsed: !!fallbackStage,
+    fallbackStage,
+  };
+}
+
+async function recordExecution(args: {
+  supabase: any;
+  projectId: string;
+  pipelineRunId: string | null;
+  task: string;
+  provider: string;
+  model: string;
+  startedAt: Date;
+  status: string;
+  retryCount: number;
+  fallbackStage: string | null;
+  validation: ValidationResult;
+  attempts: any[];
+  errorMessage: string | null;
+}) {
+  const completedAt = new Date();
+  try {
+    await args.supabase.from("task_executions").insert({
+      pipeline_run_id: args.pipelineRunId,
+      project_id: args.projectId,
+      task_name: args.task,
+      provider: args.provider,
+      model: args.model,
+      status: args.status,
+      started_at: args.startedAt.toISOString(),
+      completed_at: completedAt.toISOString(),
+      duration_ms: completedAt.getTime() - args.startedAt.getTime(),
+      retry_count: args.retryCount,
+      fallback_used: !!args.fallbackStage,
+      fallback_stage: args.fallbackStage,
+      validation_passed: args.validation.valid,
+      validation_errors: args.validation.errors,
+      validation_warnings: args.validation.warnings,
+      error_message: args.errorMessage,
+      attempts: args.attempts,
+    });
+  } catch (e) {
+    console.warn("task_executions insert failed", e);
+  }
 }
 
 export const ALL_TASKS: TaskKey[] = [
