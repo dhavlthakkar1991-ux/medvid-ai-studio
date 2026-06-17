@@ -285,6 +285,7 @@ function ProjectView() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
+          <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
           <TabsTrigger value="health">Pipeline Health</TabsTrigger>
           <TabsTrigger value="cost">Cost</TabsTrigger>
         </TabsList>
