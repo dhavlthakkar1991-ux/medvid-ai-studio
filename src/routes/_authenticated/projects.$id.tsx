@@ -119,6 +119,15 @@ function ProjectView() {
   if (!q.data) return null;
 
   const { project, transcript, versions, latestJob, usage } = q.data;
+  if (!project) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-16 text-center space-y-4">
+        <h1 className="text-2xl font-bold">Project not found</h1>
+        <p className="text-muted-foreground">This project may have been deleted.</p>
+        <Button onClick={() => navigate({ to: "/dashboard" })}>Back to dashboard</Button>
+      </div>
+    );
+  }
   const latest = (task: string) => versions.find((v: any) => v.task === task);
   const totalCost = (usage as any[]).reduce((s, r) => s + Number(r.estimated_cost), 0);
 
