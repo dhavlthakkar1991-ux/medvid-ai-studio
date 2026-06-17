@@ -270,7 +270,7 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
     },
     body: JSON.stringify({ file: { display_name: filename } }),
   });
-  if (!uploadStart.ok) throw new Error(`Transcription failed (gemini upload): ${uploadStart.status} ${(await uploadStart.text()).slice(0, 200)}`);
+  if (!uploadStart.ok) throw new Error(formatTranscriptionHttpError("gemini upload", uploadStart.status, await uploadStart.text()));
   const uploadUrl = uploadStart.headers.get("x-goog-upload-url");
   if (!uploadUrl) throw new Error("Transcription failed (gemini): upload URL missing.");
 
@@ -283,7 +283,7 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
     },
     body: bytes,
   });
-  if (!uploadFinish.ok) throw new Error(`Transcription failed (gemini file): ${uploadFinish.status} ${(await uploadFinish.text()).slice(0, 200)}`);
+  if (!uploadFinish.ok) throw new Error(formatTranscriptionHttpError("gemini file", uploadFinish.status, await uploadFinish.text()));
   const uploaded = await uploadFinish.json();
   let file = uploaded.file ?? uploaded;
   if (!file?.uri) throw new Error("Transcription failed (gemini): uploaded file URI missing.");
@@ -292,7 +292,7 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
     if (file.state === "FAILED") throw new Error("Transcription failed (gemini): uploaded file processing failed.");
     await new Promise((resolve) => setTimeout(resolve, 1000));
     const statusRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${encodeURIComponent(apiKey)}`);
-    if (!statusRes.ok) throw new Error(`Transcription failed (gemini status): ${statusRes.status} ${(await statusRes.text()).slice(0, 200)}`);
+    if (!statusRes.ok) throw new Error(formatTranscriptionHttpError("gemini status", statusRes.status, await statusRes.text()));
     const statusJson = await statusRes.json();
     file = statusJson.file ?? statusJson;
   }
@@ -314,7 +314,7 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
       generationConfig: { temperature: 0 },
     }),
   }).finally(() => clearTimeout(timeoutId));
-  if (!res.ok) throw new Error(`Transcription failed (gemini): ${res.status} ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(formatTranscriptionHttpError("gemini", res.status, await res.text()));
   const json = await res.json();
   const text = (json.candidates ?? [])
     .flatMap((c: any) => c.content?.parts ?? [])
@@ -369,6 +369,15 @@ async function transcribeWithLovable(audio: Blob, filename: string): Promise<Tra
   return { text, words: [], language: null, provider: "lovable", durationSeconds: 0 };
 }
 
+function formatTranscriptionHttpError(stage: string, status: number, body: string) {
+  const compact = body.replace(/\s+/g, " ").trim();
+  if (status === 429 && /prepayment credits are depleted|RESOURCE_EXHAUSTED/i.test(compact)) {
+    return `Transcription failed (${stage}): Gemini credits are depleted. Add credits for that provider or switch Settings → AI to Lovable/OpenAI/Groq.`;
+  }
+  if (status === 429) return `Transcription failed (${stage}): provider rate limit or quota reached. Please retry later or switch providers.`;
+  return `Transcription failed (${stage}): ${status} ${compact.slice(0, 200)}`;
+}
+
 export async function transcribeAudio(
   provider: TranscriptionProviderId,
   userKeys: Record<string, string>,
@@ -388,9 +397,16 @@ export async function transcribeAudio(
         if (!msg.includes("413") && !/cannot exceed/i.test(msg)) throw e;
       }
     }
-    if (userKeys.gemini) return transcribeWithGemini(userKeys.gemini, audio, filename);
-    if (userKeys.openai) return transcribeAudio("openai", userKeys, audio, filename);
-    if (userKeys.groq) return transcribeAudio("groq", userKeys, audio, filename);
+    const errors: string[] = [];
+    for (const nextProvider of ["gemini", "openai", "groq"] as const) {
+      if (!userKeys[nextProvider]) continue;
+      try {
+        return await transcribeAudio(nextProvider, userKeys, audio, filename);
+      } catch (e: any) {
+        errors.push(String(e?.message ?? e));
+      }
+    }
+    if (errors.length > 0) throw new Error(errors.join(" | "));
     throw new Error(
       `Video is ${(audio.size / 1024 / 1024).toFixed(1)}MB — exceeds Lovable AI's 30MB inline limit. Add a Gemini, OpenAI, or Groq key in Settings → AI to transcribe larger files.`,
     );
