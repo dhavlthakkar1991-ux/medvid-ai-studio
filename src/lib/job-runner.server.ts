@@ -48,6 +48,11 @@ export async function runAnalysisJob(jobId: string) {
       pipelineStartedAt = pr?.started_at ? new Date(pr.started_at) : new Date();
     }
   }
+  if (!pipelineRunId) {
+    await setState("failed", 0, "Could not create pipeline run.");
+    return { body: "pipeline_run_failed", status: 500 };
+  }
+  const runId: string = pipelineRunId;
 
   try {
     // ---- STEP 1: transcribe if needed -----------------------------------
@@ -119,7 +124,7 @@ export async function runAnalysisJob(jobId: string) {
       .from("task_executions")
       .select("task_name, status")
       .eq("project_id", project.id)
-      .eq("pipeline_run_id", pipelineRunId);
+      .eq("pipeline_run_id", runId);
     const doneSet = new Set(
       (execRows ?? [])
         .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings")
@@ -138,7 +143,7 @@ export async function runAnalysisJob(jobId: string) {
         // Record a synthetic failed execution so we don't loop on this task.
         try {
           await supabaseAdmin.from("task_executions").insert({
-            pipeline_run_id: pipelineRunId,
+            pipeline_run_id: runId,
             project_id: project.id,
             task_name: task,
             provider: "unknown",
@@ -172,7 +177,7 @@ export async function runAnalysisJob(jobId: string) {
       .from("task_executions")
       .select("task_name, status, fallback_used, validation_passed")
       .eq("project_id", project.id)
-      .eq("pipeline_run_id", pipelineRunId);
+      .eq("pipeline_run_id", runId);
     const outcomes = (finalExecs ?? []).map((r: any) => ({
       task: r.task_name as string,
       valid: r.status !== "failed" && r.validation_passed !== false,
