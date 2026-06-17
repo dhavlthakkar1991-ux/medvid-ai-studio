@@ -185,7 +185,12 @@ export async function runTaskForProject(
     }
     // Editorial decisions overwrite edit_actions; rebuild manifest from the new actions.
     if (task === "editorial_decisions") {
-      await buildRenderManifestForProject(supabase, projectId);
+      const actions = Array.isArray((res.data as any)?.edit_actions) ? (res.data as any).edit_actions : [];
+      if (actions.length === 0) {
+        console.warn("editorial_decisions returned 0 valid edit_actions; skipping manifest rebuild");
+      } else {
+        await buildRenderManifestForProject(supabase, projectId);
+      }
     }
   } catch (e) {
     console.warn(`normalize/timeline build failed for ${task}`, e);
