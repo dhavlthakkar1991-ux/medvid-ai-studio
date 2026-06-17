@@ -330,27 +330,41 @@ async function transcribeWithLovable(audio: Blob, filename: string): Promise<Tra
   const apiKey = process.env.LOVABLE_API_KEY ?? "";
   if (!apiKey) throw new Error("Lovable AI is not configured. Contact support.");
   const mediaType = getMediaMimeType(audio, filename);
-  const gateway = createOpenAICompatible({
-    name: "lovable",
-    baseURL: "https://ai.gateway.lovable.dev/v1",
+  // The Vercel AI SDK's openai-compatible adapter rejects `video/*` file parts
+  // ("file part media type video/mp4 functionality not supported"). Call the
+  // Lovable gateway directly with an inline base64 data URL via the
+  // `image_url` content part — the gateway forwards inline media to Gemini.
+  const bytes = new Uint8Array(await audio.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  const dataUrl = `data:${mediaType};base64,${base64}`;
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
     headers: {
+      "Content-Type": "application/json",
       "Lovable-API-Key": apiKey,
-      "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+      "X-Lovable-AIG-SDK": "raw",
     },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      temperature: 0,
+      max_completion_tokens: 8192,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: "Transcribe the spoken words in this media file. Return only the verbatim transcript text, with no summary or commentary." },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ],
+      }],
+    }),
   });
-  const result = await generateText({
-    model: gateway("google/gemini-2.5-flash"),
-    temperature: 0,
-    maxOutputTokens: 8192,
-    messages: [{
-      role: "user",
-      content: [
-        { type: "text", text: "Transcribe the spoken words in this media file. Return only the verbatim transcript text, with no summary or commentary." },
-        { type: "file", data: new Uint8Array(await audio.arrayBuffer()), mediaType, filename },
-      ],
-    }],
-  });
-  const text = result.text.trim();
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Transcription failed (lovable): ${res.status} ${t.slice(0, 300)}`);
+  }
+  const json = await res.json();
+  const text = String(json?.choices?.[0]?.message?.content ?? "").trim();
   if (!text) throw new Error("Transcription failed (Lovable AI): empty transcript returned.");
   return { text, words: [], language: null, provider: "lovable", durationSeconds: 0 };
 }
