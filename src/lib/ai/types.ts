@@ -15,7 +15,7 @@ export type Task = (typeof TASKS)[number];
 export const LLM_PROVIDERS = ["lovable", "openai", "gemini", "openrouter", "anthropic", "groq", "deepseek"] as const;
 export type LLMProviderId = (typeof LLM_PROVIDERS)[number];
 
-export const TRANSCRIPTION_PROVIDERS = ["openai", "groq", "gemini", "assemblyai", "deepgram"] as const;
+export const TRANSCRIPTION_PROVIDERS = ["lovable", "openai", "groq", "gemini", "assemblyai", "deepgram"] as const;
 export type TranscriptionProviderId = (typeof TRANSCRIPTION_PROVIDERS)[number];
 
 /** Default model per task — user/project can override these in settings. */

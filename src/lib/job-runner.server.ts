@@ -16,7 +16,9 @@ export async function runAnalysisJob(jobId: string) {
 
   const { data: job } = await supabaseAdmin.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return { body: "job not found", status: 404 };
-  if (job.state === "completed" || job.state === "failed") return { body: "done", status: 200 };
+  if (["completed", "completed_with_warnings", "needs_review", "failed"].includes(job.state)) {
+    return { body: "done", status: 200 };
+  }
   const { data: project } = await supabaseAdmin.from("projects").select("*").eq("id", job.project_id).single();
   if (!project) return { body: "project not found", status: 404 };
   const { data: settings } = await supabaseAdmin.from("ai_settings").select("*").eq("user_id", project.user_id).maybeSingle();
@@ -76,13 +78,11 @@ export async function runAnalysisJob(jobId: string) {
       const blob = await audioRes.blob();
 
       const keys = (settings?.provider_keys as Record<string, string>) ?? {};
-      const preferredProvider = String(settings?.default_transcription_provider ?? "openai") === "lovable"
-        ? "openai"
-        : String(settings?.default_transcription_provider ?? "openai");
-      const implementedProviders = ["openai", "groq", "gemini"];
+      const preferredProvider = String(settings?.default_transcription_provider ?? "lovable");
+      const implementedProviders = ["lovable", "openai", "groq", "gemini"];
       const txProvider = implementedProviders.includes(preferredProvider) && keys[preferredProvider]
         ? preferredProvider
-        : keys.gemini ? "gemini" : keys.openai ? "openai" : keys.groq ? "groq" : preferredProvider;
+        : preferredProvider === "lovable" ? "lovable" : keys.openai ? "openai" : keys.groq ? "groq" : keys.gemini ? "gemini" : "lovable";
 
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Transcription timed out.")), 120000);
@@ -122,12 +122,12 @@ export async function runAnalysisJob(jobId: string) {
     // ---- STEP 2: run the next pending analysis task ---------------------
     const { data: execRows } = await supabaseAdmin
       .from("task_executions")
-      .select("task_name, status")
+      .select("id, task_name, status")
       .eq("project_id", project.id)
       .eq("pipeline_run_id", runId);
     const doneSet = new Set(
       (execRows ?? [])
-        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings")
+        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings" || r.status === "failed")
         .map((r: any) => r.task_name as string),
     );
     const pending = ALL_TASKS.filter((t) => !doneSet.has(t));
@@ -136,27 +136,42 @@ export async function runAnalysisJob(jobId: string) {
       const task = pending[0];
       const doneCount = ALL_TASKS.length - pending.length;
       await setState("analyzing", 20 + Math.round((doneCount / ALL_TASKS.length) * 70));
+      const { data: claimed, error: claimError } = await supabaseAdmin
+        .from("task_executions")
+        .insert({
+          pipeline_run_id: runId,
+          project_id: project.id,
+          task_name: task,
+          status: "running",
+          provider: "pending",
+          model: "pending",
+          attempts: [],
+        })
+        .select("id")
+        .single();
+      if (claimError || !claimed) {
+        // Another runner invocation claimed this task first. Return cleanly; the
+        // browser poller will pick up the next progress update instead of
+        // launching duplicate AI calls.
+        return { body: `claimed:${task}`, status: 200 };
+      }
       try {
-        await runTaskForProject(supabaseAdmin, project.user_id, project.id, task, { pipelineRunId });
+        await runTaskForProject(supabaseAdmin, project.user_id, project.id, task, { pipelineRunId, executionId: claimed.id });
       } catch (error) {
         console.error(`task ${task} failed`, error);
         // Record a synthetic failed execution so we don't loop on this task.
         try {
-          await supabaseAdmin.from("task_executions").insert({
-            pipeline_run_id: runId,
-            project_id: project.id,
-            task_name: task,
+          await supabaseAdmin.from("task_executions").update({
             provider: "unknown",
             model: "unknown",
             status: "failed",
-            started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
             duration_ms: 0,
             retry_count: 0,
             fallback_used: false,
             error_message: String((error as any)?.message ?? error),
             attempts: [],
-          });
+          }).eq("id", claimed.id);
         } catch {}
       }
       await setState("analyzing", 20 + Math.round(((doneCount + 1) / ALL_TASKS.length) * 70));
@@ -194,7 +209,7 @@ export async function runAnalysisJob(jobId: string) {
         ? "completed_with_warnings"
         : "completed";
 
-    await setState("completed", 100);
+    await setState(projectStatus, 100);
     await supabaseAdmin.from("projects").update({ status: projectStatus }).eq("id", project.id);
 
     const completedAt = new Date();

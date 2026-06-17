@@ -78,6 +78,8 @@ const trackLabel = (n: unknown) => {
   return TRACK_LABELS[v] ?? `Track ${Number.isFinite(v) ? v : "?"}`;
 };
 
+const ACTIVE_JOB_STATES = new Set(["queued", "transcribing", "analyzing"]);
+
 function ProjectView() {
   const { id } = useParams({ from: "/_authenticated/projects/$id" });
   const navigate = useNavigate();
@@ -109,7 +111,7 @@ function ProjectView() {
       const d = query.state.data as any;
       if (!d) return 3000;
       const s = d.latestJob?.state;
-      return s && s !== "completed" && s !== "failed" ? 3000 : false;
+      return s && ACTIVE_JOB_STATES.has(s) ? 3000 : false;
     },
   });
 
@@ -119,7 +121,7 @@ function ProjectView() {
     refetchInterval: (query) => {
       const parent = qc.getQueryData(["project", id]) as any;
       const s = parent?.latestJob?.state;
-      return s && s !== "completed" && s !== "failed" ? 5000 : false;
+      return s && ACTIVE_JOB_STATES.has(s) ? 5000 : false;
     },
   });
 
@@ -129,7 +131,7 @@ function ProjectView() {
     refetchInterval: (query) => {
       const parent = qc.getQueryData(["project", id]) as any;
       const s = parent?.latestJob?.state;
-      return s && s !== "completed" && s !== "failed" ? 4000 : false;
+      return s && ACTIVE_JOB_STATES.has(s) ? 4000 : false;
     },
   });
 
@@ -141,7 +143,7 @@ function ProjectView() {
   useEffect(() => {
     if (!latestJobForLaunch) return;
     const state = latestJobForLaunch.state;
-    if (state === "completed") return;
+    if (!ACTIVE_JOB_STATES.has(state)) return;
     const updatedAt = latestJobForLaunch.updated_at ?? "";
     const key = `${latestJobForLaunch.id}:${state}:${updatedAt}`;
     if (launchedJobs.current.has(key)) return;
@@ -221,7 +223,7 @@ function ProjectView() {
         </div>
       </div>
 
-      {latestJob && latestJob.state !== "completed" && (
+      {latestJob && ACTIVE_JOB_STATES.has(latestJob.state) && (
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center justify-between mb-2">

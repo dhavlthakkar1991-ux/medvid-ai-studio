@@ -8,7 +8,7 @@ type LLMResult<T> = { data: T; usage: Usage; provider: string; model: string };
 
 function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, string>): {
   baseURL: string;
-  apiKey: string;
+  apiKey?: string;
   headers: Record<string, string>;
   name: string;
 } {
@@ -16,8 +16,10 @@ function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, str
     case "lovable":
       return {
         baseURL: "https://ai.gateway.lovable.dev/v1",
-        apiKey: process.env.LOVABLE_API_KEY ?? "",
-        headers: { "Lovable-API-Key": process.env.LOVABLE_API_KEY ?? "" } as Record<string, string>,
+        headers: {
+          "Lovable-API-Key": process.env.LOVABLE_API_KEY ?? "",
+          "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+        } as Record<string, string>,
         name: "lovable",
       };
     case "openai":
@@ -51,14 +53,14 @@ export async function generateJSON<T>(
   if (!cfg.apiKey && provider !== "lovable") {
     throw new Error(`No API key configured for provider "${provider}". Add it in Settings → AI.`);
   }
-  if (provider === "lovable" && !cfg.apiKey) {
+  if (provider === "lovable" && !cfg.headers["Lovable-API-Key"]) {
     throw new Error("Lovable AI is not configured. Contact support.");
   }
 
   const gateway = createOpenAICompatible({
     name: cfg.name,
     baseURL: cfg.baseURL,
-    apiKey: cfg.apiKey,
+    ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}),
     headers: cfg.headers,
   });
   const modelId = normalizeModel(provider, opts.model);
@@ -69,6 +71,7 @@ export async function generateJSON<T>(
         model: gateway(modelId),
         system: opts.system + "\n\nRespond with ONLY valid minified JSON matching the requested schema. No markdown, no commentary.",
         prompt: opts.prompt,
+        maxOutputTokens: 8192,
       });
       const parsed = extractJson(result.text);
       const data = opts.schema.parse(coerceToSchemaShape(parsed, opts.schema)) as T;
@@ -83,6 +86,7 @@ export async function generateJSON<T>(
       schema: opts.schema,
       system: opts.system,
       prompt: opts.prompt,
+      maxOutputTokens: 8192,
     });
     const usage: Usage = {
       inputTokens: result.usage?.inputTokens ?? 0,
@@ -304,12 +308,42 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
   return { text, words: [], language: null, provider: "gemini", durationSeconds: 0 };
 }
 
+async function transcribeWithLovable(audio: Blob, filename: string): Promise<TranscriptResult> {
+  const apiKey = process.env.LOVABLE_API_KEY ?? "";
+  if (!apiKey) throw new Error("Lovable AI is not configured. Contact support.");
+  const mediaType = getMediaMimeType(audio, filename);
+  const gateway = createOpenAICompatible({
+    name: "lovable",
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    headers: {
+      "Lovable-API-Key": apiKey,
+      "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+    },
+  });
+  const result = await generateText({
+    model: gateway("google/gemini-2.5-flash"),
+    temperature: 0,
+    maxOutputTokens: 8192,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: "Transcribe the spoken words in this media file. Return only the verbatim transcript text, with no summary or commentary." },
+        { type: "file", data: new Uint8Array(await audio.arrayBuffer()), mediaType, filename },
+      ],
+    }],
+  });
+  const text = result.text.trim();
+  if (!text) throw new Error("Transcription failed (Lovable AI): empty transcript returned.");
+  return { text, words: [], language: null, provider: "lovable", durationSeconds: 0 };
+}
+
 export async function transcribeAudio(
   provider: TranscriptionProviderId,
   userKeys: Record<string, string>,
   audio: Blob,
   filename: string,
 ): Promise<TranscriptResult> {
+  if (provider === "lovable") return transcribeWithLovable(audio, filename);
   if (provider === "gemini") return transcribeWithGemini(userKeys.gemini ?? "", audio, filename);
   if (provider === "assemblyai" || provider === "deepgram") {
     throw new Error(`Transcription provider "${provider}" is not yet implemented in Phase 1.`);

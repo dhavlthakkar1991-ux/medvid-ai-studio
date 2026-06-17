@@ -61,7 +61,7 @@ export async function runTaskForProject(
   userId: string,
   projectId: string,
   task: TaskKey,
-  options?: { pipelineRunId?: string | null },
+  options?: { pipelineRunId?: string | null; executionId?: string | null },
 ) {
   // Load context + transcript + ai_settings + template
   const [{ data: project }, { data: ctx }, { data: tx }, { data: settings }] = await Promise.all([
@@ -173,6 +173,7 @@ export async function runTaskForProject(
     // Total failure — still record the execution before throwing.
     await recordExecution({
       supabase, projectId, pipelineRunId: options?.pipelineRunId ?? null,
+      executionId: options?.executionId ?? null,
       task, provider, model, startedAt,
       status: "failed", retryCount, fallbackStage, validation: lastValidation,
       attempts, errorMessage: attempts[attempts.length - 1]?.errors?.[0] ?? "no_output",
@@ -253,6 +254,7 @@ export async function runTaskForProject(
 
   await recordExecution({
     supabase, projectId, pipelineRunId: options?.pipelineRunId ?? null,
+    executionId: options?.executionId ?? null,
     task, provider: res.provider, model: res.model, startedAt,
     status: lastValidation.valid ? "completed" : "completed_with_warnings",
     retryCount, fallbackStage, validation: lastValidation, attempts,
@@ -275,6 +277,7 @@ async function recordExecution(args: {
   supabase: any;
   projectId: string;
   pipelineRunId: string | null;
+  executionId: string | null;
   task: string;
   provider: string;
   model: string;
@@ -287,26 +290,28 @@ async function recordExecution(args: {
   errorMessage: string | null;
 }) {
   const completedAt = new Date();
+  const row = {
+    pipeline_run_id: args.pipelineRunId,
+    project_id: args.projectId,
+    task_name: args.task,
+    provider: args.provider,
+    model: args.model,
+    status: args.status,
+    started_at: args.startedAt.toISOString(),
+    completed_at: completedAt.toISOString(),
+    duration_ms: completedAt.getTime() - args.startedAt.getTime(),
+    retry_count: args.retryCount,
+    fallback_used: !!args.fallbackStage,
+    fallback_stage: args.fallbackStage,
+    validation_passed: args.validation.valid,
+    validation_errors: args.validation.errors,
+    validation_warnings: args.validation.warnings,
+    error_message: args.errorMessage,
+    attempts: args.attempts,
+  };
   try {
-    await args.supabase.from("task_executions").insert({
-      pipeline_run_id: args.pipelineRunId,
-      project_id: args.projectId,
-      task_name: args.task,
-      provider: args.provider,
-      model: args.model,
-      status: args.status,
-      started_at: args.startedAt.toISOString(),
-      completed_at: completedAt.toISOString(),
-      duration_ms: completedAt.getTime() - args.startedAt.getTime(),
-      retry_count: args.retryCount,
-      fallback_used: !!args.fallbackStage,
-      fallback_stage: args.fallbackStage,
-      validation_passed: args.validation.valid,
-      validation_errors: args.validation.errors,
-      validation_warnings: args.validation.warnings,
-      error_message: args.errorMessage,
-      attempts: args.attempts,
-    });
+    if (args.executionId) await args.supabase.from("task_executions").update(row).eq("id", args.executionId);
+    else await args.supabase.from("task_executions").insert(row);
   } catch (e) {
     console.warn("task_executions insert failed", e);
   }
