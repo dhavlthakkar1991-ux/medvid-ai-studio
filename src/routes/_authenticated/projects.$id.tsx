@@ -56,6 +56,21 @@ function recoverySource(t: { fallback_used?: boolean }): "AI" | "Recovery" {
   return t.fallback_used ? "Recovery" : "AI";
 }
 
+function whyFallback(t: { attempts?: any[] }): string[] {
+  const lines: string[] = [];
+  const atts = Array.isArray(t.attempts) ? t.attempts : [];
+  for (const a of atts) {
+    const label = OUTCOME_LABEL[a.stage] ?? a.stage;
+    if (a.valid) {
+      lines.push(`${label}: ✓ passed`);
+      break;
+    }
+    const errs = Array.isArray(a.errors) ? a.errors.slice(0, 3).join(", ") : (a.error_message ?? "failed");
+    lines.push(`${label}: ✗ ${errs}`);
+  }
+  return lines;
+}
+
 const QUALITY_SUMMARY_TASKS: Array<{ key: string; label: string }> = [
   { key: "scene_plan", label: "Scene Plan" },
   { key: "visual_storyboard", label: "Storyboard" },
