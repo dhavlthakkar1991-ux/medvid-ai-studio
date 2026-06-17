@@ -19,4 +19,8 @@ Every field REQUIRED. asset_prompt must be image/video generation ready (vivid).
   editorial_decisions: `Decide what to layer on the doctor's talking-head for EVERY scene.
 Output JSON ONLY matching: { "edit_actions": [ { "scene_number": number, "action_type": string, "start_time": number, "end_time": number, "layer": number, "priority": number, "layout": string, "transition_in": string, "transition_out": string, "asset_query": string, "reason": string } ] }
 start_time and end_time MUST be numbers in seconds (not strings, not "mm:ss"). end_time MUST be greater than start_time. Produce 1-3 actions per scene so every scene is covered. Preserve doctor narration — only layer enhancements on top.`,
+
+  seo: `Produce a YouTube SEO package.
+Output JSON ONLY matching EXACTLY: { "seo": { "titles": [string,string,string,string,string], "description": string, "tags": [12-20 strings], "chapters_text": string, "pinned_comment": string } }
+The top-level key MUST be "seo" — do NOT use "seo_package", "youtube", or any other alias. titles, tags, and description must all be non-empty. Each title <=70 chars. description <=500 chars.`,
 };

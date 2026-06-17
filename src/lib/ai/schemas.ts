@@ -61,8 +61,15 @@ export const ScenePlanSchema = z.object({
     scene_number: z.coerce.number().optional(),
     start_seconds: z.coerce.number().optional(),
     end_seconds: z.coerce.number().optional(),
-    narration_text: z.string().min(1, "narration_text required"),
-    objective: z.string().min(1, "objective required"),
+    narration_text: z.string().optional().default(""),
+    objective: z.string().optional().default(""),
+  }).transform((s) => {
+    // Gemini occasionally omits narration_text/objective on a single scene.
+    // Backfill from neighboring fields so the whole plan isn't rejected.
+    const title = s.title || s.kind || "Scene";
+    const narration = (s.narration_text && s.narration_text.trim()) || title;
+    const objective = (s.objective && s.objective.trim()) || `Cover: ${title}`;
+    return { ...s, narration_text: narration, objective };
   })),
 });
 

@@ -9,7 +9,7 @@ import { generateAssetCandidatesForProject } from "./assets/asset-matcher.server
 import { compileTimelineForProject } from "./render/timeline-compiler.server";
 import { validateTaskOutput, type TaskValidatorKey, type ValidationResult } from "./qa/validators";
 import { FALLBACK_PROMPTS } from "./qa/fallback-prompts.server";
-import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions } from "./qa/fallback-generators.server";
+import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions, fallbackSeo } from "./qa/fallback-generators.server";
 
 const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
   lovable: "google/gemini-2.5-flash",
@@ -51,7 +51,7 @@ const TASK_PROMPTS: Record<TaskKey, string> = {
   broll: `Suggest 5–12 B-roll cutaways. Each item MUST have EXACTLY these fields: scene_number (1-based, matching scene_plan), keyword (<=4 words), search_prompt (cinematic generation-ready description), placement_reason (why this clip supports the narration), recommended_start (mm:ss), recommended_end (mm:ss). Do NOT emit legacy fields (prompt, asset_prompt, keywords[], t).`,
   infographics: `Suggest 4–10 medical infographics aligned to the chapters. Each: t, type, title, bullets (3–6), asset_prompt.`,
   thumbnails: `Suggest 3 high-CTR thumbnail concepts. Each: concept, layout, text (≤6 words), palette (hex[]), asset_prompt.`,
-  seo: `Produce SEO package for YouTube: 5 titles (≤70 chars), description (≤500 chars), 12–20 tags, chapters_text (HH:MM:SS lines), pinned_comment.`,
+  seo: `Produce SEO package for YouTube. Return JSON shaped EXACTLY as { "seo": { "titles": [...5 strings ≤70 chars...], "description": "≤500 chars", "tags": [12-20 strings], "chapters_text": "HH:MM:SS lines", "pinned_comment": "..." } }. Use the top-level key "seo" (NOT "seo_package", "youtube_seo", or any alias). titles, tags, and description must all be non-empty.`,
   shorts: `Pick 3–5 short clip ideas (15–60s windows). Each: start (mm:ss), end (mm:ss), hook (≤80 chars), caption, asset_prompt.`,
   editorial_decisions: `You are a professional medical video editor. The source is a doctor's talking-head video (Track 0). You make the editing decisions; planners only suggest assets. Produce 12–40 edit_actions densely covering the video — aim for >70% timeline coverage. Each item: scene_number (1-based), action_type (one of: show_broll, show_infographic, show_medical_diagram, show_clinical_image, show_lower_third, show_text_overlay, show_callout, kinetic_typography, highlight_keyword, show_statistic, picture_in_picture, split_screen, show_cta, show_thumbnail_frame, show_logo, show_transition, zoom_crop, ken_burns), start_time (seconds, numeric), end_time (seconds, numeric), layer (Track 0=talking head [reserved], 1=b-roll, 2=infographics/diagrams, 3=lower thirds, 4=kinetic typography, 5=keyword highlights, 6=CTA/end cards), priority (1-10), layout (full_screen, pip_right, pip_left, split_screen, doctor_with_infographic, doctor_with_broll, doctor_with_callout, top_bottom, picture_in_picture), transition_in/transition_out (cut, fade, crossfade, slide, push, zoom, blur, whip, medical_hud), asset_query (concrete search/generation prompt), reason. Use lower thirds for speaker/credentials, kinetic typography for key phrases, highlight_keyword for medical terms, and show_cta near the end. Never replace narration — only enhance it.`,
 };
@@ -193,6 +193,7 @@ export async function runTaskForProject(
     else if (task === "broll") gen = await fallbackBroll(supabase, projectId, project);
     else if (task === "visual_storyboard") gen = await fallbackVisualStoryboard(supabase, projectId, project);
     else if (task === "editorial_decisions") gen = await fallbackEditorialDecisions(supabase, projectId, project);
+    else if (task === "seo") gen = await fallbackSeo(supabase, projectId, project);
     if (gen) {
       // Run through schema for normalization (best-effort)
       let parsed: any = gen;
