@@ -130,6 +130,17 @@ function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
     if (Array.isArray(parsed) && parsed.length === 1 && typeof parsed[0] === "object") {
       parsed = parsed[0];
     }
+    // If the schema has a single key and the model returned the inner shape directly,
+    // wrap it under that key.
+    if (
+      keys.length === 1 &&
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      !(keys[0] in (parsed as Record<string, unknown>))
+    ) {
+      parsed = { [keys[0]]: parsed };
+    }
     // Fill in any missing array-typed fields with [] so Zod doesn't reject them.
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const obj = parsed as Record<string, unknown>;
@@ -142,6 +153,9 @@ function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
           fieldDef?.schema?._def?.typeName;
         if (typeName === "ZodArray" && obj[key] === undefined) {
           obj[key] = [];
+        }
+        if (typeName === "ZodObject" && obj[key] === undefined) {
+          obj[key] = {};
         }
       }
       return obj;
