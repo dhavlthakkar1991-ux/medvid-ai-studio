@@ -120,7 +120,7 @@ function extractJson(response: string): unknown {
 function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
   // Schemas are { someKey: Array<...> }. If the model returned just the array, wrap it.
   const def: any = (schema as any)._def;
-  const shape = def?.shape?.() ?? def?.shape;
+  const shape = getObjectShape(schema);
   if (shape && typeof shape === "object") {
     const keys = Object.keys(shape);
     if (Array.isArray(parsed) && keys.length === 1) {
@@ -141,27 +141,63 @@ function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
     ) {
       parsed = { [keys[0]]: parsed };
     }
-    // Fill in any missing array-typed fields with [] so Zod doesn't reject them.
+    // Fill in missing required fields with safe defaults so Zod doesn't reject
+    // partial JSON from providers that omit empty sections.
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const obj = parsed as Record<string, unknown>;
-      for (const key of keys) {
-        const field: any = shape[key];
-        const fieldDef = field?._def;
-        const typeName =
-          fieldDef?.typeName ??
-          fieldDef?.innerType?._def?.typeName ??
-          fieldDef?.schema?._def?.typeName;
-        if (typeName === "ZodArray" && obj[key] === undefined) {
-          obj[key] = [];
-        }
-        if (typeName === "ZodObject" && obj[key] === undefined) {
-          obj[key] = {};
-        }
-      }
-      return obj;
+      return fillMissingSchemaDefaults(parsed, schema);
     }
   }
   return parsed;
+}
+
+function getObjectShape(schema: any): Record<string, any> | null {
+  const def = schema?._def;
+  const shape = def?.shape?.() ?? def?.shape;
+  if (shape && typeof shape === "object") return shape;
+  return null;
+}
+
+function getSchemaTypeName(schema: any): string | undefined {
+  const def = schema?._def;
+  return def?.typeName ?? def?.innerType?._def?.typeName ?? def?.schema?._def?.typeName;
+}
+
+function getArrayElementSchema(schema: any): any | null {
+  const def = schema?._def;
+  if (getSchemaTypeName(schema) !== "ZodArray") return null;
+  return def?.type ?? def?.element ?? null;
+}
+
+function defaultForSchema(schema: any): unknown {
+  const typeName = getSchemaTypeName(schema);
+  if (typeName === "ZodArray") return [];
+  if (typeName === "ZodObject") return {};
+  if (typeName === "ZodString") return "";
+  if (typeName === "ZodNumber" || typeName === "ZodNaN") return 0;
+  if (typeName === "ZodBoolean") return false;
+  return undefined;
+}
+
+function fillMissingSchemaDefaults(value: unknown, schema: any): unknown {
+  const shape = getObjectShape(schema);
+  if (!shape || !value || typeof value !== "object" || Array.isArray(value)) return value;
+
+  const obj = value as Record<string, unknown>;
+  for (const [key, fieldSchema] of Object.entries(shape)) {
+    if (obj[key] === undefined) obj[key] = defaultForSchema(fieldSchema);
+
+    const nestedShape = getObjectShape(fieldSchema);
+    if (nestedShape && obj[key] && typeof obj[key] === "object" && !Array.isArray(obj[key])) {
+      fillMissingSchemaDefaults(obj[key], fieldSchema);
+    }
+
+    const elementSchema = getArrayElementSchema(fieldSchema);
+    if (elementSchema && Array.isArray(obj[key])) {
+      for (const item of obj[key]) fillMissingSchemaDefaults(item, elementSchema);
+    }
+  }
+
+  return obj;
 }
 
 /* ============ Transcription ============ */
