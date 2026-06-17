@@ -153,7 +153,6 @@ export async function runAnalysisJob(jobId: string) {
         // Another runner invocation claimed this task first. Return cleanly; the
         // browser poller will pick up the next progress update instead of
         // launching duplicate AI calls.
-        await setState("analyzing", 20 + Math.round((doneCount / ALL_TASKS.length) * 70));
         return { body: `claimed:${task}`, status: 200 };
       }
       try {
