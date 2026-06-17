@@ -9,14 +9,18 @@ export async function compileTimelineForProject(
   supabase: SupabaseLike,
   projectId: string,
 ) {
-  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: sceneAssets }] = await Promise.all([
-    supabase.from("scenes").select("*").eq("project_id", projectId).order("scene_number", { ascending: true }),
+  const { data: scenes } = await supabase
+    .from("scenes")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("scene_number", { ascending: true });
+  const sceneIds = ((scenes ?? []) as any[]).map((s) => s.id);
+  const [{ data: storyboard }, { data: broll }, { data: sceneAssets }] = await Promise.all([
     supabase.from("storyboard_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("broll_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
-    supabase
-      .from("scene_assets")
-      .select("scene_id, asset_id, is_primary, render_order")
-      .in("scene_id", (((await supabase.from("scenes").select("id").eq("project_id", projectId)).data ?? []) as any[]).map((s: any) => s.id).concat(["00000000-0000-0000-0000-000000000000"])),
+    sceneIds.length > 0
+      ? supabase.from("scene_assets").select("scene_id, asset_id, is_primary, render_order").in("scene_id", sceneIds)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
 
   const primaryAssetByScene = new Map<string, string>();
@@ -105,7 +109,7 @@ export async function validateTimelineForProject(
   supabase: SupabaseLike,
   projectId: string,
 ): Promise<TimelineValidationReport> {
-  const [{ data: project }, { data: scenes }, { data: instructions }, { data: sceneAssets }] = await Promise.all([
+  const [{ data: project }, { data: scenes }, { data: instructions }] = await Promise.all([
     supabase.from("projects").select("duration_seconds").eq("id", projectId).maybeSingle(),
     supabase.from("scenes").select("*").eq("project_id", projectId).order("start_time", { ascending: true }),
     supabase
@@ -113,16 +117,11 @@ export async function validateTimelineForProject(
       .select("*")
       .eq("project_id", projectId)
       .order("render_order", { ascending: true }),
-    supabase
-      .from("scene_assets")
-      .select("scene_id")
-      .in(
-        "scene_id",
-        (((await supabase.from("scenes").select("id").eq("project_id", projectId)).data ?? []) as any[]).map(
-          (s: any) => s.id,
-        ).concat(["00000000-0000-0000-0000-000000000000"]),
-      ),
   ]);
+  const sceneIds = ((scenes ?? []) as any[]).map((s: any) => s.id);
+  const { data: sceneAssets } = sceneIds.length > 0
+    ? await supabase.from("scene_assets").select("scene_id").in("scene_id", sceneIds)
+    : { data: [] as any[] };
 
   const issues: TimelineValidationIssue[] = [];
   const sceneList = (scenes ?? []) as any[];
