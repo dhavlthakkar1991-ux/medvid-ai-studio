@@ -44,7 +44,8 @@ export async function runTaskForProject(
   const overrides = (settings?.model_overrides as Record<string, string>) ?? {};
   const provider = ((settings?.default_llm_provider as LLMProviderId) ?? "lovable");
   const budget = !!settings?.budget_mode;
-  const model = budget ? BUDGET_MODEL : (overrides[task] || TASK_DEFAULT_MODELS[task]);
+  const rawModel = budget ? BUDGET_MODEL : (overrides[task] || TASK_DEFAULT_MODELS[task]);
+  const model = coerceModelForProvider(provider, rawModel);
   const userKeys = (settings?.provider_keys as Record<string, string>) ?? {};
 
   const schema = TaskSchemas[task];
