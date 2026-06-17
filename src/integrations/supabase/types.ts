@@ -91,6 +91,126 @@ export type Database = {
           },
         ]
       }
+      broll_items: {
+        Row: {
+          asset_status: string
+          asset_url: string | null
+          created_at: string
+          id: string
+          item_index: number
+          keyword: string
+          placement_reason: string
+          project_id: string
+          recommended_end: number
+          recommended_start: number
+          scene_id: string | null
+          search_prompt: string
+        }
+        Insert: {
+          asset_status?: string
+          asset_url?: string | null
+          created_at?: string
+          id?: string
+          item_index?: number
+          keyword?: string
+          placement_reason?: string
+          project_id: string
+          recommended_end?: number
+          recommended_start?: number
+          scene_id?: string | null
+          search_prompt?: string
+        }
+        Update: {
+          asset_status?: string
+          asset_url?: string | null
+          created_at?: string
+          id?: string
+          item_index?: number
+          keyword?: string
+          placement_reason?: string
+          project_id?: string
+          recommended_end?: number
+          recommended_start?: number
+          scene_id?: string | null
+          search_prompt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broll_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broll_items_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      infographic_items: {
+        Row: {
+          asset_prompt: string
+          asset_status: string
+          asset_url: string | null
+          bullets: Json
+          created_at: string
+          id: string
+          item_index: number
+          project_id: string
+          scene_id: string | null
+          t: string
+          title: string
+          type: string
+        }
+        Insert: {
+          asset_prompt?: string
+          asset_status?: string
+          asset_url?: string | null
+          bullets?: Json
+          created_at?: string
+          id?: string
+          item_index?: number
+          project_id: string
+          scene_id?: string | null
+          t?: string
+          title?: string
+          type?: string
+        }
+        Update: {
+          asset_prompt?: string
+          asset_status?: string
+          asset_url?: string | null
+          bullets?: Json
+          created_at?: string
+          id?: string
+          item_index?: number
+          project_id?: string
+          scene_id?: string | null
+          t?: string
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "infographic_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "infographic_items_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           created_at: string
@@ -312,6 +432,79 @@ export type Database = {
           },
         ]
       }
+      render_manifest: {
+        Row: {
+          asset_query: string
+          asset_source: string
+          asset_type: string
+          asset_url: string | null
+          caption_style: string
+          created_at: string
+          id: string
+          project_id: string
+          render_order: number
+          scene_id: string | null
+          status: string
+          storyboard_item_id: string | null
+          timeline_end: number
+          timeline_start: number
+        }
+        Insert: {
+          asset_query?: string
+          asset_source?: string
+          asset_type?: string
+          asset_url?: string | null
+          caption_style?: string
+          created_at?: string
+          id?: string
+          project_id: string
+          render_order?: number
+          scene_id?: string | null
+          status?: string
+          storyboard_item_id?: string | null
+          timeline_end?: number
+          timeline_start?: number
+        }
+        Update: {
+          asset_query?: string
+          asset_source?: string
+          asset_type?: string
+          asset_url?: string | null
+          caption_style?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          render_order?: number
+          scene_id?: string | null
+          status?: string
+          storyboard_item_id?: string | null
+          timeline_end?: number
+          timeline_start?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_manifest_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_storyboard_item_id_fkey"
+            columns: ["storyboard_item_id"]
+            isOneToOne: false
+            referencedRelation: "storyboard_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       render_profiles: {
         Row: {
           created_at: string
@@ -350,6 +543,89 @@ export type Database = {
           watermark?: string | null
         }
         Relationships: []
+      }
+      scene_transcript_map: {
+        Row: {
+          id: string
+          scene_id: string
+          transcript_segment_id: string
+        }
+        Insert: {
+          id?: string
+          scene_id: string
+          transcript_segment_id: string
+        }
+        Update: {
+          id?: string
+          scene_id?: string
+          transcript_segment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_transcript_map_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scene_transcript_map_transcript_segment_id_fkey"
+            columns: ["transcript_segment_id"]
+            isOneToOne: false
+            referencedRelation: "transcript_segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scenes: {
+        Row: {
+          created_at: string
+          duration: number
+          end_time: number
+          id: string
+          narration_text: string
+          objective: string
+          project_id: string
+          scene_number: number
+          start_time: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          narration_text?: string
+          objective?: string
+          project_id: string
+          scene_number: number
+          start_time?: number
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          narration_text?: string
+          objective?: string
+          project_id?: string
+          scene_number?: number
+          start_time?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scenes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       specialty_templates: {
         Row: {
@@ -398,6 +674,172 @@ export type Database = {
           template_name?: string
         }
         Relationships: []
+      }
+      storyboard_items: {
+        Row: {
+          animation: string
+          asset_prompt: string
+          asset_status: string
+          asset_url: string | null
+          created_at: string
+          duration_seconds: number
+          id: string
+          item_index: number
+          priority: string
+          project_id: string
+          render_notes: string | null
+          scene_id: string | null
+          screen_layout: string
+          timeline_end: number
+          timeline_start: number
+          visual_type: string
+        }
+        Insert: {
+          animation?: string
+          asset_prompt?: string
+          asset_status?: string
+          asset_url?: string | null
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          item_index?: number
+          priority?: string
+          project_id: string
+          render_notes?: string | null
+          scene_id?: string | null
+          screen_layout?: string
+          timeline_end?: number
+          timeline_start?: number
+          visual_type?: string
+        }
+        Update: {
+          animation?: string
+          asset_prompt?: string
+          asset_status?: string
+          asset_url?: string | null
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          item_index?: number
+          priority?: string
+          project_id?: string
+          render_notes?: string | null
+          scene_id?: string | null
+          screen_layout?: string
+          timeline_end?: number
+          timeline_start?: number
+          visual_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storyboard_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "storyboard_items_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thumbnail_items: {
+        Row: {
+          asset_prompt: string
+          asset_status: string
+          asset_url: string | null
+          concept: string
+          created_at: string
+          id: string
+          item_index: number
+          layout: string
+          palette: Json
+          project_id: string
+          text: string
+        }
+        Insert: {
+          asset_prompt?: string
+          asset_status?: string
+          asset_url?: string | null
+          concept?: string
+          created_at?: string
+          id?: string
+          item_index?: number
+          layout?: string
+          palette?: Json
+          project_id: string
+          text?: string
+        }
+        Update: {
+          asset_prompt?: string
+          asset_status?: string
+          asset_url?: string | null
+          concept?: string
+          created_at?: string
+          id?: string
+          item_index?: number
+          layout?: string
+          palette?: Json
+          project_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thumbnail_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transcript_segments: {
+        Row: {
+          created_at: string
+          duration: number
+          end_time: number
+          id: string
+          project_id: string
+          segment_index: number
+          start_time: number
+          text: string
+          word_count: number
+        }
+        Insert: {
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          project_id: string
+          segment_index: number
+          start_time?: number
+          text?: string
+          word_count?: number
+        }
+        Update: {
+          created_at?: string
+          duration?: number
+          end_time?: number
+          id?: string
+          project_id?: string
+          segment_index?: number
+          start_time?: number
+          text?: string
+          word_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transcript_segments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transcripts: {
         Row: {

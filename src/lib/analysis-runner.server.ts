@@ -3,6 +3,8 @@ import { TaskSchemas, type TaskKey } from "./ai/schemas";
 import { TASK_DEFAULT_MODELS, BUDGET_MODEL, type LLMProviderId } from "./ai/types";
 import { buildContextPrompt } from "./ai/context.server";
 import { estimateCost } from "./ai/pricing";
+import { normalizeTaskOutput } from "./analysis/normalize.server";
+import { buildRenderManifestForProject } from "./render/timeline-builder.server";
 
 const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
   lovable: "google/gemini-2.5-flash",
@@ -82,7 +84,63 @@ export async function runTaskForProject(
   const system = SYSTEM_BASE + "\n" + ctxPrompt;
   const prompt = `${TASK_PROMPTS[task]}\n\nDuration: ${project.duration_seconds ?? "unknown"}s\nTitle: ${project.title}\nTopic: ${project.topic ?? ""}\n\nTranscript:\n${(tx.full_text as string).slice(0, 18000)}`;
 
-  const res = await generateJSON<any>(provider, userKeys, { model, system, prompt, schema });
+  let res = await generateJSON<any>(provider, userKeys, { model, system, prompt, schema });
+
+  // B-roll hardening: never accept fewer than 5 items.
+  if (task === "broll") {
+    const count = Array.isArray(res.data?.broll) ? res.data.broll.length : 0;
+    if (count < 5) {
+      try {
+        const retryPrompt =
+          prompt +
+          `\n\nIMPORTANT: Return AT LEAST 5 b-roll suggestions. Each item MUST include: scene_number (1-based), keyword, search_prompt, placement_reason, recommended_start (mm:ss), recommended_end (mm:ss).`;
+        const retry = await generateJSON<any>(provider, userKeys, { model, system, prompt: retryPrompt, schema });
+        if (Array.isArray(retry.data?.broll) && retry.data.broll.length > count) {
+          res = {
+            ...retry,
+            usage: {
+              inputTokens: res.usage.inputTokens + retry.usage.inputTokens,
+              outputTokens: res.usage.outputTokens + retry.usage.outputTokens,
+            },
+          };
+        }
+      } catch (e) {
+        console.warn("broll retry failed", e);
+      }
+    }
+    const final = Array.isArray(res.data?.broll) ? res.data.broll : [];
+    if (final.length < 5) {
+      // Synthesize fallback items from scenes / project so we never persist an empty array.
+      const { data: scenes } = await supabase
+        .from("scenes")
+        .select("scene_number, title, start_time, end_time, narration_text")
+        .eq("project_id", projectId)
+        .order("scene_number", { ascending: true });
+      const base = (scenes ?? []) as Array<{ scene_number: number; title: string; start_time: number; end_time: number; narration_text: string }>;
+      const seeds = base.length > 0 ? base : Array.from({ length: 5 }, (_, i) => ({
+        scene_number: i + 1,
+        title: `${project.topic ?? project.title} — segment ${i + 1}`,
+        start_time: i * 10,
+        end_time: i * 10 + 5,
+        narration_text: "",
+      }));
+      const fmt = (s: number) => {
+        const m = Math.floor(s / 60).toString().padStart(2, "0");
+        const sec = Math.floor(s % 60).toString().padStart(2, "0");
+        return `${m}:${sec}`;
+      };
+      const fallback = seeds.slice(0, Math.max(5, seeds.length)).map((s) => ({
+        scene_number: s.scene_number,
+        keyword: s.title,
+        search_prompt: `Cinematic medical b-roll: ${s.title}`,
+        placement_reason: `Cover narration: ${s.narration_text?.slice(0, 120) || s.title}`,
+        recommended_start: fmt(s.start_time),
+        recommended_end: fmt(s.end_time || s.start_time + 5),
+      }));
+      const merged = [...final, ...fallback].slice(0, Math.max(5, final.length + fallback.length));
+      res = { ...res, data: { broll: merged.slice(0, Math.max(5, merged.length)) } };
+    }
+  }
 
   // Determine next version number
   const { data: prev } = await supabase
@@ -103,6 +161,23 @@ export async function runTaskForProject(
     models_used: { [task]: res.model },
     analysis_data: res.data,
   });
+
+  // Project the JSON into the canonical relational tables.
+  try {
+    await normalizeTaskOutput(
+      supabase,
+      projectId,
+      task,
+      res.data,
+      Number(project.duration_seconds) || 0,
+    );
+    // Rebuild render manifest whenever a contributing task changes.
+    if (task === "scene_plan" || task === "visual_storyboard" || task === "broll") {
+      await buildRenderManifestForProject(supabase, projectId);
+    }
+  } catch (e) {
+    console.warn(`normalize/timeline build failed for ${task}`, e);
+  }
 
   const cost = estimateCost(res.model, res.usage.inputTokens, res.usage.outputTokens);
   await supabase.from("usage_logs").insert({

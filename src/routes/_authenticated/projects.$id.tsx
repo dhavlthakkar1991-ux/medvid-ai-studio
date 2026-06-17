@@ -6,6 +6,7 @@ import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
+import { getCanonicalProject, rebuildRenderManifest } from "@/lib/render.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,8 @@ function ProjectView() {
   const regenFn = useServerFn(regenerateTask);
   const runJobFn = useServerFn(runQueuedJob);
   const exportFn = useServerFn(getExportBundle);
+  const canonFn = useServerFn(getCanonicalProject);
+  const rebuildFn = useServerFn(rebuildRenderManifest);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
 
@@ -47,6 +50,16 @@ function ProjectView() {
       if (!d) return 3000;
       const s = d.latestJob?.state;
       return s && s !== "completed" && s !== "failed" ? 3000 : false;
+    },
+  });
+
+  const canonQ = useQuery({
+    queryKey: ["project-canonical", id],
+    queryFn: () => canonFn({ data: { projectId: id } }),
+    refetchInterval: (query) => {
+      const parent = qc.getQueryData(["project", id]) as any;
+      const s = parent?.latestJob?.state;
+      return s && s !== "completed" && s !== "failed" ? 5000 : false;
     },
   });
 
@@ -134,6 +147,7 @@ function ProjectView() {
           {Object.keys(TASK_LABELS).map((t) => (
             <TabsTrigger key={t} value={t}>{TASK_LABELS[t]}</TabsTrigger>
           ))}
+          <TabsTrigger value="render_manifest">Render Manifest</TabsTrigger>
           <TabsTrigger value="cost">Cost</TabsTrigger>
         </TabsList>
 
@@ -180,6 +194,67 @@ function ProjectView() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="render_manifest">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Render Manifest {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.manifest.length} steps · {canonQ.data.scenes.length} scenes</Badge>}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await rebuildFn({ data: { projectId: id } });
+                    qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+                    toast.success("Render manifest rebuilt.");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed");
+                  }
+                }}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />Rebuild
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!canonQ.data || canonQ.data.manifest.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No manifest yet. Generate Scene Plan + Storyboard, then rebuild.</p>
+              ) : (
+                <div className="overflow-auto max-h-[60vh]">
+                  <table className="w-full text-xs">
+                    <thead className="text-muted-foreground border-b border-border">
+                      <tr>
+                        <th className="text-left py-1 pr-3">#</th>
+                        <th className="text-left py-1 pr-3">Start</th>
+                        <th className="text-left py-1 pr-3">End</th>
+                        <th className="text-left py-1 pr-3">Type</th>
+                        <th className="text-left py-1 pr-3">Source</th>
+                        <th className="text-left py-1 pr-3">Query</th>
+                        <th className="text-left py-1 pr-3">Status</th>
+                        <th className="text-left py-1 pr-3">Scene</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {canonQ.data.manifest.map((m: any) => (
+                        <tr key={m.id} className="border-b border-border/50 align-top">
+                          <td className="py-1 pr-3">{m.render_order}</td>
+                          <td className="py-1 pr-3 tabular-nums">{Number(m.timeline_start).toFixed(2)}s</td>
+                          <td className="py-1 pr-3 tabular-nums">{Number(m.timeline_end).toFixed(2)}s</td>
+                          <td className="py-1 pr-3">{m.asset_type}</td>
+                          <td className="py-1 pr-3">{m.asset_source}</td>
+                          <td className="py-1 pr-3 max-w-md truncate" title={m.asset_query}>{m.asset_query}</td>
+                          <td className="py-1 pr-3"><Badge variant="outline">{m.status}</Badge></td>
+                          <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{m.scene_id?.slice(0, 8)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
