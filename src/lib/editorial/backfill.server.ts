@@ -21,13 +21,18 @@ const ACTION_LAYER: Record<string, number> = {
   show_broll: 1,
   show_infographic: 2,
   show_clinical_image: 2,
+  show_medical_diagram: 2,
   show_callout: 3,
   show_text_overlay: 3,
   show_lower_third: 3,
-  picture_in_picture: 5,
-  split_screen: 5,
+  kinetic_typography: 4,
+  show_statistic: 4,
+  highlight_keyword: 5,
+  picture_in_picture: 1,
+  split_screen: 1,
   show_cta: 6,
   show_thumbnail_frame: 6,
+  show_logo: 6,
 };
 
 function visualTypeToAction(visualType: string | null | undefined): string {

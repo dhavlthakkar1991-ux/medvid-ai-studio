@@ -819,6 +819,7 @@ export type Database = {
           id: string
           layer: number | null
           layout_id: string | null
+          priority: number | null
           project_id: string
           render_order: number
           scene_id: string | null
@@ -843,6 +844,7 @@ export type Database = {
           id?: string
           layer?: number | null
           layout_id?: string | null
+          priority?: number | null
           project_id: string
           render_order?: number
           scene_id?: string | null
@@ -867,6 +869,7 @@ export type Database = {
           id?: string
           layer?: number | null
           layout_id?: string | null
+          priority?: number | null
           project_id?: string
           render_order?: number
           scene_id?: string | null

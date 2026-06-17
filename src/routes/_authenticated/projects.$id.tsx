@@ -64,6 +64,20 @@ const QUALITY_SUMMARY_TASKS: Array<{ key: string; label: string }> = [
   { key: "seo", label: "SEO" },
 ];
 
+const TRACK_LABELS: Record<number, string> = {
+  0: "Track 0 — Talking Head",
+  1: "Track 1 — B-roll",
+  2: "Track 2 — Infographics",
+  3: "Track 3 — Lower Thirds",
+  4: "Track 4 — Kinetic Typography",
+  5: "Track 5 — Keyword Highlights",
+  6: "Track 6 — CTA / End Cards",
+};
+const trackLabel = (n: unknown) => {
+  const v = typeof n === "number" ? n : Number(n);
+  return TRACK_LABELS[v] ?? `Track ${Number.isFinite(v) ? v : "?"}`;
+};
+
 function ProjectView() {
   const { id } = useParams({ from: "/_authenticated/projects/$id" });
   const navigate = useNavigate();
@@ -323,6 +337,38 @@ function ProjectView() {
               {!healthQ.data || healthQ.data.taskExecutions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No pipeline runs recorded yet.</p>
               ) : (
+                <>
+                  {healthQ.data.editorial && (
+                    <div className="mb-4 space-y-3">
+                      <div className="rounded-md border border-border p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs text-muted-foreground">Editorial Coverage</div>
+                          <Badge
+                            variant={healthQ.data.editorial.coverage >= 0.7 ? "outline" : "destructive"}
+                            className="text-[10px]"
+                          >
+                            {(healthQ.data.editorial.coverage * 100).toFixed(0)}% · target 70%
+                          </Badge>
+                        </div>
+                        <Progress value={Math.min(100, healthQ.data.editorial.coverage * 100)} />
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          {healthQ.data.editorial.coveredSeconds.toFixed(1)}s of {healthQ.data.editorial.durationSeconds.toFixed(1)}s ·{" "}
+                          {healthQ.data.editorial.actionCount} actions ({healthQ.data.editorial.aiCount} AI, {healthQ.data.editorial.backfillCount} backfill)
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Action Type Summary</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                          {Object.entries(healthQ.data.editorial.actionTypeSummary).map(([label, count]) => (
+                            <div key={label} className="rounded-md border border-border px-2 py-1.5">
+                              <div className="text-[10px] text-muted-foreground">{label}</div>
+                              <div className="text-sm font-semibold tabular-nums">{count as number}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 <div className="overflow-auto">
                   <table className="w-full text-xs">
                     <thead className="text-muted-foreground border-b border-border">
@@ -376,6 +422,7 @@ function ProjectView() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -432,8 +479,11 @@ function ProjectView() {
                         <th className="text-left py-1 pr-3">#</th>
                         <th className="text-left py-1 pr-3">Start</th>
                         <th className="text-left py-1 pr-3">End</th>
+                        <th className="text-left py-1 pr-3">Layer</th>
+                        <th className="text-left py-1 pr-3">Action</th>
                         <th className="text-left py-1 pr-3">Type</th>
                         <th className="text-left py-1 pr-3">Source</th>
+                        <th className="text-left py-1 pr-3">Priority</th>
                         <th className="text-left py-1 pr-3">Query</th>
                         <th className="text-left py-1 pr-3">Status</th>
                         <th className="text-left py-1 pr-3">Scene</th>
@@ -445,8 +495,11 @@ function ProjectView() {
                           <td className="py-1 pr-3">{m.render_order}</td>
                           <td className="py-1 pr-3 tabular-nums">{Number(m.timeline_start).toFixed(2)}s</td>
                           <td className="py-1 pr-3 tabular-nums">{Number(m.timeline_end).toFixed(2)}s</td>
+                          <td className="py-1 pr-3 tabular-nums">{m.layer ?? "—"}</td>
+                          <td className="py-1 pr-3">{m.action_type ? <Badge variant="outline" className="text-[10px]">{m.action_type}</Badge> : "—"}</td>
                           <td className="py-1 pr-3">{m.asset_type}</td>
                           <td className="py-1 pr-3">{m.asset_source}</td>
+                          <td className="py-1 pr-3 tabular-nums">{m.priority ?? "—"}</td>
                           <td className="py-1 pr-3 max-w-md truncate" title={m.asset_query}>{m.asset_query}</td>
                           <td className="py-1 pr-3"><Badge variant="outline">{m.status}</Badge></td>
                           <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{m.scene_id?.slice(0, 8)}</td>
@@ -538,38 +591,72 @@ function ProjectView() {
             <CardContent>
               {!canonQ.data || canonQ.data.timelineInstructions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No timeline yet. Rebuild from the Render Manifest tab.</p>
-              ) : (
-                <div className="overflow-auto max-h-[60vh]">
-                  <table className="w-full text-xs">
-                    <thead className="text-muted-foreground border-b border-border">
-                      <tr>
-                        <th className="text-left py-1 pr-3">#</th>
-                        <th className="text-left py-1 pr-3">Scene</th>
-                        <th className="text-left py-1 pr-3">Asset</th>
-                        <th className="text-left py-1 pr-3">Start</th>
-                        <th className="text-left py-1 pr-3">End</th>
-                        <th className="text-left py-1 pr-3">Duration</th>
-                        <th className="text-left py-1 pr-3">Layer</th>
-                        <th className="text-left py-1 pr-3">Transition</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {canonQ.data.timelineInstructions.map((t: any) => (
-                        <tr key={t.id} className="border-b border-border/50">
-                          <td className="py-1 pr-3">{t.render_order}</td>
-                          <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{t.scene_id?.slice(0, 8) ?? "—"}</td>
-                          <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{t.asset_id?.slice(0, 8) ?? "—"}</td>
-                          <td className="py-1 pr-3 tabular-nums">{Number(t.timeline_start).toFixed(2)}s</td>
-                          <td className="py-1 pr-3 tabular-nums">{Number(t.timeline_end).toFixed(2)}s</td>
-                          <td className="py-1 pr-3 tabular-nums">{Number(t.duration).toFixed(2)}s</td>
-                          <td className="py-1 pr-3">{t.layer}</td>
-                          <td className="py-1 pr-3">{t.transition}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              ) : (() => {
+                // Visually group manifest entries by layer (Track 0–6).
+                const rows = (canonQ.data.manifest as any[]).length > 0
+                  ? (canonQ.data.manifest as any[]).map((m) => ({
+                      id: m.id,
+                      layer: typeof m.layer === "number" ? m.layer : 0,
+                      action_type: m.action_type,
+                      timeline_start: m.timeline_start,
+                      timeline_end: m.timeline_end,
+                      scene_id: m.scene_id,
+                      transition: m.transition,
+                      priority: m.priority,
+                      source: m.asset_source,
+                      query: m.asset_query,
+                    }))
+                  : (canonQ.data.timelineInstructions as any[]).map((t) => ({
+                      id: t.id, layer: t.layer ?? 0, action_type: null,
+                      timeline_start: t.timeline_start, timeline_end: t.timeline_end,
+                      scene_id: t.scene_id, transition: t.transition, priority: null,
+                      source: t.asset_id ? "registry" : "—", query: "",
+                    }));
+                const layers = Array.from(new Set(rows.map((r) => r.layer))).sort((a, b) => a - b);
+                return (
+                  <div className="space-y-4 max-h-[60vh] overflow-auto">
+                    {layers.map((layer) => {
+                      const items = rows.filter((r) => r.layer === layer).sort((a, b) => a.timeline_start - b.timeline_start);
+                      return (
+                        <div key={layer}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="secondary" className="text-[10px]">{trackLabel(layer)}</Badge>
+                            <span className="text-xs text-muted-foreground">{items.length} item{items.length === 1 ? "" : "s"}</span>
+                          </div>
+                          <table className="w-full text-xs">
+                            <thead className="text-muted-foreground border-b border-border">
+                              <tr>
+                                <th className="text-left py-1 pr-3">Action</th>
+                                <th className="text-left py-1 pr-3">Start</th>
+                                <th className="text-left py-1 pr-3">End</th>
+                                <th className="text-left py-1 pr-3">Duration</th>
+                                <th className="text-left py-1 pr-3">Priority</th>
+                                <th className="text-left py-1 pr-3">Transition</th>
+                                <th className="text-left py-1 pr-3">Source</th>
+                                <th className="text-left py-1 pr-3">Query</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((r) => (
+                                <tr key={r.id} className="border-b border-border/50">
+                                  <td className="py-1 pr-3">{r.action_type ?? "—"}</td>
+                                  <td className="py-1 pr-3 tabular-nums">{Number(r.timeline_start).toFixed(2)}s</td>
+                                  <td className="py-1 pr-3 tabular-nums">{Number(r.timeline_end).toFixed(2)}s</td>
+                                  <td className="py-1 pr-3 tabular-nums">{(Number(r.timeline_end) - Number(r.timeline_start)).toFixed(2)}s</td>
+                                  <td className="py-1 pr-3 tabular-nums">{r.priority ?? "—"}</td>
+                                  <td className="py-1 pr-3">{r.transition ?? "—"}</td>
+                                  <td className="py-1 pr-3">{r.source ?? "—"}</td>
+                                  <td className="py-1 pr-3 max-w-xs truncate" title={r.query}>{r.query}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
