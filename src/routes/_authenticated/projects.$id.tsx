@@ -135,15 +135,17 @@ function ProjectView() {
 
   const latestJobForLaunch = q.data?.latestJob;
 
+  // The runner is step-based: each HTTP call advances one stage (transcribe →
+  // one analysis task → … → finalize). Re-fire whenever the job isn't done.
+  // We key on `${id}:${updated_at}` so each progress tick triggers the next step.
   useEffect(() => {
-    const updatedAt = latestJobForLaunch?.updated_at ? new Date(latestJobForLaunch.updated_at).getTime() : 0;
-    const staleTranscribing = latestJobForLaunch?.state === "transcribing" && updatedAt > 0 && Date.now() - updatedAt > 2 * 60 * 1000;
-    if (
-      !latestJobForLaunch ||
-      (latestJobForLaunch.state !== "queued" && latestJobForLaunch.state !== "failed" && !staleTranscribing) ||
-      launchedJobs.current.has(latestJobForLaunch.id)
-    ) return;
-    launchedJobs.current.add(latestJobForLaunch.id);
+    if (!latestJobForLaunch) return;
+    const state = latestJobForLaunch.state;
+    if (state === "completed") return;
+    const updatedAt = latestJobForLaunch.updated_at ?? "";
+    const key = `${latestJobForLaunch.id}:${state}:${updatedAt}`;
+    if (launchedJobs.current.has(key)) return;
+    launchedJobs.current.add(key);
     runJobFn({ data: { jobId: latestJobForLaunch.id } })
       .then((job) => {
         if (job.runnerUrl) return fetch(job.runnerUrl, { method: "POST" });
