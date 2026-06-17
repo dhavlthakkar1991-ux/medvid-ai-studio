@@ -8,12 +8,14 @@ export async function buildRenderManifestForProject(
   supabase: SupabaseLike,
   projectId: string,
 ) {
-  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: instructions }, { data: editActions }] = await Promise.all([
+  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: infographics }, { data: instructions }, { data: editActions }, { data: project }] = await Promise.all([
     supabase.from("scenes").select("*").eq("project_id", projectId).order("scene_number", { ascending: true }),
     supabase.from("storyboard_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("broll_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
+    supabase.from("infographic_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("timeline_instructions").select("*").eq("project_id", projectId).order("render_order", { ascending: true }),
     supabase.from("edit_actions").select("*").eq("project_id", projectId).order("start_time", { ascending: true }),
+    supabase.from("projects").select("duration_seconds").eq("id", projectId).maybeSingle(),
   ]);
 
   type Entry = {
@@ -26,6 +28,7 @@ export async function buildRenderManifestForProject(
     transition_out_id: string | null;
     layer: number | null;
     action_type: string | null;
+    priority: number | null;
     transition: string;
     timeline_start: number;
     timeline_end: number;
@@ -39,9 +42,13 @@ export async function buildRenderManifestForProject(
 
   const entries: Entry[] = [];
 
-  // Manifest V3: prefer edit_actions when present — they are the editorial contract.
-  if (Array.isArray(editActions) && editActions.length > 0) {
-    for (const ea of editActions as any[]) {
+  // Manifest V3: Editorial Decisions are authoritative. Build manifest from
+  // edit_actions first, then enrich (never overwrite) with storyboard/broll/
+  // infographics on supplementary layers so editorial actions like
+  // show_lower_third / kinetic_typography / highlight_keyword survive.
+  const eas = Array.isArray(editActions) ? (editActions as any[]) : [];
+  if (eas.length > 0) {
+    for (const ea of eas) {
       entries.push({
         scene_id: ea.scene_id ?? null,
         storyboard_item_id: ea.storyboard_item_id ?? null,
@@ -52,6 +59,7 @@ export async function buildRenderManifestForProject(
         transition_out_id: ea.transition_out_id ?? null,
         layer: typeof ea.layer === "number" ? ea.layer : null,
         action_type: ea.action_type ?? null,
+        priority: typeof ea.priority === "number" ? ea.priority : 5,
         transition: "fade",
         timeline_start: Number(ea.start_time) || 0,
         timeline_end: Number(ea.end_time) || 0,
@@ -61,6 +69,43 @@ export async function buildRenderManifestForProject(
         asset_url: null,
         caption_style: "Full",
         status: "pending",
+      });
+    }
+
+    // Enrichment: add storyboard/broll/infographics on their own layers if no
+    // edit_action already covers that layer at that time window. Editorial
+    // actions are never overwritten.
+    const hasOverlap = (layer: number, s: number, e: number) =>
+      entries.some((x) => x.layer === layer && x.timeline_start < e && x.timeline_end > s);
+
+    for (const it of (broll ?? []) as any[]) {
+      const s = Number(it.recommended_start) || 0;
+      const e = Number(it.recommended_end) || s + 3;
+      if (e <= s) continue;
+      if (hasOverlap(1, s, e)) continue;
+      entries.push({
+        scene_id: it.scene_id ?? null, storyboard_item_id: null, asset_id: null,
+        edit_action_id: null, layout_id: null, transition_in_id: null, transition_out_id: null,
+        layer: 1, action_type: "show_broll", priority: 4, transition: "cut",
+        timeline_start: s, timeline_end: e,
+        asset_type: "show_broll", asset_source: "enrichment_broll",
+        asset_query: it.search_prompt || it.keyword || "", asset_url: null,
+        caption_style: "", status: "pending",
+      });
+    }
+    for (const it of (infographics ?? []) as any[]) {
+      const s = Number(it.timeline_start) || 0;
+      const e = Number(it.timeline_end) || s + 5;
+      if (e <= s) continue;
+      if (hasOverlap(2, s, e)) continue;
+      entries.push({
+        scene_id: it.scene_id ?? null, storyboard_item_id: null, asset_id: null,
+        edit_action_id: null, layout_id: null, transition_in_id: null, transition_out_id: null,
+        layer: 2, action_type: "show_infographic", priority: 5, transition: "fade",
+        timeline_start: s, timeline_end: e,
+        asset_type: "show_infographic", asset_source: "enrichment_infographic",
+        asset_query: it.asset_prompt || it.title || "", asset_url: null,
+        caption_style: "Full", status: "pending",
       });
     }
   } else if (Array.isArray(instructions) && instructions.length > 0) {
@@ -77,6 +122,7 @@ export async function buildRenderManifestForProject(
         transition_out_id: null,
         layer: typeof ins.layer === "number" ? ins.layer : null,
         action_type: null,
+        priority: 5,
         transition: ins.transition || "cut",
         timeline_start: Number(ins.timeline_start) || 0,
         timeline_end: Number(ins.timeline_end) || 0,
@@ -100,6 +146,7 @@ export async function buildRenderManifestForProject(
         transition_out_id: null,
         layer: 0,
         action_type: null,
+        priority: 5,
         transition: "fade",
         timeline_start: Number(it.timeline_start) || 0,
         timeline_end: Number(it.timeline_end) || 0,
@@ -122,6 +169,7 @@ export async function buildRenderManifestForProject(
         transition_out_id: null,
         layer: 1,
         action_type: null,
+        priority: 4,
         transition: "cut",
         timeline_start: Number(it.recommended_start) || 0,
         timeline_end: Number(it.recommended_end) || 0,
@@ -145,5 +193,22 @@ export async function buildRenderManifestForProject(
 
   await supabase.from("render_manifest").delete().eq("project_id", projectId);
   if (rows.length > 0) await supabase.from("render_manifest").insert(rows);
-  return { count: rows.length };
+
+  // Editorial coverage = fraction of project duration covered by editorial actions.
+  const duration = Number(project?.duration_seconds) || rows.reduce((m, r) => Math.max(m, r.timeline_end), 0);
+  let editorialCovered = 0;
+  if (eas.length > 0 && duration > 0) {
+    const intervals = eas
+      .map((a: any) => [Number(a.start_time) || 0, Number(a.end_time) || 0] as [number, number])
+      .filter(([s, e]) => e > s)
+      .sort((a, b) => a[0] - b[0]);
+    let curS = -1, curE = -1;
+    for (const [s, e] of intervals) {
+      if (s > curE) { if (curE > curS) editorialCovered += curE - curS; curS = s; curE = e; }
+      else curE = Math.max(curE, e);
+    }
+    if (curE > curS) editorialCovered += curE - curS;
+  }
+  const coverage = duration > 0 ? editorialCovered / duration : 0;
+  return { count: rows.length, editorialCoverage: coverage, editorialActionCount: eas.length };
 }
