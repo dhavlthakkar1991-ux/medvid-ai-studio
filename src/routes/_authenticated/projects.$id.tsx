@@ -268,6 +268,120 @@ function ProjectView() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="assets">
+          <Card>
+            <CardHeader><CardTitle className="text-base">
+              Asset Library {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.assetCandidates.length} candidates · {canonQ.data.assets.length} assets</Badge>}
+            </CardTitle></CardHeader>
+            <CardContent>
+              {!canonQ.data || canonQ.data.assetCandidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No asset candidates yet. Generate Storyboard or B-Roll to populate.</p>
+              ) : (
+                <div className="space-y-4 max-h-[60vh] overflow-auto">
+                  {canonQ.data.scenes.map((s: any) => {
+                    const cands = canonQ.data.assetCandidates.filter((c: any) => c.scene_id === s.id);
+                    if (cands.length === 0) return null;
+                    return (
+                      <div key={s.id}>
+                        <div className="text-sm font-medium mb-1">Scene {s.scene_number} — {s.title}</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {cands.map((c: any) => (
+                            <div key={c.id} className="border border-border rounded-md p-2 text-xs">
+                              <div className="flex items-center justify-between mb-1">
+                                <Badge variant="outline" className="text-[10px]">{c.asset_type}</Badge>
+                                <span className="text-muted-foreground">p{c.priority}</span>
+                              </div>
+                              <div className="truncate" title={c.search_query}>{c.search_query}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const orphan = canonQ.data.assetCandidates.filter((c: any) => !c.scene_id);
+                    if (orphan.length === 0) return null;
+                    return (
+                      <div>
+                        <div className="text-sm font-medium mb-1 text-muted-foreground">Unscened candidates</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {orphan.map((c: any) => (
+                            <div key={c.id} className="border border-border rounded-md p-2 text-xs">
+                              <Badge variant="outline" className="text-[10px]">{c.asset_type}</Badge>
+                              <div className="mt-1 truncate" title={c.search_query}>{c.search_query}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Timeline {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.timelineInstructions.length} instructions</Badge>}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const report = await validateFn({ data: { projectId: id } });
+                    if (report.ok && report.issues.length === 0) toast.success("Timeline valid.");
+                    else if (report.ok) toast.warning(`${report.issues.length} warning(s)`);
+                    else toast.error(`${report.issues.filter((i: any) => i.severity === "error").length} error(s)`);
+                    console.log("timeline validation", report);
+                  } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                }}
+              >
+                Validate
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!canonQ.data || canonQ.data.timelineInstructions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No timeline yet. Rebuild from the Render Manifest tab.</p>
+              ) : (
+                <div className="overflow-auto max-h-[60vh]">
+                  <table className="w-full text-xs">
+                    <thead className="text-muted-foreground border-b border-border">
+                      <tr>
+                        <th className="text-left py-1 pr-3">#</th>
+                        <th className="text-left py-1 pr-3">Scene</th>
+                        <th className="text-left py-1 pr-3">Asset</th>
+                        <th className="text-left py-1 pr-3">Start</th>
+                        <th className="text-left py-1 pr-3">End</th>
+                        <th className="text-left py-1 pr-3">Duration</th>
+                        <th className="text-left py-1 pr-3">Layer</th>
+                        <th className="text-left py-1 pr-3">Transition</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {canonQ.data.timelineInstructions.map((t: any) => (
+                        <tr key={t.id} className="border-b border-border/50">
+                          <td className="py-1 pr-3">{t.render_order}</td>
+                          <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{t.scene_id?.slice(0, 8) ?? "—"}</td>
+                          <td className="py-1 pr-3 font-mono text-[10px] text-muted-foreground">{t.asset_id?.slice(0, 8) ?? "—"}</td>
+                          <td className="py-1 pr-3 tabular-nums">{Number(t.timeline_start).toFixed(2)}s</td>
+                          <td className="py-1 pr-3 tabular-nums">{Number(t.timeline_end).toFixed(2)}s</td>
+                          <td className="py-1 pr-3 tabular-nums">{Number(t.duration).toFixed(2)}s</td>
+                          <td className="py-1 pr-3">{t.layer}</td>
+                          <td className="py-1 pr-3">{t.transition}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
