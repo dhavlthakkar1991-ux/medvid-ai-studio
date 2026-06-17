@@ -1,19 +1,23 @@
-import { createFileRoute, useParams } from "@tanstack/react-router";
+import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
+import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Download, FileJson, FileText, Captions } from "lucide-react";
+import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
@@ -34,6 +38,7 @@ const TASK_LABELS: Record<string, string> = {
 
 function ProjectView() {
   const { id } = useParams({ from: "/_authenticated/projects/$id" });
+  const navigate = useNavigate();
   const getFn = useServerFn(getProject);
   const regenFn = useServerFn(regenerateTask);
   const runJobFn = useServerFn(runQueuedJob);
@@ -44,8 +49,15 @@ function ProjectView() {
   const exportManifestFn = useServerFn(exportRenderManifestJson);
   const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
   const healthFn = useServerFn(getPipelineHealth);
+  const resetFn = useServerFn(resetProject);
+  const deleteFn = useServerFn(deleteProject);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
+  const [resetStage, setResetStage] = useState<ResetStage>("complete");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteText, setDeleteText] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const q = useQuery({
     queryKey: ["project", id],
@@ -146,6 +158,12 @@ function ProjectView() {
           <Button size="sm" variant="outline" onClick={() => onExport("txt")}><FileText className="h-3 w-3 mr-1" />TXT</Button>
           <Button size="sm" variant="outline" onClick={() => onExport("srt")}><Captions className="h-3 w-3 mr-1" />SRT</Button>
           <Button size="sm" variant="outline" onClick={onExportManifest}><FileJson className="h-3 w-3 mr-1" />Manifest</Button>
+          <Button size="sm" variant="outline" onClick={() => setResetOpen(true)}>
+            <RotateCcw className="h-3 w-3 mr-1" />Reset
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="h-3 w-3 mr-1" />Delete
+          </Button>
         </div>
       </div>
 
