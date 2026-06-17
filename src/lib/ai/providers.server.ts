@@ -152,6 +152,35 @@ function coerceToSchemaShape(parsed: unknown, schema: ZodSchema): unknown {
     if (Array.isArray(parsed) && parsed.length === 1 && typeof parsed[0] === "object") {
       parsed = parsed[0];
     }
+    // Models often wrap output under an alias (e.g. `seo_package` instead of
+    // `seo`, or `scenes` instead of `scene_plan`). When parsed has exactly
+    // one key that does NOT match the schema key but its value matches the
+    // expected sub-shape (array or object), remap it to the schema key so
+    // we don't bury real content under a placeholder.
+    if (
+      keys.length === 1 &&
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+    ) {
+      const parsedKeys = Object.keys(parsed as Record<string, unknown>);
+      if (parsedKeys.length === 1 && parsedKeys[0] !== keys[0]) {
+        const inner = (parsed as Record<string, unknown>)[parsedKeys[0]];
+        const expectedField = (shape as Record<string, any>)[keys[0]];
+        const expectsArray = getSchemaTypeName(expectedField) === "ZodArray";
+        const innerShape = getObjectShape(expectedField);
+        if (expectsArray && Array.isArray(inner)) {
+          parsed = { [keys[0]]: inner };
+        } else if (innerShape && inner && typeof inner === "object" && !Array.isArray(inner)) {
+          // Check overlap with expected nested shape — at least one expected
+          // field present in `inner` means this is the real payload.
+          const innerKeys = Object.keys(inner as Record<string, unknown>);
+          const expectedSubKeys = Object.keys(innerShape);
+          const overlap = innerKeys.some((k) => expectedSubKeys.includes(k));
+          if (overlap) parsed = { [keys[0]]: inner };
+        }
+      }
+    }
     // If the schema has a single key and the model returned the inner shape directly,
     // wrap it under that key.
     if (
