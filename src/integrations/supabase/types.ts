@@ -570,6 +570,7 @@ export type Database = {
       }
       render_manifest: {
         Row: {
+          asset_id: string | null
           asset_query: string
           asset_source: string
           asset_type: string
@@ -584,8 +585,10 @@ export type Database = {
           storyboard_item_id: string | null
           timeline_end: number
           timeline_start: number
+          transition: string
         }
         Insert: {
+          asset_id?: string | null
           asset_query?: string
           asset_source?: string
           asset_type?: string
@@ -600,8 +603,10 @@ export type Database = {
           storyboard_item_id?: string | null
           timeline_end?: number
           timeline_start?: number
+          transition?: string
         }
         Update: {
+          asset_id?: string | null
           asset_query?: string
           asset_source?: string
           asset_type?: string
@@ -616,8 +621,16 @@ export type Database = {
           storyboard_item_id?: string | null
           timeline_end?: number
           timeline_start?: number
+          transition?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "render_manifest_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "render_manifest_project_id_fkey"
             columns: ["project_id"]
