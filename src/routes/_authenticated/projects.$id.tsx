@@ -1,8 +1,10 @@
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useRef } from "react";
 import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
+import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,8 +34,10 @@ function ProjectView() {
   const { id } = useParams({ from: "/_authenticated/projects/$id" });
   const getFn = useServerFn(getProject);
   const regenFn = useServerFn(regenerateTask);
+  const runJobFn = useServerFn(runQueuedJob);
   const exportFn = useServerFn(getExportBundle);
   const qc = useQueryClient();
+  const launchedJobs = useRef(new Set<string>());
 
   const q = useQuery({
     queryKey: ["project", id],
@@ -45,6 +49,23 @@ function ProjectView() {
       return s && s !== "completed" && s !== "failed" ? 3000 : false;
     },
   });
+
+  const latestJobForLaunch = q.data?.latestJob;
+
+  useEffect(() => {
+    if (
+      !latestJobForLaunch ||
+      (latestJobForLaunch.state !== "queued" && latestJobForLaunch.state !== "failed") ||
+      launchedJobs.current.has(latestJobForLaunch.id)
+    ) return;
+    launchedJobs.current.add(latestJobForLaunch.id);
+    runJobFn({ data: { jobId: latestJobForLaunch.id } })
+      .then((job) => {
+        if (job.runnerUrl) return fetch(job.runnerUrl, { method: "POST" });
+      })
+      .catch(() => undefined)
+      .finally(() => qc.invalidateQueries({ queryKey: ["project", id] }));
+  }, [latestJobForLaunch, qc, id, runJobFn]);
 
   const regen = useMutation({
     mutationFn: (task: string) => regenFn({ data: { projectId: id, task: task as any } }),

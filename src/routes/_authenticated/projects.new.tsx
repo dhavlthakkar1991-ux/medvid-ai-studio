@@ -68,7 +68,8 @@ function NewProject() {
           video_path: path, duration_seconds: null, context: ctx,
         },
       });
-      await startFn({ data: { projectId: id } });
+      const job = await startFn({ data: { projectId: id } });
+      if (job.runnerUrl) void fetch(job.runnerUrl, { method: "POST" }).catch(() => undefined);
       toast.success("Project created. Analysis started.");
       router.navigate({ to: "/projects/$id", params: { id } });
     } catch (e: any) {

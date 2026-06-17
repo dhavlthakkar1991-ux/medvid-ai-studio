@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/api/jobs/run/$jobId")({
+export const Route = createFileRoute("/api/public/jobs/run/$jobId")({
   server: {
     handlers: {
       POST: async ({ params, request }) => {
