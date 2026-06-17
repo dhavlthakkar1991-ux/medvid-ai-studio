@@ -7,6 +7,7 @@ import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions } from "@/lib/render.functions";
+import { getPipelineHealth } from "@/lib/qa.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ function ProjectView() {
   const validateFn = useServerFn(validateTimeline);
   const exportManifestFn = useServerFn(exportRenderManifestJson);
   const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
+  const healthFn = useServerFn(getPipelineHealth);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
 
@@ -63,6 +65,16 @@ function ProjectView() {
       const parent = qc.getQueryData(["project", id]) as any;
       const s = parent?.latestJob?.state;
       return s && s !== "completed" && s !== "failed" ? 5000 : false;
+    },
+  });
+
+  const healthQ = useQuery({
+    queryKey: ["project-health", id],
+    queryFn: () => healthFn({ data: { projectId: id } }),
+    refetchInterval: (query) => {
+      const parent = qc.getQueryData(["project", id]) as any;
+      const s = parent?.latestJob?.state;
+      return s && s !== "completed" && s !== "failed" ? 4000 : false;
     },
   });
 
@@ -160,6 +172,7 @@ function ProjectView() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
+          <TabsTrigger value="health">Pipeline Health</TabsTrigger>
           <TabsTrigger value="cost">Cost</TabsTrigger>
         </TabsList>
 
