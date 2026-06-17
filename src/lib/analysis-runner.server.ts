@@ -102,12 +102,28 @@ export async function runTaskForProject(
     .catch(() => 0);
   const valCtx = { transcriptDuration: Number(project.duration_seconds) || 0, sceneCount };
 
-  const attempts: Array<{ stage: string; valid: boolean; errors: string[]; warnings: string[]; duration_ms: number; model?: string }> = [];
+  const attempts: Array<{
+    stage: string;
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    duration_ms: number;
+    model?: string;
+    provider?: string;
+    raw_text?: string;
+    raw_parsed?: unknown;
+    normalized?: unknown;
+    error_message?: string;
+  }> = [];
   let usage = { inputTokens: 0, outputTokens: 0 };
   let res: any = null;
+  let resValid = false;
   let lastValidation: ValidationResult = { valid: false, warnings: [], errors: ["not_attempted"] };
   let fallbackStage: string | null = null;
   let retryCount = 0;
+
+  const truncate = (s: string | undefined, n = 4000) =>
+    typeof s === "string" && s.length > n ? s.slice(0, n) + `…[+${s.length - n} chars]` : s;
 
   const tryStage = async (stage: string, runPrompt: string): Promise<void> => {
     const t0 = Date.now();
@@ -118,11 +134,33 @@ export async function runTaskForProject(
         outputTokens: usage.outputTokens + (out.usage?.outputTokens ?? 0),
       };
       const v = validateTaskOutput(validatorKey, out.data, valCtx);
-      attempts.push({ stage, valid: v.valid, errors: v.errors, warnings: v.warnings, duration_ms: Date.now() - t0, model: out.model });
-      if (v.valid || res == null) res = out;
+      attempts.push({
+        stage,
+        valid: v.valid,
+        errors: v.errors,
+        warnings: v.warnings,
+        duration_ms: Date.now() - t0,
+        model: out.model,
+        provider: out.provider,
+        raw_text: truncate(out.raw?.text),
+        raw_parsed: out.raw?.parsed,
+        normalized: out.data,
+      });
+      // Never overwrite an already-valid AI output with a later attempt.
+      if (!resValid && (v.valid || res == null)) {
+        res = out;
+        resValid = v.valid;
+      }
       lastValidation = v;
     } catch (err: any) {
-      attempts.push({ stage, valid: false, errors: [String(err?.message ?? err)], warnings: [], duration_ms: Date.now() - t0 });
+      attempts.push({
+        stage,
+        valid: false,
+        errors: [String(err?.message ?? err)],
+        warnings: [],
+        duration_ms: Date.now() - t0,
+        error_message: String(err?.message ?? err),
+      });
       lastValidation = { valid: false, warnings: [], errors: [String(err?.message ?? err)] };
     }
   };
@@ -148,7 +186,7 @@ export async function runTaskForProject(
   }
 
   // Stage 5: deterministic fallback generator
-  if (!lastValidation.valid) {
+  if (!resValid) {
     const t0 = Date.now();
     let gen: any = null;
     if (task === "scene_plan") gen = await fallbackScenePlan(supabase, projectId, project);
@@ -160,10 +198,20 @@ export async function runTaskForProject(
       let parsed: any = gen;
       try { parsed = schema.parse(gen); } catch { /* generators are already minimal-valid; ignore */ }
       const v = validateTaskOutput(validatorKey, parsed, valCtx);
-      attempts.push({ stage: "fallback_generator", valid: v.valid, errors: v.errors, warnings: v.warnings, duration_ms: Date.now() - t0 });
-      if (v.valid) {
+      attempts.push({
+        stage: "fallback_generator",
+        valid: v.valid,
+        errors: v.errors,
+        warnings: v.warnings,
+        duration_ms: Date.now() - t0,
+        provider: "deterministic",
+        normalized: parsed,
+      });
+      // Only overwrite AI output with deterministic output when we have no valid AI result.
+      if (v.valid && !resValid) {
         fallbackStage = "fallback_generator";
         res = { provider: "fallback", model: "deterministic", data: parsed, usage: { inputTokens: 0, outputTokens: 0 } };
+        resValid = true;
         lastValidation = v;
       }
     }
