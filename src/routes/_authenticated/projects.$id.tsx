@@ -6,7 +6,7 @@ import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
-import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson } from "@/lib/render.functions";
+import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions } from "@/lib/render.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,7 @@ function ProjectView() {
   const rebuildFn = useServerFn(rebuildRenderManifest);
   const validateFn = useServerFn(validateTimeline);
   const exportManifestFn = useServerFn(exportRenderManifestJson);
+  const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
 
@@ -158,6 +159,7 @@ function ProjectView() {
           <TabsTrigger value="render_manifest">Render Manifest</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="editorial">Editorial</TabsTrigger>
           <TabsTrigger value="cost">Cost</TabsTrigger>
         </TabsList>
 
@@ -379,6 +381,82 @@ function ProjectView() {
                   </table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="editorial">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Editorial Decisions {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.editActions.length} actions</Badge>}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!transcript}
+                onClick={async () => {
+                  try {
+                    toast.info("Generating editorial decisions…");
+                    await regenEditorialFn({ data: { projectId: id } });
+                    qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+                    qc.invalidateQueries({ queryKey: ["project", id] });
+                    toast.success("Editorial decisions regenerated.");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed");
+                  }
+                }}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />Regenerate Editorial Decisions
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!canonQ.data || canonQ.data.editActions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No editorial decisions yet. Storyboard/B-roll will be auto-backfilled, or click Regenerate to run the AI editor.</p>
+              ) : (() => {
+                const layoutById = new Map<string, string>(((canonQ.data.layoutTemplates as any[]) ?? []).map((l: any) => [l.id, l.name]));
+                const transitionById = new Map<string, string>(((canonQ.data.transitionTemplates as any[]) ?? []).map((t: any) => [t.id, t.name]));
+                const sceneById = new Map<string, any>((canonQ.data.scenes as any[]).map((s: any) => [s.id, s]));
+                return (
+                  <div className="overflow-auto max-h-[60vh]">
+                    <table className="w-full text-xs">
+                      <thead className="text-muted-foreground border-b border-border">
+                        <tr>
+                          <th className="text-left py-1 pr-3">Scene</th>
+                          <th className="text-left py-1 pr-3">Action</th>
+                          <th className="text-left py-1 pr-3">Layer</th>
+                          <th className="text-left py-1 pr-3">Layout</th>
+                          <th className="text-left py-1 pr-3">Transition</th>
+                          <th className="text-left py-1 pr-3">Start</th>
+                          <th className="text-left py-1 pr-3">End</th>
+                          <th className="text-left py-1 pr-3">Duration</th>
+                          <th className="text-left py-1 pr-3">Asset Query</th>
+                          <th className="text-left py-1 pr-3">Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(canonQ.data.editActions as any[]).map((a: any) => {
+                          const s = a.scene_id ? sceneById.get(a.scene_id) : null;
+                          return (
+                            <tr key={a.id} className="border-b border-border/50 align-top">
+                              <td className="py-1 pr-3">{s ? `${s.scene_number}` : "—"}</td>
+                              <td className="py-1 pr-3"><Badge variant="outline" className="text-[10px]">{a.action_type}</Badge></td>
+                              <td className="py-1 pr-3 tabular-nums">{a.layer}</td>
+                              <td className="py-1 pr-3">{layoutById.get(a.layout_id) ?? "—"}</td>
+                              <td className="py-1 pr-3">{transitionById.get(a.transition_in_id) ?? "—"} → {transitionById.get(a.transition_out_id) ?? "—"}</td>
+                              <td className="py-1 pr-3 tabular-nums">{Number(a.start_time).toFixed(2)}s</td>
+                              <td className="py-1 pr-3 tabular-nums">{Number(a.end_time).toFixed(2)}s</td>
+                              <td className="py-1 pr-3 tabular-nums">{Number(a.duration).toFixed(2)}s</td>
+                              <td className="py-1 pr-3 max-w-xs truncate" title={a.asset_query}>{a.asset_query}</td>
+                              <td className="py-1 pr-3"><Badge variant="outline" className="text-[10px]">{a.source}</Badge></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
