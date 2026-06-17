@@ -6,7 +6,7 @@ import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
-import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions } from "@/lib/render.functions";
+import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,7 @@ function ProjectView() {
   const validateFn = useServerFn(validateTimeline);
   const exportManifestFn = useServerFn(exportRenderManifestJson);
   const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
+  const regenLayoutFn = useServerFn(regenerateLayoutDecisions);
   const healthFn = useServerFn(getPipelineHealth);
   const resetFn = useServerFn(resetProject);
   const deleteFn = useServerFn(deleteProject);
