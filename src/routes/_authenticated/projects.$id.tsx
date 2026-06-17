@@ -129,7 +129,7 @@ function ProjectView() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-base">{TASK_LABELS[t]} {v && <Badge variant="outline" className="ml-2">v{v.version}</Badge>}</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => regen.mutate(t)} disabled={regen.isPending}>
+                  <Button size="sm" variant="outline" onClick={() => regen.mutate(t)} disabled={regen.isPending || !transcript}>
                     <RefreshCw className="h-3 w-3 mr-1" />Regenerate
                   </Button>
                 </CardHeader>
