@@ -223,7 +223,7 @@ function ProjectView() {
         </div>
       </div>
 
-      {latestJob && latestJob.state !== "completed" && (
+      {latestJob && ACTIVE_JOB_STATES.has(latestJob.state) && (
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center justify-between mb-2">
