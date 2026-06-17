@@ -16,7 +16,9 @@ export async function runAnalysisJob(jobId: string) {
 
   const { data: job } = await supabaseAdmin.from("jobs").select("*").eq("id", jobId).single();
   if (!job) return { body: "job not found", status: 404 };
-  if (job.state === "completed" || job.state === "failed") return { body: "done", status: 200 };
+  if (["completed", "completed_with_warnings", "needs_review", "failed"].includes(job.state)) {
+    return { body: "done", status: 200 };
+  }
   const { data: project } = await supabaseAdmin.from("projects").select("*").eq("id", job.project_id).single();
   if (!project) return { body: "project not found", status: 404 };
   const { data: settings } = await supabaseAdmin.from("ai_settings").select("*").eq("user_id", project.user_id).maybeSingle();
@@ -76,13 +78,11 @@ export async function runAnalysisJob(jobId: string) {
       const blob = await audioRes.blob();
 
       const keys = (settings?.provider_keys as Record<string, string>) ?? {};
-      const preferredProvider = String(settings?.default_transcription_provider ?? "openai") === "lovable"
-        ? "openai"
-        : String(settings?.default_transcription_provider ?? "openai");
-      const implementedProviders = ["openai", "groq", "gemini"];
+      const preferredProvider = String(settings?.default_transcription_provider ?? "lovable");
+      const implementedProviders = ["lovable", "openai", "groq", "gemini"];
       const txProvider = implementedProviders.includes(preferredProvider) && keys[preferredProvider]
         ? preferredProvider
-        : keys.gemini ? "gemini" : keys.openai ? "openai" : keys.groq ? "groq" : preferredProvider;
+        : preferredProvider === "lovable" ? "lovable" : keys.openai ? "openai" : keys.groq ? "groq" : keys.gemini ? "gemini" : "lovable";
 
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Transcription timed out.")), 120000);
@@ -127,7 +127,7 @@ export async function runAnalysisJob(jobId: string) {
       .eq("pipeline_run_id", runId);
     const doneSet = new Set(
       (execRows ?? [])
-        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings")
+        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings" || r.status === "failed")
         .map((r: any) => r.task_name as string),
     );
     const pending = ALL_TASKS.filter((t) => !doneSet.has(t));
@@ -194,7 +194,7 @@ export async function runAnalysisJob(jobId: string) {
         ? "completed_with_warnings"
         : "completed";
 
-    await setState("completed", 100);
+    await setState(projectStatus, 100);
     await supabaseAdmin.from("projects").update({ status: projectStatus }).eq("id", project.id);
 
     const completedAt = new Date();
