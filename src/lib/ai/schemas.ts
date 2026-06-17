@@ -9,9 +9,9 @@ const VisualTypeSchema = z.preprocess((value) => {
   if (normalized.includes("anatomy") || normalized.includes("diagram") || normalized.includes("chart") || normalized.includes("graph")) return "Diagram";
   if (normalized.includes("b_roll") || normalized.includes("broll") || normalized.includes("speaker") || normalized.includes("talking_head")) return "B-Roll";
   if (normalized.includes("chapter")) return "Chapter Card";
-  if (normalized.includes("callout")) return "Callout";
+  if (normalized.includes("callout") || normalized.includes("text_overlay") || normalized.includes("overlay") || normalized.includes("lower_third") || normalized.includes("title_card") || normalized.includes("quote")) return "Callout";
   if (normalized.includes("split")) return "Split Screen";
-  return value;
+  return "Callout";
 }, z.enum(["Medical Infographic", "B-Roll", "Diagram", "Chapter Card", "Callout", "Split Screen"]));
 
 const ScreenLayoutSchema = z.preprocess((value) => {
@@ -19,19 +19,19 @@ const ScreenLayoutSchema = z.preprocess((value) => {
   const normalized = normalizeToken(value);
   if (normalized.includes("two_thirds") || normalized.includes("split")) return "Split Screen";
   if (normalized.includes("pip") || normalized.includes("picture_in_picture")) return "PiP";
-  if (normalized.includes("lower_third")) return "Lower Third";
+  if (normalized.includes("lower_third") || normalized.includes("text_on_background") || normalized.includes("overlay") || normalized.includes("caption") || normalized.includes("banner")) return "Lower Third";
   if (normalized.includes("full") || normalized.includes("speaker") || normalized.includes("infographic") || normalized.includes("anatomy")) return "Full";
-  return value;
+  return "Full";
 }, z.enum(["Full", "Split Screen", "PiP", "Lower Third"]));
 
 const AnimationSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   const normalized = normalizeToken(value);
   if (normalized.includes("zoom")) return "Zoom";
-  if (normalized.includes("fade") || normalized.includes("reveal") || normalized.includes("highlight")) return "Fade";
+  if (normalized.includes("fade") || normalized.includes("reveal") || normalized.includes("highlight") || normalized.includes("pulse") || normalized.includes("emphasize") || normalized.includes("flash") || normalized.includes("glow")) return "Fade";
   if (normalized.includes("slide") || normalized.includes("wipe") || normalized.includes("pan")) return "Slide In Right";
   if (normalized.includes("none") || normalized.includes("static")) return "None";
-  return value;
+  return "Fade";
 }, z.enum(["Slide In Right", "Fade", "Zoom", "None"]));
 
 const PrioritySchema = z.preprocess((value) => {
