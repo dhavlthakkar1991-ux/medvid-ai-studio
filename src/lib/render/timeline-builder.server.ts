@@ -8,17 +8,24 @@ export async function buildRenderManifestForProject(
   supabase: SupabaseLike,
   projectId: string,
 ) {
-  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: instructions }] = await Promise.all([
+  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: instructions }, { data: editActions }] = await Promise.all([
     supabase.from("scenes").select("*").eq("project_id", projectId).order("scene_number", { ascending: true }),
     supabase.from("storyboard_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("broll_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("timeline_instructions").select("*").eq("project_id", projectId).order("render_order", { ascending: true }),
+    supabase.from("edit_actions").select("*").eq("project_id", projectId).order("start_time", { ascending: true }),
   ]);
 
   type Entry = {
     scene_id: string | null;
     storyboard_item_id: string | null;
     asset_id: string | null;
+    edit_action_id: string | null;
+    layout_id: string | null;
+    transition_in_id: string | null;
+    transition_out_id: string | null;
+    layer: number | null;
+    action_type: string | null;
     transition: string;
     timeline_start: number;
     timeline_end: number;
@@ -32,8 +39,31 @@ export async function buildRenderManifestForProject(
 
   const entries: Entry[] = [];
 
-  // Prefer timeline_instructions (deterministic compiler output) when present.
-  if (Array.isArray(instructions) && instructions.length > 0) {
+  // Manifest V3: prefer edit_actions when present — they are the editorial contract.
+  if (Array.isArray(editActions) && editActions.length > 0) {
+    for (const ea of editActions as any[]) {
+      entries.push({
+        scene_id: ea.scene_id ?? null,
+        storyboard_item_id: ea.storyboard_item_id ?? null,
+        asset_id: null,
+        edit_action_id: ea.id,
+        layout_id: ea.layout_id ?? null,
+        transition_in_id: ea.transition_in_id ?? null,
+        transition_out_id: ea.transition_out_id ?? null,
+        layer: typeof ea.layer === "number" ? ea.layer : null,
+        action_type: ea.action_type ?? null,
+        transition: "fade",
+        timeline_start: Number(ea.start_time) || 0,
+        timeline_end: Number(ea.end_time) || 0,
+        asset_type: ea.action_type || "edit_action",
+        asset_source: ea.source === "ai" ? "ai_editorial" : "backfill",
+        asset_query: ea.asset_query || "",
+        asset_url: null,
+        caption_style: "Full",
+        status: "pending",
+      });
+    }
+  } else if (Array.isArray(instructions) && instructions.length > 0) {
     const storyboardById = new Map<string, any>(((storyboard ?? []) as any[]).map((s) => [s.id, s]));
     for (const ins of instructions as any[]) {
       const sb = ins.storyboard_item_id ? storyboardById.get(ins.storyboard_item_id) : null;
@@ -41,6 +71,12 @@ export async function buildRenderManifestForProject(
         scene_id: ins.scene_id ?? null,
         storyboard_item_id: ins.storyboard_item_id ?? null,
         asset_id: ins.asset_id ?? null,
+        edit_action_id: null,
+        layout_id: null,
+        transition_in_id: null,
+        transition_out_id: null,
+        layer: typeof ins.layer === "number" ? ins.layer : null,
+        action_type: null,
         transition: ins.transition || "cut",
         timeline_start: Number(ins.timeline_start) || 0,
         timeline_end: Number(ins.timeline_end) || 0,
@@ -58,6 +94,12 @@ export async function buildRenderManifestForProject(
         scene_id: it.scene_id ?? null,
         storyboard_item_id: it.id,
         asset_id: null,
+        edit_action_id: null,
+        layout_id: null,
+        transition_in_id: null,
+        transition_out_id: null,
+        layer: 0,
+        action_type: null,
         transition: "fade",
         timeline_start: Number(it.timeline_start) || 0,
         timeline_end: Number(it.timeline_end) || 0,
@@ -74,6 +116,12 @@ export async function buildRenderManifestForProject(
         scene_id: it.scene_id ?? null,
         storyboard_item_id: null,
         asset_id: null,
+        edit_action_id: null,
+        layout_id: null,
+        transition_in_id: null,
+        transition_out_id: null,
+        layer: 1,
+        action_type: null,
         transition: "cut",
         timeline_start: Number(it.recommended_start) || 0,
         timeline_end: Number(it.recommended_end) || 0,
@@ -87,7 +135,7 @@ export async function buildRenderManifestForProject(
     }
   }
 
-  entries.sort((a, b) => a.timeline_start - b.timeline_start);
+  entries.sort((a, b) => (a.layer ?? 0) - (b.layer ?? 0) || a.timeline_start - b.timeline_start);
 
   const rows = entries.map((e, i) => ({
     project_id: projectId,
