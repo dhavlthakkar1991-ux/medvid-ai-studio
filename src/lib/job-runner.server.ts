@@ -226,7 +226,8 @@ export async function runAnalysisJob(jobId: string) {
     return { body: "ok", status: 200 };
   } catch (error: any) {
     console.error("job step failed", error);
-    await setState("failed", 0, String(error?.message ?? error));
+    const message = String(error?.message ?? error);
+    await setState("failed", 0, message);
     await supabaseAdmin.from("projects").update({ status: "failed" }).eq("id", project.id);
     if (pipelineRunId) {
       const completedAt = new Date();
@@ -236,6 +237,6 @@ export async function runAnalysisJob(jobId: string) {
         duration_ms: completedAt.getTime() - (pipelineStartedAt?.getTime() ?? completedAt.getTime()),
       }).eq("id", pipelineRunId);
     }
-    return { body: "failed", status: 500 };
+    return { body: message, status: 200 };
   }
 }
