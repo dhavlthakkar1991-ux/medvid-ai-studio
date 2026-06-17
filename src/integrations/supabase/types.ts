@@ -227,6 +227,33 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          payload: Json
+          project_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          project_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          project_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       broll_items: {
         Row: {
           asset_status: string
