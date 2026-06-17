@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { getProject } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
-import { runQueuedJob } from "@/lib/jobs.functions";
+import { runQueuedJob, startFullPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw } from "lucide-react";
+import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -101,6 +101,7 @@ function ProjectView() {
   const getFn = useServerFn(getProject);
   const regenFn = useServerFn(regenerateTask);
   const runJobFn = useServerFn(runQueuedJob);
+  const startPipelineFn = useServerFn(startFullPipeline);
   const exportFn = useServerFn(getExportBundle);
   const canonFn = useServerFn(getCanonicalProject);
   const rebuildFn = useServerFn(rebuildRenderManifest);
@@ -247,6 +248,41 @@ function ProjectView() {
             </div>
             <Progress value={latestJob.progress} />
             {latestJob.error && <p className="text-xs text-destructive mt-2">{latestJob.error}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {project.video_path && (!latestJob || !ACTIVE_JOB_STATES.has(latestJob.state)) && (
+        <Card>
+          <CardContent className="py-4 flex items-center justify-between gap-4">
+            <div className="text-sm">
+              <div className="font-medium">
+                {latestJob ? `Last run: ${latestJob.state}` : "Pipeline not started"}
+              </div>
+              {latestJob?.error && (
+                <div className="text-xs text-destructive mt-1 break-all">{latestJob.error}</div>
+              )}
+            </div>
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const res = await startPipelineFn({ data: { projectId: id } });
+                  if (res.runnerUrl) fetch(res.runnerUrl, { method: "POST" }).catch(() => undefined);
+                  toast.success("Pipeline started.");
+                  qc.invalidateQueries({ queryKey: ["project", id] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Failed to start pipeline.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Play className="h-3 w-3 mr-1" />
+              {latestJob ? "Restart Pipeline" : "Start Pipeline"}
+            </Button>
           </CardContent>
         </Card>
       )}
