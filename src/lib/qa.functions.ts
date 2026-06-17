@@ -33,6 +33,37 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
       if (!latestByTask.has(ex.task_name)) latestByTask.set(ex.task_name, ex);
     }
 
+    // Per-task historical metrics across recent executions.
+    const metricsByTask: Record<string, {
+      total: number;
+      aiSuccess: number;
+      retried: number;
+      fallback: number;
+      aiSuccessRate: number;
+      retryRate: number;
+      fallbackRate: number;
+    }> = {};
+    const groups = new Map<string, any[]>();
+    for (const ex of executions ?? []) {
+      if (!groups.has(ex.task_name)) groups.set(ex.task_name, []);
+      groups.get(ex.task_name)!.push(ex);
+    }
+    for (const [task, list] of groups.entries()) {
+      const total = list.length;
+      const aiSuccess = list.filter((e) => e.validation_passed && !e.fallback_used).length;
+      const retried = list.filter((e) => (e.retry_count ?? 0) > 0).length;
+      const fallback = list.filter((e) => e.fallback_used).length;
+      metricsByTask[task] = {
+        total,
+        aiSuccess,
+        retried,
+        fallback,
+        aiSuccessRate: total ? aiSuccess / total : 0,
+        retryRate: total ? retried / total : 0,
+        fallbackRate: total ? fallback / total : 0,
+      };
+    }
+
     // Editorial coverage: union of edit_action intervals / project duration.
     const eas = (editActions ?? []) as Array<{ action_type: string; start_time: number; end_time: number; source: string }>;
     const duration = Number(project?.duration_seconds) || 0;
@@ -93,6 +124,7 @@ export const getPipelineHealth = createServerFn({ method: "POST" })
       recentRuns: runs ?? [],
       latestRunId,
       taskExecutions: Array.from(latestByTask.values()),
+      taskMetrics: metricsByTask,
       editorial: {
         durationSeconds: duration,
         coveredSeconds: covered,
