@@ -99,8 +99,19 @@ export async function runAnalysisJob(jobId: string) {
         language: tx.language,
         provider_used: tx.provider,
       });
-      if (tx.durationSeconds) {
-        await supabaseAdmin.from("projects").update({ duration_seconds: tx.durationSeconds }).eq("id", project.id);
+      // Persist duration. Prefer the provider value; otherwise derive from
+      // word timings; otherwise estimate from word count (~2.5 words/sec).
+      let resolvedDuration = Number(tx.durationSeconds) || 0;
+      if (!resolvedDuration && Array.isArray(tx.words) && tx.words.length > 0) {
+        resolvedDuration = Number(tx.words[tx.words.length - 1]?.end) || 0;
+      }
+      if (!resolvedDuration && tx.text) {
+        const wc = tx.text.trim().split(/\s+/).filter(Boolean).length;
+        if (wc > 0) resolvedDuration = Math.max(15, Math.round(wc / 2.5));
+      }
+      if (resolvedDuration) {
+        await supabaseAdmin.from("projects").update({ duration_seconds: resolvedDuration }).eq("id", project.id);
+        project.duration_seconds = resolvedDuration;
       }
       try {
         await writeTranscriptSegments(
@@ -108,7 +119,7 @@ export async function runAnalysisJob(jobId: string) {
           project.id,
           tx.text,
           tx.words,
-          tx.durationSeconds || Number(project.duration_seconds) || 0,
+          resolvedDuration || Number(project.duration_seconds) || 0,
         );
       } catch (e) {
         console.warn("transcript segmentation failed", e);
