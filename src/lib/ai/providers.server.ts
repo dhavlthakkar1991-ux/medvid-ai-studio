@@ -8,7 +8,7 @@ type LLMResult<T> = { data: T; usage: Usage; provider: string; model: string };
 
 function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, string>): {
   baseURL: string;
-  apiKey: string;
+  apiKey?: string;
   headers: Record<string, string>;
   name: string;
 } {
@@ -16,8 +16,10 @@ function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, str
     case "lovable":
       return {
         baseURL: "https://ai.gateway.lovable.dev/v1",
-        apiKey: process.env.LOVABLE_API_KEY ?? "",
-        headers: { "Lovable-API-Key": process.env.LOVABLE_API_KEY ?? "" } as Record<string, string>,
+        headers: {
+          "Lovable-API-Key": process.env.LOVABLE_API_KEY ?? "",
+          "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+        } as Record<string, string>,
         name: "lovable",
       };
     case "openai":
@@ -51,14 +53,14 @@ export async function generateJSON<T>(
   if (!cfg.apiKey && provider !== "lovable") {
     throw new Error(`No API key configured for provider "${provider}". Add it in Settings → AI.`);
   }
-  if (provider === "lovable" && !cfg.apiKey) {
+  if (provider === "lovable" && !cfg.headers["Lovable-API-Key"]) {
     throw new Error("Lovable AI is not configured. Contact support.");
   }
 
   const gateway = createOpenAICompatible({
     name: cfg.name,
     baseURL: cfg.baseURL,
-    apiKey: cfg.apiKey,
+    ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}),
     headers: cfg.headers,
   });
   const modelId = normalizeModel(provider, opts.model);
@@ -69,6 +71,7 @@ export async function generateJSON<T>(
         model: gateway(modelId),
         system: opts.system + "\n\nRespond with ONLY valid minified JSON matching the requested schema. No markdown, no commentary.",
         prompt: opts.prompt,
+        maxOutputTokens: 8192,
       });
       const parsed = extractJson(result.text);
       const data = opts.schema.parse(coerceToSchemaShape(parsed, opts.schema)) as T;
@@ -83,6 +86,7 @@ export async function generateJSON<T>(
       schema: opts.schema,
       system: opts.system,
       prompt: opts.prompt,
+      maxOutputTokens: 8192,
     });
     const usage: Usage = {
       inputTokens: result.usage?.inputTokens ?? 0,
