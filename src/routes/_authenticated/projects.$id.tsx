@@ -562,6 +562,82 @@ function ProjectView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset project</DialogTitle>
+            <DialogDescription>
+              Choose how far back to reset. The uploaded video, project settings, and specialty configuration are always preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="text-sm font-medium">Reset from</label>
+            <Select value={resetStage} onValueChange={(v) => setResetStage(v as ResetStage)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="transcript">Transcript — delete everything after transcript</SelectItem>
+                <SelectItem value="scene_plan">Scene Plan — delete scenes and downstream</SelectItem>
+                <SelectItem value="storyboard">Storyboard — delete storyboard, b-roll, infographics, manifest</SelectItem>
+                <SelectItem value="editorial_decisions">Editorial Decisions — delete edit actions + manifest</SelectItem>
+                <SelectItem value="complete">Complete Reset — wipe all generated outputs</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetOpen(false)} disabled={busy}>Cancel</Button>
+            <Button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await resetFn({ data: { projectId: id, stage: resetStage } });
+                  toast.success(`Reset (${resetStage}) complete.`);
+                  setResetOpen(false);
+                  qc.invalidateQueries({ queryKey: ["project", id] });
+                  qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+                  qc.invalidateQueries({ queryKey: ["project-health", id] });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Reset failed");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >Reset project</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={(o) => { setDeleteOpen(o); if (!o) setDeleteText(""); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete project</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the project, the uploaded video, and every related record. This cannot be undone. Type <span className="font-mono font-semibold">DELETE</span> to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <Input value={deleteText} onChange={(e) => setDeleteText(e.target.value)} placeholder="DELETE" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={busy}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={busy || deleteText !== "DELETE"}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await deleteFn({ data: { projectId: id, confirm: "DELETE" } });
+                  toast.success("Project deleted.");
+                  navigate({ to: "/dashboard" });
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Delete failed");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >Delete forever</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
