@@ -183,6 +183,10 @@ export async function runTaskForProject(
       await compileTimelineForProject(supabase, projectId);
       await buildRenderManifestForProject(supabase, projectId);
     }
+    // Editorial decisions overwrite edit_actions; rebuild manifest from the new actions.
+    if (task === "editorial_decisions") {
+      await buildRenderManifestForProject(supabase, projectId);
+    }
   } catch (e) {
     console.warn(`normalize/timeline build failed for ${task}`, e);
   }
@@ -211,4 +215,5 @@ export const ALL_TASKS: TaskKey[] = [
   "thumbnails",
   "seo",
   "shorts",
+  "editorial_decisions",
 ];
