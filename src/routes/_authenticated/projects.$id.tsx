@@ -369,6 +369,40 @@ function ProjectView() {
                           ))}
                         </div>
                       </div>
+                      {healthQ.data.presence && healthQ.data.presence.totalLayoutDecisions > 0 && (
+                        <div className="space-y-2 pt-2">
+                          <div className="rounded-md border border-border p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="text-xs text-muted-foreground">Doctor Presence</div>
+                              <Badge
+                                variant={healthQ.data.presence.doctorPresencePct >= 0.6 ? "outline" : "destructive"}
+                                className="text-[10px]"
+                              >
+                                {(healthQ.data.presence.doctorPresencePct * 100).toFixed(0)}% · target 60%
+                              </Badge>
+                            </div>
+                            <Progress value={Math.min(100, healthQ.data.presence.doctorPresencePct * 100)} />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1">Composition Mix</div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                              {([
+                                ["Layout Diversity", healthQ.data.presence.layoutDiversityPct],
+                                ["Full Screen", healthQ.data.presence.fullScreenPct],
+                                ["PiP", healthQ.data.presence.pipPct],
+                                ["Split Screen", healthQ.data.presence.splitScreenPct],
+                                ["Infographic", healthQ.data.presence.infographicPct],
+                                ["Clinical Image", healthQ.data.presence.clinicalImagePct],
+                              ] as Array<[string, number]>).map(([label, v]) => (
+                                <div key={label} className="rounded-md border border-border px-2 py-1.5">
+                                  <div className="text-[10px] text-muted-foreground">{label}</div>
+                                  <div className="text-sm font-semibold tabular-nums">{(v * 100).toFixed(0)}%</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 <div className="overflow-auto">
