@@ -133,3 +133,41 @@ export async function fallbackEditorialDecisions(supabase: any, projectId: strin
   }));
   return { edit_actions };
 }
+
+export async function fallbackSeo(_supabase: any, _projectId: string, project: any) {
+  const topic = (project?.topic || project?.title || "Medical topic").toString();
+  const titles = [
+    `${topic}: What You Need to Know`,
+    `${topic} — Doctor Explains`,
+    `Understanding ${topic}`,
+    `${topic}: Symptoms & Warning Signs`,
+    `${topic}: A Patient Guide`,
+  ].map((t) => t.slice(0, 70));
+  const description =
+    `In this video a medical specialist explains ${topic} in clear, accessible language. ` +
+    `Learn about the key risk factors, warning signs, and when to consult a doctor. ` +
+    `Share this with friends and family to raise awareness.`;
+  const tags = [
+    topic.toLowerCase(),
+    "medical education",
+    "health awareness",
+    "doctor explains",
+    "patient guide",
+    "symptoms",
+    "warning signs",
+    "early detection",
+    "treatment",
+    "prevention",
+    "healthcare",
+    "medicine",
+  ];
+  return {
+    seo: {
+      titles,
+      description,
+      tags,
+      chapters_text: "00:00 Introduction\n00:30 Main content\n01:30 Conclusion",
+      pinned_comment: `If you found this helpful, please like and share to spread awareness about ${topic}.`,
+    },
+  };
+}
