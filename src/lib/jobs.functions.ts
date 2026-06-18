@@ -6,6 +6,20 @@ export const startFullPipeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ projectId: z.string() }).parse(input))
   .handler(async ({ context, data }) => {
+    const { data: active } = await context.supabase
+      .from("jobs")
+      .select("id")
+      .eq("project_id", data.projectId)
+      .in("state", ["queued", "transcribing", "analyzing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (active?.id) {
+      const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+      const token = await createJobRunnerToken(active.id);
+      return { jobId: active.id, runnerUrl: `/api/public/jobs/run/${active.id}?token=${encodeURIComponent(token)}` };
+    }
+
     const { data: job, error } = await context.supabase
       .from("jobs")
       .insert({ project_id: data.projectId, kind: "full", state: "queued", progress: 0 })

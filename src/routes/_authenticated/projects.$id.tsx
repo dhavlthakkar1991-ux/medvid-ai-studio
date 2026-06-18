@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { getProject, updateTranscript, setProjectDuration, getProjectVideoUrl } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
-import { startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
+import { startFullPipeline, runQueuedJob, retryPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
@@ -111,6 +111,7 @@ function ProjectView() {
   const getFn = useServerFn(getProject);
   const regenFn = useServerFn(regenerateTask);
   const startPipelineFn = useServerFn(startFullPipeline);
+  const runQueuedJobFn = useServerFn(runQueuedJob);
   const retryPipelineFn = useServerFn(retryPipeline);
   const exportFn = useServerFn(getExportBundle);
   const canonFn = useServerFn(getCanonicalProject);
@@ -339,10 +340,37 @@ function ProjectView() {
 
   const latestJobForLaunch = q.data?.latestJob;
 
-  // NOTE: the client no longer auto-fires the runner on every progress tick —
-  // that burned tokens whenever a job got stuck. The pipeline now self-chains
-  // server-side after each successful step. Use Start / Retry buttons to
-  // (re)start it manually if it stalls.
+  // Keep active jobs warm. The server runner is still the only place that
+  // advances the pipeline; this client nudge is throttled and only refires
+  // when progress has not changed for a while, so users do not need to keep
+  // pressing Retry after a dropped background invocation.
+  useEffect(() => {
+    if (!latestJobForLaunch || !ACTIVE_JOB_STATES.has(latestJobForLaunch.state)) return;
+    let cancelled = false;
+    let lastProgress = Number(latestJobForLaunch.progress) || 0;
+    let lastChangeAt = Date.now();
+    const timer = window.setInterval(async () => {
+      const current = qc.getQueryData(["project", id]) as any;
+      const job = current?.latestJob;
+      if (!job || !ACTIVE_JOB_STATES.has(job.state)) return;
+      const progress = Number(job.progress) || 0;
+      if (progress !== lastProgress) {
+        lastProgress = progress;
+        lastChangeAt = Date.now();
+        return;
+      }
+      if (Date.now() - lastChangeAt < 45_000) return;
+      lastChangeAt = Date.now();
+      try {
+        const res = await runQueuedJobFn({ data: { jobId: job.id } });
+        if (!cancelled && res.runnerUrl) fetch(res.runnerUrl, { method: "POST" }).catch(() => undefined);
+      } catch {}
+    }, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [id, latestJobForLaunch?.id, latestJobForLaunch?.state, qc, runQueuedJobFn]);
 
   const regen = useMutation({
     mutationFn: (task: string) => regenFn({ data: { projectId: id, task: task as any } }),
