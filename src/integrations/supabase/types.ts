@@ -94,44 +94,102 @@ export type Database = {
       asset_candidates: {
         Row: {
           asset_type: string
+          broll_item_id: string | null
           candidate_data: Json
           created_at: string
+          description: string | null
+          edit_action_id: string | null
           id: string
+          infographic_item_id: string | null
+          linked_asset_id: string | null
           priority: number
           project_id: string
           provider: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           scene_id: string | null
           search_query: string
           status: string
           storyboard_item_id: string | null
+          thumbnail_url: string | null
+          title: string | null
         }
         Insert: {
           asset_type: string
+          broll_item_id?: string | null
           candidate_data?: Json
           created_at?: string
+          description?: string | null
+          edit_action_id?: string | null
           id?: string
+          infographic_item_id?: string | null
+          linked_asset_id?: string | null
           priority?: number
           project_id: string
           provider?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scene_id?: string | null
           search_query: string
           status?: string
           storyboard_item_id?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
         }
         Update: {
           asset_type?: string
+          broll_item_id?: string | null
           candidate_data?: Json
           created_at?: string
+          description?: string | null
+          edit_action_id?: string | null
           id?: string
+          infographic_item_id?: string | null
+          linked_asset_id?: string | null
           priority?: number
           project_id?: string
           provider?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scene_id?: string | null
           search_query?: string
           status?: string
           storyboard_item_id?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "asset_candidates_broll_item_id_fkey"
+            columns: ["broll_item_id"]
+            isOneToOne: false
+            referencedRelation: "broll_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_candidates_edit_action_id_fkey"
+            columns: ["edit_action_id"]
+            isOneToOne: false
+            referencedRelation: "edit_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_candidates_infographic_item_id_fkey"
+            columns: ["infographic_item_id"]
+            isOneToOne: false
+            referencedRelation: "infographic_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_candidates_linked_asset_id_fkey"
+            columns: ["linked_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "asset_candidates_project_id_fkey"
             columns: ["project_id"]
@@ -164,8 +222,14 @@ export type Database = {
           height: number | null
           id: string
           metadata: Json
+          preview_url: string | null
           project_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           scene_id: string | null
+          search_query: string | null
+          source: string | null
           source_type: string
           status: string
           thumbnail_url: string | null
@@ -182,8 +246,14 @@ export type Database = {
           height?: number | null
           id?: string
           metadata?: Json
+          preview_url?: string | null
           project_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scene_id?: string | null
+          search_query?: string | null
+          source?: string | null
           source_type: string
           status?: string
           thumbnail_url?: string | null
@@ -200,8 +270,14 @@ export type Database = {
           height?: number | null
           id?: string
           metadata?: Json
+          preview_url?: string | null
           project_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scene_id?: string | null
+          search_query?: string | null
+          source?: string | null
           source_type?: string
           status?: string
           thumbnail_url?: string | null
@@ -721,6 +797,54 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      project_assets: {
+        Row: {
+          asset_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          project_id: string
+          role: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          role: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          role?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_context: {
         Row: {
