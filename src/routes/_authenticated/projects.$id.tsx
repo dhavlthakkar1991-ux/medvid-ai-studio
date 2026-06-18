@@ -394,6 +394,19 @@ function ProjectView() {
         </div>
       </div>
 
+      <DurationCard
+        projectId={id}
+        currentDuration={Number(project.duration_seconds) || 0}
+        getVideoUrl={async () => (await getVideoUrlFn({ data: { projectId: id } })).url}
+        setDuration={async (d) => setDurationFn({ data: { projectId: id, durationSeconds: d } })}
+        onUpdated={() => {
+          qc.invalidateQueries({ queryKey: ["project", id] });
+          qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+          qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+          qc.invalidateQueries({ queryKey: ["readiness", id] });
+        }}
+      />
+
       {latestJob && ACTIVE_JOB_STATES.has(latestJob.state) && (
         <Card>
           <CardContent className="py-4">
