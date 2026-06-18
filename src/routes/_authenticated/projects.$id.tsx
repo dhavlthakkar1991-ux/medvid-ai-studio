@@ -117,6 +117,8 @@ function ProjectView() {
   const reviewListFn = useServerFn(listAssetReview);
   const reviewActFn = useServerFn(reviewAssetCandidate);
   const readinessFn = useServerFn(getProjectReadiness);
+  const timelineFn = useServerFn(getProjectTimeline);
+  const recomposeFn = useServerFn(recomposeTimeline);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
@@ -172,9 +174,25 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["asset-review", id] });
       qc.invalidateQueries({ queryKey: ["readiness", id] });
       qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Review failed"),
   });
+  const composerQ = useQuery({
+    queryKey: ["timeline-composer", id],
+    queryFn: () => timelineFn({ data: { projectId: id } }),
+  });
+  const recomposeMut = useMutation({
+    mutationFn: () => recomposeFn({ data: { projectId: id } }),
+    onSuccess: () => {
+      toast.success("Timeline recomposed");
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
+  });
+  const [composerZoom, setComposerZoom] = useState(8); // pixels per second
 
   const latestJobForLaunch = q.data?.latestJob;
 
