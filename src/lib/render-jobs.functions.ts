@@ -31,6 +31,12 @@ type Sb = any;
 
 /** Pre-flight gate: timeline valid, manifest exists, duration known, assets ok. */
 export async function computeRenderReadiness(sb: Sb, projectId: string) {
+  // Auto-repair duration before reading — most "Project duration unknown"
+  // blockers are stale rows where the duration was never persisted.
+  try {
+    const { repairProjectDuration } = await import("./render/duration-repair.server");
+    await repairProjectDuration(sb, projectId);
+  } catch (e) { console.warn("duration repair failed", e); }
   const [{ data: project }, manifestRes, timelineRes, candRes] = await Promise.all([
     sb.from("projects").select("id, duration_seconds").eq("id", projectId).maybeSingle(),
     sb.from("render_manifest").select("id", { count: "exact", head: true }).eq("project_id", projectId),
