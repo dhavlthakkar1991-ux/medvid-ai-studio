@@ -113,6 +113,9 @@ function ProjectView() {
   const healthFn = useServerFn(getPipelineHealth);
   const resetFn = useServerFn(resetProject);
   const deleteFn = useServerFn(deleteProject);
+  const reviewListFn = useServerFn(listAssetReview);
+  const reviewActFn = useServerFn(reviewAssetCandidate);
+  const readinessFn = useServerFn(getProjectReadiness);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
@@ -150,6 +153,26 @@ function ProjectView() {
       const s = parent?.latestJob?.state;
       return s && ACTIVE_JOB_STATES.has(s) ? 4000 : false;
     },
+  });
+
+  const reviewQ = useQuery({
+    queryKey: ["asset-review", id],
+    queryFn: () => reviewListFn({ data: { projectId: id } }),
+  });
+  const readinessQ = useQuery({
+    queryKey: ["readiness", id],
+    queryFn: () => readinessFn({ data: { projectId: id } }),
+  });
+  const reviewMut = useMutation({
+    mutationFn: (v: { candidateId: string; action: "accept" | "reject" | "lock" | "replace"; replacementQuery?: string }) =>
+      reviewActFn({ data: v }),
+    onSuccess: () => {
+      toast.success("Review saved");
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Review failed"),
   });
 
   const latestJobForLaunch = q.data?.latestJob;
