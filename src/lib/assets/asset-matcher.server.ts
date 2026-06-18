@@ -4,6 +4,8 @@
 
 type SupabaseLike = any;
 
+import { ACTION_TO_ASSET_TYPE } from "./asset-linker.server";
+
 const VISUAL_TYPE_TO_ASSET: Record<string, string> = {
   "B-Roll": "broll",
   "Medical Infographic": "infographic",
@@ -16,17 +18,6 @@ const VISUAL_TYPE_TO_ASSET: Record<string, string> = {
 function mapAssetType(visualType: string): string {
   return VISUAL_TYPE_TO_ASSET[visualType] ?? "image";
 }
-
-/** Map an editorial action_type to the spec asset_type used in candidates. */
-const ACTION_TO_ASSET_TYPE: Record<string, string> = {
-  show_clinical_image: "clinical_image",
-  show_medical_diagram: "medical_diagram",
-  show_broll: "broll_video",
-  show_infographic: "infographic",
-  show_thumbnail_frame: "icon",
-  show_logo: "icon",
-  show_cta: "icon",
-};
 
 /** Heuristic query variants for a single storyboard prompt. */
 function buildQueryVariants(prompt: string, title: string, asset_type: string): string[] {
