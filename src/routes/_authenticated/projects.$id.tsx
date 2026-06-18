@@ -2,7 +2,7 @@ import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { getProject, updateTranscript } from "@/lib/projects.functions";
+import { getProject, updateTranscript, setProjectDuration, getProjectVideoUrl } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
