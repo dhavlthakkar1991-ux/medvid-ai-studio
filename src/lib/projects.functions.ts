@@ -112,3 +112,25 @@ export const createUploadUrl = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { path, token: signed.token, signedUrl: signed.signedUrl };
   });
+
+const UpdateTranscriptInput = z.object({
+  projectId: z.string(),
+  fullText: z.string().min(1),
+});
+
+/** Edit the rendered transcript text. Returns updated row. */
+export const updateTranscript = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => UpdateTranscriptInput.parse(i))
+  .handler(async ({ context, data }) => {
+    const { data: proj, error: pErr } = await context.supabase
+      .from("projects").select("id, user_id").eq("id", data.projectId).maybeSingle();
+    if (pErr) throw new Error(pErr.message);
+    if (!proj || proj.user_id !== context.userId) throw new Error("Project not found");
+    const { error } = await context.supabase
+      .from("transcripts")
+      .update({ full_text: data.fullText, updated_at: new Date().toISOString() })
+      .eq("project_id", data.projectId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

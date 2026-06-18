@@ -2,14 +2,14 @@ import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { getProject } from "@/lib/projects.functions";
+import { getProject, updateTranscript } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob, startFullPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
-import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
+import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
 import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -117,6 +118,8 @@ function ProjectView() {
   const deleteFn = useServerFn(deleteProject);
   const reviewListFn = useServerFn(listAssetReview);
   const reviewActFn = useServerFn(reviewAssetCandidate);
+  const acceptAllFn = useServerFn(acceptAllPendingCandidates);
+  const updateTranscriptFn = useServerFn(updateTranscript);
   const readinessFn = useServerFn(getProjectReadiness);
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
@@ -178,6 +181,47 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Review failed"),
+  });
+  const acceptAllMut = useMutation({
+    mutationFn: () => acceptAllFn({ data: { projectId: id } }),
+    onSuccess: (res: any) => {
+      toast.success(`Accepted ${res?.accepted ?? 0} candidate(s)`);
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Accept-all failed"),
+  });
+  const [transcriptDraft, setTranscriptDraft] = useState<string | null>(null);
+  const [transcriptDirty, setTranscriptDirty] = useState(false);
+  const updateTxMut = useMutation({
+    mutationFn: (fullText: string) => updateTranscriptFn({ data: { projectId: id, fullText } }),
+    onSuccess: () => {
+      toast.success("Transcript saved");
+      setTranscriptDirty(true);
+      qc.invalidateQueries({ queryKey: ["project", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Save failed"),
+  });
+  const rerunFromTranscriptMut = useMutation({
+    mutationFn: async () => {
+      await resetFn({ data: { projectId: id, stage: "transcript" } });
+      const r = await startPipelineFn({ data: { projectId: id } });
+      return r;
+    },
+    onSuccess: (r: any) => {
+      toast.success("Pipeline restarted from transcript");
+      setTranscriptDirty(false);
+      if (r?.runnerUrl) {
+        try { fetch(r.runnerUrl, { method: "POST" }); } catch {}
+      }
+      qc.invalidateQueries({ queryKey: ["project", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Rerun failed"),
   });
   const composerQ = useQuery({
     queryKey: ["timeline-composer", id],
@@ -442,11 +486,76 @@ function ProjectView() {
         </TabsList>
 
         <TabsContent value="transcript">
-          <Card><CardContent className="py-4">
-            {transcript ? (
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed">{transcript.full_text}</pre>
-            ) : <p className="text-muted-foreground text-sm">Transcript not ready yet.</p>}
-          </CardContent></Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Transcript</CardTitle>
+              {transcript && (
+                <div className="flex items-center gap-2">
+                  {transcriptDraft === null ? (
+                    <Button size="sm" variant="outline" onClick={() => setTranscriptDraft(transcript.full_text ?? "")}>
+                      Edit
+                    </Button>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => setTranscriptDraft(null)} disabled={updateTxMut.isPending}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const text = transcriptDraft ?? "";
+                          if (!text.trim()) { toast.error("Transcript cannot be empty"); return; }
+                          updateTxMut.mutate(text, {
+                            onSuccess: () => setTranscriptDraft(null),
+                          });
+                        }}
+                        disabled={updateTxMut.isPending || transcriptDraft === transcript.full_text}
+                      >
+                        {updateTxMut.isPending ? "Saving…" : "Save"}
+                      </Button>
+                    </>
+                  )}
+                  {transcriptDirty && transcriptDraft === null && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => rerunFromTranscriptMut.mutate()}
+                      disabled={rerunFromTranscriptMut.isPending}
+                    >
+                      <Play className="h-3 w-3 mr-1" />
+                      {rerunFromTranscriptMut.isPending ? "Restarting…" : "Rerun pipeline from transcript"}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="py-4">
+              {!transcript ? (
+                <p className="text-muted-foreground text-sm">Transcript not ready yet.</p>
+              ) : transcriptDraft !== null ? (
+                <>
+                  <Textarea
+                    value={transcriptDraft}
+                    onChange={(e) => setTranscriptDraft(e.target.value)}
+                    className="min-h-[60vh] text-sm leading-relaxed font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    After saving, click "Rerun pipeline from transcript" to regenerate every downstream stage
+                    (scenes, storyboard, editorial, assets, manifest) using the corrected text.
+                  </p>
+                </>
+              ) : (
+                <>
+                  {transcriptDirty && (
+                    <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                      Transcript edited. Downstream stages are stale until you rerun the pipeline.
+                    </div>
+                  )}
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed">{transcript.full_text}</pre>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {Object.keys(TASK_LABELS).map((t) => {
@@ -830,7 +939,7 @@ function ProjectView() {
 
         <TabsContent value="review">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
                 Review Workspace {reviewQ.data && (
                   <Badge variant="outline" className="ml-2">
@@ -838,6 +947,25 @@ function ProjectView() {
                   </Badge>
                 )}
               </CardTitle>
+              {(() => {
+                const pending = (reviewQ.data?.candidates ?? []).filter(
+                  (c: any) => c.status === "pending" || c.status === "searched",
+                ).length;
+                return (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    disabled={pending === 0 || acceptAllMut.isPending || reviewMut.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Accept all ${pending} pending candidate(s)?`)) {
+                        acceptAllMut.mutate();
+                      }
+                    }}
+                  >
+                    {acceptAllMut.isPending ? "Accepting…" : `Accept all (${pending})`}
+                  </Button>
+                );
+              })()}
             </CardHeader>
             <CardContent>
               {!reviewQ.data || reviewQ.data.candidates.length === 0 ? (
