@@ -188,6 +188,8 @@ export const acceptAllPendingCandidates = createServerFn({ method: "POST" })
     if (accepted > 0) {
       try {
         const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+        const { ensureApprovedAssetsForEditActions } = await import("./assets/asset-linker.server");
+        await ensureApprovedAssetsForEditActions(sb, data.projectId, userId, { createMissing: true });
         await buildRenderManifestForProject(sb, data.projectId);
       } catch (e) {
         console.warn("manifest rebuild after bulk accept failed", e);

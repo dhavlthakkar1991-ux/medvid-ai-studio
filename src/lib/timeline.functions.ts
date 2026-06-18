@@ -38,10 +38,12 @@ export const recomposeTimeline = createServerFn({ method: "POST" })
     const sb = context.supabase;
     const { composeTimelineForProject, validateTimelineForProject } = await import("./timeline/timeline-composer.server");
     const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+    const { ensureApprovedAssetsForEditActions } = await import("./assets/asset-linker.server");
+    const linked = await ensureApprovedAssetsForEditActions(sb, data.projectId, context.userId, { createMissing: true });
     const composeResult = await composeTimelineForProject(sb, data.projectId);
     const validation = await validateTimelineForProject(sb, data.projectId);
     await buildRenderManifestForProject(sb, data.projectId);
-    return { ...composeResult, validation };
+    return { ...composeResult, linked, validation };
   });
 
 /**
@@ -64,6 +66,7 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
     const pid = data.projectId;
     const { composeTimelineForProject, validateTimelineForProject } = await import("./timeline/timeline-composer.server");
     const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+    const { ensureApprovedAssetsForEditActions } = await import("./assets/asset-linker.server");
 
     const fixesApplied: string[] = [];
 
@@ -124,6 +127,11 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
         await sb.from("edit_actions").insert(insertable);
       }
     }
+
+    const assetRepair = await ensureApprovedAssetsForEditActions(sb, pid, context.userId, { createMissing: true });
+    if (assetRepair.linked > 0) fixesApplied.push(`Linked approved assets to ${assetRepair.linked} visual action(s)`);
+    if (assetRepair.createdAssets > 0) fixesApplied.push(`Created ${assetRepair.createdAssets} approved placeholder asset(s)`);
+    if (assetRepair.createdCandidates > 0) fixesApplied.push(`Created ${assetRepair.createdCandidates} action-linked candidate(s)`);
 
     // 2) Recompose + validate
     await composeTimelineForProject(sb, pid);

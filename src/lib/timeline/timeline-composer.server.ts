@@ -2,6 +2,8 @@
 // layout decisions, and approved assets. The timeline becomes the authoritative
 // source for Render Manifest V5.
 
+import { compatibleAssetTypesForAction } from "../assets/asset-linker.server";
+
 type SupabaseLike = any;
 
 export const TRACK_KINDS = [
@@ -105,6 +107,7 @@ export async function composeTimelineForProject(supabase: SupabaseLike, projectI
   const layoutByAction = new Map<string, any>();
   for (const l of (layouts ?? []) as any[]) if (l.action_id) layoutByAction.set(l.action_id, l);
   const assetById = new Map<string, any>(((assets ?? []) as any[]).map((a) => [a.id, a]));
+  const approvedAssets = (assets ?? []) as any[];
   const approvedAssetByAction = new Map<string, string>();
   for (const c of (candidates ?? []) as any[]) {
     if (!c.edit_action_id || !c.linked_asset_id) continue;
@@ -150,7 +153,16 @@ export async function composeTimelineForProject(supabase: SupabaseLike, projectI
     const end = Number(ea.end_time) || 0;
     if (end <= start) continue;
     const ld = layoutByAction.get(ea.id);
-    const approvedAssetId = approvedAssetByAction.get(ea.id) ?? null;
+    const compatibleTypes = compatibleAssetTypesForAction(action);
+    const fallbackAsset = approvedAssets
+      .filter((a) => compatibleTypes.includes(String(a.asset_type)))
+      .filter((a) => !ea.scene_id || !a.scene_id || a.scene_id === ea.scene_id)
+      .sort((a, b) => {
+        const aScene = a.scene_id === ea.scene_id ? 1 : 0;
+        const bScene = b.scene_id === ea.scene_id ? 1 : 0;
+        return (bScene - aScene) || String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+      })[0];
+    const approvedAssetId = approvedAssetByAction.get(ea.id) ?? fallbackAsset?.id ?? null;
     items.push({
       project_id: projectId,
       track_id: trackId,
