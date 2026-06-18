@@ -9,6 +9,7 @@ import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
+import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -112,6 +113,9 @@ function ProjectView() {
   const healthFn = useServerFn(getPipelineHealth);
   const resetFn = useServerFn(resetProject);
   const deleteFn = useServerFn(deleteProject);
+  const reviewListFn = useServerFn(listAssetReview);
+  const reviewActFn = useServerFn(reviewAssetCandidate);
+  const readinessFn = useServerFn(getProjectReadiness);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
@@ -149,6 +153,26 @@ function ProjectView() {
       const s = parent?.latestJob?.state;
       return s && ACTIVE_JOB_STATES.has(s) ? 4000 : false;
     },
+  });
+
+  const reviewQ = useQuery({
+    queryKey: ["asset-review", id],
+    queryFn: () => reviewListFn({ data: { projectId: id } }),
+  });
+  const readinessQ = useQuery({
+    queryKey: ["readiness", id],
+    queryFn: () => readinessFn({ data: { projectId: id } }),
+  });
+  const reviewMut = useMutation({
+    mutationFn: (v: { candidateId: string; action: "accept" | "reject" | "lock" | "replace"; replacementQuery?: string }) =>
+      reviewActFn({ data: v }),
+    onSuccess: () => {
+      toast.success("Review saved");
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Review failed"),
   });
 
   const latestJobForLaunch = q.data?.latestJob;
@@ -338,6 +362,8 @@ function ProjectView() {
           ))}
           <TabsTrigger value="render_manifest">Render Manifest</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
+          <TabsTrigger value="review">Review Assets</TabsTrigger>
+          <TabsTrigger value="readiness">Readiness</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
           <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
@@ -694,50 +720,128 @@ function ProjectView() {
         <TabsContent value="assets">
           <Card>
             <CardHeader><CardTitle className="text-base">
-              Asset Library {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.assetCandidates.length} candidates · {canonQ.data.assets.length} assets</Badge>}
+              Asset Library {reviewQ.data && <Badge variant="outline" className="ml-2">{reviewQ.data.candidates.length} candidates · {reviewQ.data.assets.length} assets</Badge>}
             </CardTitle></CardHeader>
             <CardContent>
-              {!canonQ.data || canonQ.data.assetCandidates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No asset candidates yet. Generate Storyboard or B-Roll to populate.</p>
+              {!reviewQ.data || reviewQ.data.candidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No asset candidates yet. Generate Storyboard, B-Roll, Infographics, or Editorial Decisions to populate.</p>
               ) : (
-                <div className="space-y-4 max-h-[60vh] overflow-auto">
-                  {canonQ.data.scenes.map((s: any) => {
-                    const cands = canonQ.data.assetCandidates.filter((c: any) => c.scene_id === s.id);
-                    if (cands.length === 0) return null;
-                    return (
-                      <div key={s.id}>
-                        <div className="text-sm font-medium mb-1">Scene {s.scene_number} — {s.title}</div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          {cands.map((c: any) => (
-                            <div key={c.id} className="border border-border rounded-md p-2 text-xs">
-                              <div className="flex items-center justify-between mb-1">
-                                <Badge variant="outline" className="text-[10px]">{c.asset_type}</Badge>
-                                <span className="text-muted-foreground">p{c.priority}</span>
-                              </div>
-                              <div className="truncate" title={c.search_query}>{c.search_query}</div>
-                            </div>
-                          ))}
-                        </div>
+                <div className="space-y-6 max-h-[65vh] overflow-auto">
+                  {Object.entries(reviewQ.data.grouped).map(([role, items]: [string, any[]]) => (
+                    <div key={role}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold">{role}</div>
+                        <Badge variant="outline" className="text-[10px]">
+                          {items.filter((i) => i.status === "approved" || i.status === "locked" || i.status === "replaced").length} approved · {items.length} total
+                        </Badge>
                       </div>
-                    );
-                  })}
-                  {(() => {
-                    const orphan = canonQ.data.assetCandidates.filter((c: any) => !c.scene_id);
-                    if (orphan.length === 0) return null;
-                    return (
-                      <div>
-                        <div className="text-sm font-medium mb-1 text-muted-foreground">Unscened candidates</div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          {orphan.map((c: any) => (
-                            <div key={c.id} className="border border-border rounded-md p-2 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        {items.map((c: any) => (
+                          <div key={c.id} className="border border-border rounded-md p-2 text-xs space-y-1">
+                            <div className="flex items-center justify-between">
                               <Badge variant="outline" className="text-[10px]">{c.asset_type}</Badge>
-                              <div className="mt-1 truncate" title={c.search_query}>{c.search_query}</div>
+                              <Badge
+                                variant={c.status === "approved" || c.status === "locked" ? "default" : "secondary"}
+                                className="text-[10px]"
+                              >{c.status}</Badge>
                             </div>
-                          ))}
-                        </div>
+                            {c.title && <div className="font-medium truncate" title={c.title}>{c.title}</div>}
+                            <div className="text-muted-foreground truncate" title={c.search_query}>{c.search_query}</div>
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })()}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="review">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Review Workspace {reviewQ.data && (
+                  <Badge variant="outline" className="ml-2">
+                    {reviewQ.data.candidates.filter((c: any) => c.status === "pending" || c.status === "searched").length} pending
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!reviewQ.data || reviewQ.data.candidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No candidates to review.</p>
+              ) : (
+                <div className="space-y-2 max-h-[65vh] overflow-auto">
+                  {reviewQ.data.candidates.map((c: any) => (
+                    <div key={c.id} className="border border-border rounded-md p-3 text-xs flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <Badge variant="outline" className="text-[10px]">{c.asset_type}</Badge>
+                          <Badge
+                            variant={c.status === "approved" || c.status === "locked" ? "default" : "secondary"}
+                            className="text-[10px]"
+                          >{c.status}</Badge>
+                          {c.title && <span className="font-medium">{c.title}</span>}
+                        </div>
+                        <div className="text-muted-foreground truncate" title={c.search_query}>{c.search_query}</div>
+                        {c.description && <div className="text-muted-foreground/80 mt-1 line-clamp-2">{c.description}</div>}
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <Button size="sm" variant="default" disabled={reviewMut.isPending}
+                          onClick={() => reviewMut.mutate({ candidateId: c.id, action: "accept" })}>Accept</Button>
+                        <Button size="sm" variant="outline" disabled={reviewMut.isPending}
+                          onClick={() => reviewMut.mutate({ candidateId: c.id, action: "reject" })}>Reject</Button>
+                        <Button size="sm" variant="outline" disabled={reviewMut.isPending}
+                          onClick={() => {
+                            const q = window.prompt("Replacement query", c.search_query ?? "");
+                            if (q && q.trim()) reviewMut.mutate({ candidateId: c.id, action: "replace", replacementQuery: q.trim() });
+                          }}>Replace</Button>
+                        <Button size="sm" variant="secondary" disabled={reviewMut.isPending}
+                          onClick={() => reviewMut.mutate({ candidateId: c.id, action: "lock" })}>Lock</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="readiness">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Project Readiness {readinessQ.data && (
+                  <Badge variant={readinessQ.data.readyForRender ? "default" : "secondary"} className="ml-2">
+                    {readinessQ.data.percent}% {readinessQ.data.readyForRender ? "Ready For Render" : "In Progress"}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!readinessQ.data ? (
+                <p className="text-sm text-muted-foreground">Calculating…</p>
+              ) : (
+                <div className="space-y-3">
+                  <Progress value={readinessQ.data.percent} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {readinessQ.data.gates.map((g: any) => (
+                      <div key={g.key} className="flex items-center justify-between border border-border rounded-md p-2">
+                        <div>
+                          <div className="font-medium">{g.label}</div>
+                          <div className="text-muted-foreground">weight {Math.round(g.weight * 100)}%</div>
+                        </div>
+                        <Badge variant={g.score >= 1 ? "default" : g.score > 0 ? "secondary" : "outline"}>
+                          {Math.round(g.score * 100)}%
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {readinessQ.data.approvedAssets} of {readinessQ.data.totalCandidates} asset candidates approved.
+                  </div>
                 </div>
               )}
             </CardContent>

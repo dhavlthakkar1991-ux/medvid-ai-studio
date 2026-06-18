@@ -268,6 +268,9 @@ export async function runTaskForProject(
       await compileTimelineForProject(supabase, projectId);
       await buildRenderManifestForProject(supabase, projectId);
     }
+    if (task === "infographics") {
+      await generateAssetCandidatesForProject(supabase, projectId);
+    }
     // Editorial decisions overwrite edit_actions; rebuild manifest from the new actions.
     if (task === "editorial_decisions") {
       const actions = Array.isArray((res.data as any)?.edit_actions) ? (res.data as any).edit_actions : [];
@@ -282,6 +285,10 @@ export async function runTaskForProject(
         } catch (e) {
           console.warn("layout_decisions run failed", e);
         }
+        // Regenerate asset candidates so editorial actions (show_clinical_image,
+        // show_medical_diagram, show_broll, etc.) become reviewable candidates.
+        try { await generateAssetCandidatesForProject(supabase, projectId); }
+        catch (e) { console.warn("asset candidates regen after editorial failed", e); }
         await buildRenderManifestForProject(supabase, projectId);
       }
     }

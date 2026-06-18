@@ -8,7 +8,7 @@ export async function buildRenderManifestForProject(
   supabase: SupabaseLike,
   projectId: string,
 ) {
-  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: infographics }, { data: instructions }, { data: editActions }, { data: layoutDecisions }, { data: project }] = await Promise.all([
+  const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: infographics }, { data: instructions }, { data: editActions }, { data: layoutDecisions }, { data: project }, { data: approvedAssets }, { data: candidates }] = await Promise.all([
     supabase.from("scenes").select("*").eq("project_id", projectId).order("scene_number", { ascending: true }),
     supabase.from("storyboard_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
     supabase.from("broll_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),
@@ -17,7 +17,19 @@ export async function buildRenderManifestForProject(
     supabase.from("edit_actions").select("*").eq("project_id", projectId).order("start_time", { ascending: true }),
     supabase.from("layout_decisions").select("*").eq("project_id", projectId),
     supabase.from("projects").select("duration_seconds").eq("id", projectId).maybeSingle(),
+    supabase.from("assets").select("id, asset_type, scene_id, search_query, status, url").eq("project_id", projectId).in("status", ["approved", "locked"]),
+    supabase.from("asset_candidates").select("id, edit_action_id, status, linked_asset_id").eq("project_id", projectId),
   ]);
+
+  // Build lookup: edit_action_id -> approved asset_id (via candidates)
+  const approvedByAction = new Map<string, { assetId: string; url: string | null }>();
+  const assetById = new Map<string, any>(((approvedAssets ?? []) as any[]).map((a) => [a.id, a]));
+  for (const c of (candidates ?? []) as any[]) {
+    if (!c.edit_action_id || !c.linked_asset_id) continue;
+    if (c.status !== "approved" && c.status !== "locked" && c.status !== "replaced") continue;
+    const a = assetById.get(c.linked_asset_id);
+    if (a) approvedByAction.set(c.edit_action_id, { assetId: a.id, url: a.url ?? null });
+  }
 
   type Entry = {
     scene_id: string | null;
@@ -61,10 +73,11 @@ export async function buildRenderManifestForProject(
   if (eas.length > 0) {
     for (const ea of eas) {
       const ld = layoutByActionId.get(ea.id) || defaultLayoutForAction(ea.action_type || "");
+      const approved = approvedByAction.get(ea.id);
       entries.push({
         scene_id: ea.scene_id ?? null,
         storyboard_item_id: ea.storyboard_item_id ?? null,
-        asset_id: null,
+        asset_id: approved?.assetId ?? null,
         edit_action_id: ea.id,
         layout_id: ea.layout_id ?? null,
         transition_in_id: ea.transition_in_id ?? null,
@@ -76,11 +89,11 @@ export async function buildRenderManifestForProject(
         timeline_start: Number(ea.start_time) || 0,
         timeline_end: Number(ea.end_time) || 0,
         asset_type: ea.action_type || "edit_action",
-        asset_source: ea.source === "ai" ? "ai_editorial" : "backfill",
+        asset_source: approved ? "approved_asset" : (ea.source === "ai" ? "ai_editorial" : "backfill"),
         asset_query: ea.asset_query || "",
-        asset_url: null,
+        asset_url: approved?.url ?? null,
         caption_style: "Full",
-        status: "pending",
+        status: approved ? "approved" : "pending",
         layout_name: ld.layout_name ?? null,
         doctor_visibility: ld.doctor_visibility ?? null,
         doctor_size: ld.doctor_size ?? null,

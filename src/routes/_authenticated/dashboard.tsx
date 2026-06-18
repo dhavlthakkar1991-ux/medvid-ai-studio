@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listProjects } from "@/lib/projects.functions";
 import { getUsageTotals } from "@/lib/settings.functions";
+import { getAssetDashboardSummary } from "@/lib/assets.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Film } from "lucide-react";
+import { Plus, Film, CheckCircle2, ClipboardList, Image as ImageIcon, Activity } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -16,8 +17,10 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function Dashboard() {
   const listFn = useServerFn(listProjects);
   const usageFn = useServerFn(getUsageTotals);
+  const summaryFn = useServerFn(getAssetDashboardSummary);
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => listFn() });
   const usage = useQuery({ queryKey: ["usage"], queryFn: () => usageFn() });
+  const summary = useQuery({ queryKey: ["asset-summary"], queryFn: () => summaryFn() });
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10">
@@ -30,6 +33,26 @@ function Dashboard() {
         </div>
         <Button asChild><Link to="/projects/new"><Plus className="h-4 w-4 mr-1" />New project</Link></Button>
       </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" /> Ready For Render</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{summary.data?.readyForRender ?? "—"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><ClipboardList className="h-3.5 w-3.5" /> Awaiting Review</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{summary.data?.pendingReview ?? "—"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Approved Assets</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{summary.data?.approved ?? "—"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Avg Readiness</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{summary.data ? `${summary.data.avgReadiness}%` : "—"}</CardContent>
+        </Card>
+      </div>
+
       {projects.isLoading && <div className="text-muted-foreground">Loading…</div>}
       {projects.data && projects.data.length === 0 && (
         <Card>
