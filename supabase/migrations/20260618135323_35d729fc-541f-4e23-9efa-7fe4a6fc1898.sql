@@ -1,0 +1,1 @@
+UPDATE public.task_executions SET status='failed', completed_at=now(), error_message='Task timed out — worker invocation did not complete (manual unstick).' WHERE id='2a7d85c7-ed14-46af-9f8e-f9b2191f8636';
