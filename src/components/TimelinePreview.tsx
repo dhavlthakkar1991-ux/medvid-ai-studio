@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getProjectTimeline } from "@/lib/timeline.functions";
+import { getProjectTimeline, addCtaToTimeline } from "@/lib/timeline.functions";
 import { getCanonicalProject } from "@/lib/render.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, SkipBack, Bug } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 type Item = any;
 type Track = any;
@@ -350,6 +356,9 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
   const errors = (validation?.issues ?? []).filter((i: any) => i.level === "error");
   const warnings = (validation?.issues ?? []).filter((i: any) => i.level === "warning");
 
+  const qc = useQueryClient();
+  const addCtaFn = useServerFn(addCtaToTimeline);
+
   if (timelineQ.isLoading || canonicalQ.isLoading) {
     return <Card><CardContent className="py-12 text-sm text-muted-foreground text-center">Loading preview…</CardContent></Card>;
   }
@@ -501,9 +510,19 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
                   </div>
                 ))}
                 {warnings.map((iss: any, i: number) => (
-                  <div key={`w${i}`} className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-700">
-                    <span className="font-semibold">[{iss.code}]</span> {iss.message}
-                  </div>
+                  <ValidationRow
+                    key={`w${i}`}
+                    iss={iss}
+                    projectId={projectId}
+                    onFixed={() => {
+                      qc.invalidateQueries({ queryKey: ["preview-timeline", projectId] });
+                      qc.invalidateQueries({ queryKey: ["preview-canonical", projectId] });
+                      qc.invalidateQueries({ queryKey: ["readiness", projectId] });
+                    }}
+                    addCta={async (text) => {
+                      await addCtaFn({ data: { projectId, text } });
+                    }}
+                  />
                 ))}
               </>
             )}
@@ -557,3 +576,75 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
 }
 
 export default TimelinePreview;
+
+function ValidationRow({
+  iss,
+  projectId,
+  onFixed,
+  addCta,
+}: {
+  iss: any;
+  projectId: string;
+  onFixed: () => void;
+  addCta: (text: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("Subscribe for more medical updates");
+  const [busy, setBusy] = useState(false);
+
+  const isCtaEmpty = iss.code === "empty_track" && iss.track_kind === "cta";
+
+  return (
+    <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-yellow-500/10 text-yellow-700">
+      <div className="min-w-0">
+        <span className="font-semibold">[{iss.code}]</span> {iss.message}
+      </div>
+      {isCtaEmpty && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] shrink-0">Fix</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add a Call-to-Action</DialogTitle>
+              <DialogDescription>
+                We'll add this CTA to the end of the timeline and rebuild the render manifest.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <Label htmlFor="cta-text">CTA text</Label>
+              <Input
+                id="cta-text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="e.g. Book a consultation today"
+                maxLength={300}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
+              <Button
+                disabled={busy || text.trim().length === 0}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await addCta(text.trim());
+                    toast.success("CTA added to timeline");
+                    setOpen(false);
+                    onFixed();
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to add CTA");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? "Adding…" : "Add CTA"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
