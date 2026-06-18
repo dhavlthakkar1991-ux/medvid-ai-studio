@@ -510,9 +510,19 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
                   </div>
                 ))}
                 {warnings.map((iss: any, i: number) => (
-                  <div key={`w${i}`} className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-700">
-                    <span className="font-semibold">[{iss.code}]</span> {iss.message}
-                  </div>
+                  <ValidationRow
+                    key={`w${i}`}
+                    iss={iss}
+                    projectId={projectId}
+                    onFixed={() => {
+                      qc.invalidateQueries({ queryKey: ["preview-timeline", projectId] });
+                      qc.invalidateQueries({ queryKey: ["preview-canonical", projectId] });
+                      qc.invalidateQueries({ queryKey: ["readiness", projectId] });
+                    }}
+                    addCta={async (text) => {
+                      await addCtaFn({ data: { projectId, text } });
+                    }}
+                  />
                 ))}
               </>
             )}
