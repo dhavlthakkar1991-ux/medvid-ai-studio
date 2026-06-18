@@ -232,4 +232,3 @@ function ReadinessTile({ label, ok, detail }: { label: string; ok: boolean; deta
     </div>
   );
 }
-}
