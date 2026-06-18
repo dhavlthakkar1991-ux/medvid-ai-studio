@@ -82,6 +82,56 @@ export function RenderSpecInspector({ projectId }: { projectId: string }) {
                 <Stat label="Captions" value={spec.captions?.length ?? 0} />
               </div>
 
+              {validation && (
+                <Section title="Render readiness">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <ReadinessTile
+                      label="Worker compatible"
+                      ok={validation.summary.workerCompatible}
+                      detail={`${validation.errorCount} errors · ${validation.warningCount} warnings`}
+                    />
+                    <ReadinessTile
+                      label="Asset readiness"
+                      ok={validation.summary.assets.missingUrl === 0 && validation.summary.assets.orphan === 0}
+                      detail={`${validation.summary.assets.total} total · ${validation.summary.assets.missingUrl} missing url · ${validation.summary.assets.unused} unused`}
+                    />
+                    <ReadinessTile
+                      label="Graphics readiness"
+                      ok={validation.summary.graphics.missingPayload === 0}
+                      detail={`${validation.summary.graphics.total} total · ${validation.summary.graphics.missingPayload} empty`}
+                    />
+                    <ReadinessTile
+                      label="Timeline integrity"
+                      ok={validation.summary.timeline.outOfBounds === 0 && validation.summary.timeline.items > 0}
+                      detail={`${validation.summary.timeline.items} items · ${validation.summary.timeline.overlaps} overlaps · ${validation.summary.timeline.outOfBounds} oob · ${validation.summary.timeline.gaps} gaps`}
+                    />
+                    <ReadinessTile
+                      label="Video metadata"
+                      ok={validation.summary.canvas.hasDuration && validation.summary.canvas.hasDimensions && validation.summary.canvas.hasFps}
+                      detail={`duration:${validation.summary.canvas.hasDuration ? "✓" : "✗"} dims:${validation.summary.canvas.hasDimensions ? "✓" : "✗"} fps:${validation.summary.canvas.hasFps ? "✓" : "✗"}`}
+                    />
+                    <ReadinessTile
+                      label="Orphan references"
+                      ok={validation.summary.assets.orphan === 0}
+                      detail={`${validation.summary.assets.orphan} orphan`}
+                    />
+                  </div>
+                  {validation.issues.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto rounded border border-border divide-y divide-border">
+                      {validation.issues.slice(0, 50).map((iss: any, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2 px-2 py-1 text-xs">
+                          {iss.level === "error" ? <XCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" /> :
+                            iss.level === "warning" ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" /> :
+                            <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />}
+                          <span className="font-mono text-[10px] text-muted-foreground w-32 shrink-0">{iss.code}</span>
+                          <span className="flex-1">{iss.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+              )}
+
               <Section title="Tracks">
                 <table className="w-full text-xs">
                   <thead className="text-muted-foreground"><tr><th className="text-left py-1">id</th><th className="text-left">kind</th><th className="text-left">z-index</th><th className="text-left">label</th></tr></thead>
