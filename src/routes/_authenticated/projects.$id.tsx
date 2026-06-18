@@ -1310,7 +1310,14 @@ function ProjectView() {
                   {/* Issues list */}
                   {composerQ.data.validation.issues.length > 0 && (
                     <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
-                      <div className="text-xs font-semibold mb-1">Validation issues</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs font-semibold">Validation issues</div>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
+                          disabled={recomposeMut.isPending}
+                          onClick={() => recomposeMut.mutate()}>
+                          <RefreshCw className="h-3 w-3 mr-1" />Fix (Recompose)
+                        </Button>
+                      </div>
                       <ul className="space-y-1 text-[11px]">
                         {composerQ.data.validation.issues.map((iss: any, i: number) => (
                           <li key={i} className="flex items-start gap-2">
