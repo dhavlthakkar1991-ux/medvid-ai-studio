@@ -125,6 +125,8 @@ function ProjectView() {
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
   const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
+  const setDurationFn = useServerFn(setProjectDuration);
+  const getVideoUrlFn = useServerFn(getProjectVideoUrl);
   const qc = useQueryClient();
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
   const [resetOpen, setResetOpen] = useState(false);
