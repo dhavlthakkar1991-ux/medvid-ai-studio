@@ -10,7 +10,7 @@ import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRen
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
-import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues } from "@/lib/timeline.functions";
+import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues, addCtaToTimeline } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { getProviderJobForRender } from "@/lib/render-providers.functions";
 import { compileProjectGraphics } from "@/lib/graphics/graphics.functions";
@@ -64,6 +64,12 @@ function outcomeStage(t: { retry_count?: number; fallback_used?: boolean; fallba
 
 function recoverySource(t: { fallback_used?: boolean }): "AI" | "Recovery" {
   return t.fallback_used ? "Recovery" : "AI";
+}
+
+function isActionableTimelineIssue(issue: any): boolean {
+  const message = String(issue?.message ?? "").toLowerCase();
+  const isEmptyOptionalTrack = (issue?.code === "empty_track" || message.includes("track has no items")) && issue?.track_kind !== "cta";
+  return !isEmptyOptionalTrack;
 }
 
 function whyFallback(t: { attempts?: any[] }): string[] {
@@ -132,6 +138,7 @@ function ProjectView() {
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
   const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
+  const addCtaFn = useServerFn(addCtaToTimeline);
   const setDurationFn = useServerFn(setProjectDuration);
   const getVideoUrlFn = useServerFn(getProjectVideoUrl);
   const qc = useQueryClient();
@@ -139,6 +146,8 @@ function ProjectView() {
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
+  const [ctaFixOpen, setCtaFixOpen] = useState(false);
+  const [ctaFixText, setCtaFixText] = useState("Subscribe for more medical updates");
   const [busy, setBusy] = useState(false);
 
   const q = useQuery({
@@ -251,13 +260,31 @@ function ProjectView() {
     mutationFn: () => aiFixTimelineFn({ data: { projectId: id } }),
     onSuccess: (res: any) => {
       const fixes = res?.fixesApplied?.length ? res.fixesApplied.join(" · ") : "No repairs needed";
-      if (res?.ok) toast.success(`Timeline fixed — ${fixes}`);
+      const remainingIssues = res?.validation?.issues ?? [];
+      const needsCta = remainingIssues.some((iss: any) => iss.code === "empty_track" && iss.track_kind === "cta");
+      if (needsCta) {
+        toast.info("CTA text is needed to finish this fix.");
+        setCtaFixOpen(true);
+      } else if (res?.ok) toast.success(`Timeline fixed — ${fixes}`);
       else toast.warning(`Partial fix — ${fixes}. ${res?.validation?.errorCount ?? 0} error(s) remain.`);
       qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
       qc.invalidateQueries({ queryKey: ["readiness", id] });
       qc.invalidateQueries({ queryKey: ["project-canonical", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "AI fix failed"),
+  });
+  const addCtaMut = useMutation({
+    mutationFn: () => addCtaFn({ data: { projectId: id, text: ctaFixText.trim() } }),
+    onSuccess: () => {
+      toast.success("CTA added and timeline rebuilt");
+      setCtaFixOpen(false);
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["preview-timeline", id] });
+      qc.invalidateQueries({ queryKey: ["preview-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "CTA fix failed"),
   });
   const fixBlockerMut = useMutation({
     mutationFn: async (fix: any) => {
@@ -1471,18 +1498,25 @@ function ProjectView() {
                 <p className="text-sm text-muted-foreground">No timeline items yet. Run Editorial Decisions, then click Recompose.</p>
               ) : (
                 <div className="space-y-3">
+                  {(() => {
+                    const actionableIssues = composerQ.data.validation.issues.filter(isActionableTimelineIssue);
+                    const actionableErrors = actionableIssues.filter((iss: any) => iss.level === "error");
+                    const actionableWarnings = actionableIssues.filter((iss: any) => iss.level === "warning");
+                    return <>
                   {/* Validation summary */}
                   <div className="flex items-center gap-2 text-xs">
-                    {composerQ.data.validation.valid ? (
+                    {actionableErrors.length === 0 ? (
                       <Badge className="bg-emerald-600 hover:bg-emerald-600">✓ Valid</Badge>
                     ) : (
-                      <Badge variant="destructive">{composerQ.data.validation.errorCount} error{composerQ.data.validation.errorCount === 1 ? "" : "s"}</Badge>
+                      <Badge variant="destructive">{actionableErrors.length} error{actionableErrors.length === 1 ? "" : "s"}</Badge>
                     )}
-                    {composerQ.data.validation.warningCount > 0 && (
-                      <Badge variant="secondary">{composerQ.data.validation.warningCount} warning{composerQ.data.validation.warningCount === 1 ? "" : "s"}</Badge>
+                    {actionableWarnings.length > 0 && (
+                      <Badge variant="secondary">{actionableWarnings.length} warning{actionableWarnings.length === 1 ? "" : "s"}</Badge>
                     )}
                     <span className="text-muted-foreground">Duration: {composerQ.data.duration.toFixed(1)}s</span>
                   </div>
+                    </>;
+                  })()}
 
                   {/* Timeline grid */}
                   {(() => {
@@ -1548,7 +1582,7 @@ function ProjectView() {
                   })()}
 
                   {/* Issues list */}
-                  {composerQ.data.validation.issues.length > 0 && (
+                  {composerQ.data.validation.issues.filter(isActionableTimelineIssue).length > 0 && (
                     <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
                       <div className="flex items-center justify-between mb-1 gap-2">
                         <div className="text-xs font-semibold">Validation issues</div>
@@ -1566,7 +1600,7 @@ function ProjectView() {
                         </div>
                       </div>
                       <ul className="space-y-1 text-[11px]">
-                        {composerQ.data.validation.issues.map((iss: any, i: number) => (
+                        {composerQ.data.validation.issues.filter(isActionableTimelineIssue).map((iss: any, i: number) => (
                           <li key={i} className="flex items-start gap-2">
                             <Badge variant={iss.level === "error" ? "destructive" : "secondary"} className="text-[9px] uppercase">{iss.level}</Badge>
                             <span>{iss.message}</span>
@@ -1857,6 +1891,34 @@ function ProjectView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={ctaFixOpen} onOpenChange={setCtaFixOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add CTA text</DialogTitle>
+            <DialogDescription>
+              This warning needs your call-to-action copy. It will be added to the end of the timeline and the manifest will be rebuilt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Input
+              value={ctaFixText}
+              onChange={(e) => setCtaFixText(e.target.value)}
+              placeholder="e.g. Book a consultation today"
+              maxLength={300}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCtaFixOpen(false)} disabled={addCtaMut.isPending}>Cancel</Button>
+            <Button
+              disabled={addCtaMut.isPending || ctaFixText.trim().length === 0}
+              onClick={() => addCtaMut.mutate()}
+            >
+              {addCtaMut.isPending ? "Adding…" : "Add CTA & Fix"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
         <DialogContent>

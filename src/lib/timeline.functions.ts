@@ -9,6 +9,15 @@ const AddCtaInput = z.object({
   durationSeconds: z.number().min(1).max(30).optional(),
 });
 
+function actionableValidation(validation: any) {
+  const issues = (validation?.issues ?? []).filter((issue: any) => {
+    const message = String(issue?.message ?? "").toLowerCase();
+    return !((issue?.code === "empty_track" || message.includes("track has no items")) && issue?.track_kind !== "cta");
+  });
+  const errors = issues.filter((issue: any) => issue.level === "error");
+  return { ...validation, valid: errors.length === 0, issues, errorCount: errors.length, warningCount: issues.length - errors.length };
+}
+
 export const getProjectTimeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => Input.parse(i))
@@ -32,7 +41,7 @@ export const getProjectTimeline = createServerFn({ method: "POST" })
       tracks: tracks ?? [],
       items: items ?? [],
       duration: Number((project as any)?.duration_seconds) || 0,
-      validation,
+      validation: actionableValidation(validation),
     };
   });
 
@@ -46,7 +55,7 @@ export const recomposeTimeline = createServerFn({ method: "POST" })
     const { ensureApprovedAssetsForEditActions } = await import("./assets/asset-linker.server");
     const linked = await ensureApprovedAssetsForEditActions(sb, data.projectId, context.userId, { createMissing: true });
     const composeResult = await composeTimelineForProject(sb, data.projectId);
-    const validation = await validateTimelineForProject(sb, data.projectId);
+    const validation = actionableValidation(await validateTimelineForProject(sb, data.projectId));
     await buildRenderManifestForProject(sb, data.projectId);
     return { ...composeResult, linked, validation };
   });
@@ -140,7 +149,7 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
 
     // 2) Recompose + validate
     await composeTimelineForProject(sb, pid);
-    let validation = await validateTimelineForProject(sb, pid);
+    let validation = actionableValidation(await validateTimelineForProject(sb, pid));
 
     // 3) If errors remain or no actions exist, ask the LLM to regenerate editorial
     const needsRegen = validation.errorCount > 0 || kept.length === 0;
@@ -150,7 +159,7 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
         await runTaskForProject(sb, context.userId, pid, "editorial_decisions");
         fixesApplied.push("Regenerated editorial decisions via AI");
         await composeTimelineForProject(sb, pid);
-        validation = await validateTimelineForProject(sb, pid);
+        validation = actionableValidation(await validateTimelineForProject(sb, pid));
       } catch (e: any) {
         fixesApplied.push(`AI regeneration failed: ${e?.message ?? "unknown"}`);
       }
@@ -177,45 +186,41 @@ export const addCtaToTimeline = createServerFn({ method: "POST" })
     const pid = data.projectId;
     const dur = data.durationSeconds ?? 4;
 
-    const [{ data: project }, { data: tracks }] = await Promise.all([
+    const [{ data: project }, { data: existingCtas }] = await Promise.all([
       sb.from("projects").select("duration_seconds").eq("id", pid).maybeSingle(),
-      sb.from("timeline_tracks").select("*").eq("project_id", pid),
+      sb
+        .from("edit_actions")
+        .select("id")
+        .eq("project_id", pid)
+        .in("action_type", ["show_cta", "show_thumbnail_frame", "show_logo"])
+        .limit(1),
     ]);
     const total = Number((project as any)?.duration_seconds) || 0;
     if (total <= 0) throw new Error("Project duration unknown — recompose timeline first.");
 
-    let ctaTrack = (tracks ?? []).find((t: any) => t.kind === "cta");
-    if (!ctaTrack) {
-      const maxIdx = Math.max(0, ...((tracks ?? []) as any[]).map((t: any) => Number(t.track_index ?? 0)));
-      const { data: inserted, error: trkErr } = await sb
-        .from("timeline_tracks")
-        .insert({ project_id: pid, kind: "cta", name: "CTA", track_index: maxIdx + 1 })
-        .select("*")
-        .single();
-      if (trkErr) throw new Error(trkErr.message);
-      ctaTrack = inserted;
-    }
-
     const end = total;
     const start = Math.max(0, end - dur);
-
-    const { error: itemErr } = await sb.from("timeline_items").insert({
+    const ctaAction = {
       project_id: pid,
-      track_id: ctaTrack.id,
-      asset_type: "cta",
-      title: data.text.slice(0, 80),
+      action_type: "show_cta",
       start_time: start,
       end_time: end,
       duration: end - start,
-      layout: "overlay",
-      z_index: 50,
-      transition_in: "fade",
-      transition_out: "fade",
-      source_task: "user_fix",
-      status: "approved",
-      metadata: { cta_text: data.text, added_via: "validation_fix" },
-    });
-    if (itemErr) throw new Error(itemErr.message);
+      layer: 6,
+      priority: 10,
+      asset_query: data.text.slice(0, 300),
+      source: "user_fix",
+      parameters: { cta_text: data.text, added_via: "validation_fix" },
+    };
+
+    const existingId = Array.isArray(existingCtas) ? existingCtas[0]?.id : null;
+    const { error: actionErr } = existingId
+      ? await sb.from("edit_actions").update(ctaAction).eq("id", existingId).eq("project_id", pid)
+      : await sb.from("edit_actions").insert(ctaAction);
+    if (actionErr) throw new Error(actionErr.message);
+
+    const { composeTimelineForProject, validateTimelineForProject } = await import("./timeline/timeline-composer.server");
+    await composeTimelineForProject(sb, pid);
 
     try {
       const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
@@ -224,7 +229,6 @@ export const addCtaToTimeline = createServerFn({ method: "POST" })
       console.warn("manifest rebuild after CTA add failed", e);
     }
 
-    const { validateTimelineForProject } = await import("./timeline/timeline-composer.server");
-    const validation = await validateTimelineForProject(sb, pid);
-    return { ok: true, validation };
+    const validation = actionableValidation(await validateTimelineForProject(sb, pid));
+    return { ok: validation.errorCount === 0, validation };
   });
