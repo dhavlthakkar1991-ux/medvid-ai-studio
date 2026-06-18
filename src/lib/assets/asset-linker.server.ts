@@ -50,7 +50,7 @@ export async function ensureApprovedAssetsForEditActions(
   const [{ data: editActions, error: eaErr }, { data: candidates, error: cErr }, { data: assets, error: aErr }] = await Promise.all([
     supabase
       .from("edit_actions")
-      .select("id, project_id, scene_id, action_type, asset_query, reason, start_time, end_time")
+      .select("id, project_id, scene_id, action_type, asset_query, start_time, end_time")
       .eq("project_id", projectId)
       .order("start_time", { ascending: true }),
     supabase
@@ -119,7 +119,7 @@ export async function ensureApprovedAssetsForEditActions(
           source: "timeline-ai-fix",
           status: "approved",
           title: actionType,
-          description: ea.reason ?? null,
+          description: null,
           search_query: ea.asset_query ?? actionType,
           metadata: { from_edit_action: ea.id, repair: "missing_timeline_asset" },
           reviewed_by: userId,
@@ -164,7 +164,7 @@ export async function ensureApprovedAssetsForEditActions(
           status: "approved",
           edit_action_id: ea.id,
           title: actionType,
-          description: String(ea.reason ?? "").slice(0, 240),
+          description: null,
           candidate_data: { source: "edit_action", action_type: actionType, repair: true },
           reviewed_by: userId,
           reviewed_at: now,
