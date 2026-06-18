@@ -41,10 +41,22 @@ function assetUrl(asset?: Asset | null): string | null {
 function AssetVisual({
   item,
   asset,
+  compiledGraphic,
   className = "",
-}: { item: Item; asset?: Asset | null; className?: string }) {
+}: { item: Item; asset?: Asset | null; compiledGraphic?: any | null; className?: string }) {
   const url = assetUrl(asset);
   const kind = String(item.asset_type ?? "");
+  // Compiled graphic takes precedence — manifest V6 makes every text/CTA
+  // item a real renderable image.
+  if (compiledGraphic?.preview_url) {
+    return (
+      <img
+        src={compiledGraphic.preview_url}
+        alt={item.title ?? kind}
+        className={`object-contain w-full h-full ${className}`}
+      />
+    );
+  }
   if (url) {
     return (
       <img
