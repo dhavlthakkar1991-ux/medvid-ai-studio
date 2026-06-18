@@ -8,6 +8,7 @@ import {
   setDefaultRenderProvider,
   updateRenderProviderConfiguration,
 } from "@/lib/render-providers.functions";
+import { runProviderDiagnostics } from "@/lib/render-debug.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, CheckCircle2, Circle } from "lucide-react";
+import { Settings as SettingsIcon, CheckCircle2, Circle, Activity } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/render-providers")({
   component: RenderProvidersPage,
