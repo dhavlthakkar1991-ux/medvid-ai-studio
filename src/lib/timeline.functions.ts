@@ -164,3 +164,67 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
       validation,
     };
   });
+
+/**
+ * User-driven fix for an empty CTA track: append a CTA timeline item at the
+ * end of the video with the provided text, then rebuild the manifest.
+ */
+export const addCtaToTimeline = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => AddCtaInput.parse(i))
+  .handler(async ({ context, data }) => {
+    const sb = context.supabase;
+    const pid = data.projectId;
+    const dur = data.durationSeconds ?? 4;
+
+    const [{ data: project }, { data: tracks }] = await Promise.all([
+      sb.from("projects").select("duration_seconds").eq("id", pid).maybeSingle(),
+      sb.from("timeline_tracks").select("*").eq("project_id", pid),
+    ]);
+    const total = Number((project as any)?.duration_seconds) || 0;
+    if (total <= 0) throw new Error("Project duration unknown — recompose timeline first.");
+
+    let ctaTrack = (tracks ?? []).find((t: any) => t.kind === "cta");
+    if (!ctaTrack) {
+      const maxIdx = Math.max(0, ...((tracks ?? []) as any[]).map((t: any) => Number(t.track_index ?? 0)));
+      const { data: inserted, error: trkErr } = await sb
+        .from("timeline_tracks")
+        .insert({ project_id: pid, kind: "cta", name: "CTA", track_index: maxIdx + 1 })
+        .select("*")
+        .single();
+      if (trkErr) throw new Error(trkErr.message);
+      ctaTrack = inserted;
+    }
+
+    const end = total;
+    const start = Math.max(0, end - dur);
+
+    const { error: itemErr } = await sb.from("timeline_items").insert({
+      project_id: pid,
+      track_id: ctaTrack.id,
+      asset_type: "cta",
+      title: data.text.slice(0, 80),
+      start_time: start,
+      end_time: end,
+      duration: end - start,
+      layout: "overlay",
+      z_index: 50,
+      transition_in: "fade",
+      transition_out: "fade",
+      source_task: "user_fix",
+      status: "approved",
+      metadata: { cta_text: data.text, added_via: "validation_fix" },
+    });
+    if (itemErr) throw new Error(itemErr.message);
+
+    try {
+      const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+      await buildRenderManifestForProject(sb, pid);
+    } catch (e) {
+      console.warn("manifest rebuild after CTA add failed", e);
+    }
+
+    const { validateTimelineForProject } = await import("./timeline/timeline-composer.server");
+    const validation = await validateTimelineForProject(sb, pid);
+    return { ok: true, validation };
+  });
