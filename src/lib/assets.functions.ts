@@ -20,6 +20,105 @@ function roleFor(t: string): string {
   return ROLE_FOR_TYPE[t] ?? "Other";
 }
 
+function firstString(...values: unknown[]): string | null {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function firstNumber(...values: unknown[]): number | null {
+  for (const v of values) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function candidateMediaFields(candidate: any) {
+  const data =
+    candidate?.candidate_data && typeof candidate.candidate_data === "object"
+      ? candidate.candidate_data
+      : {};
+  const media = data.media && typeof data.media === "object" ? data.media : {};
+  const asset = data.asset && typeof data.asset === "object" ? data.asset : {};
+  const original = data.original && typeof data.original === "object" ? data.original : {};
+
+  return {
+    url: firstString(
+      candidate?.url,
+      candidate?.source_url,
+      candidate?.media_url,
+      data.url,
+      data.source_url,
+      data.media_url,
+      data.video_url,
+      data.image_url,
+      media.url,
+      media.source_url,
+      media.media_url,
+      asset.url,
+      asset.source_url,
+      original.url,
+      original.source_url,
+    ),
+    thumbnail_url: firstString(
+      candidate?.thumbnail_url,
+      data.thumbnail_url,
+      data.thumb_url,
+      media.thumbnail_url,
+      asset.thumbnail_url,
+      original.thumbnail_url,
+    ),
+    preview_url: firstString(
+      candidate?.preview_url,
+      data.preview_url,
+      media.preview_url,
+      asset.preview_url,
+      original.preview_url,
+    ),
+    duration_seconds: firstNumber(
+      candidate?.duration_seconds,
+      data.duration_seconds,
+      media.duration_seconds,
+      asset.duration_seconds,
+      original.duration_seconds,
+    ),
+    width: firstNumber(candidate?.width, data.width, media.width, asset.width, original.width),
+    height: firstNumber(
+      candidate?.height,
+      data.height,
+      media.height,
+      asset.height,
+      original.height,
+    ),
+    metadata: {
+      candidate_data: data,
+      render_media: {
+        has_url: Boolean(
+          firstString(
+            candidate?.url,
+            candidate?.source_url,
+            candidate?.media_url,
+            data.url,
+            data.source_url,
+            data.media_url,
+            data.video_url,
+            data.image_url,
+            media.url,
+            media.source_url,
+            media.media_url,
+            asset.url,
+            asset.source_url,
+            original.url,
+            original.source_url,
+          ),
+        ),
+      },
+    },
+  };
+}
+
 const ProjectIdInput = z.object({ projectId: z.string() });
 
 export const listAssetReview = createServerFn({ method: "POST" })
@@ -27,12 +126,21 @@ export const listAssetReview = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => ProjectIdInput.parse(i))
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
-    const [{ data: candidates }, { data: assets }, { data: projectAssets }, { data: scenes }] = await Promise.all([
-      sb.from("asset_candidates").select("*").eq("project_id", data.projectId).order("priority", { ascending: true }),
-      sb.from("assets").select("*").eq("project_id", data.projectId).order("created_at", { ascending: false }),
-      sb.from("project_assets").select("*").eq("project_id", data.projectId),
-      sb.from("scenes").select("id, scene_number, title").eq("project_id", data.projectId),
-    ]);
+    const [{ data: candidates }, { data: assets }, { data: projectAssets }, { data: scenes }] =
+      await Promise.all([
+        sb
+          .from("asset_candidates")
+          .select("*")
+          .eq("project_id", data.projectId)
+          .order("priority", { ascending: true }),
+        sb
+          .from("assets")
+          .select("*")
+          .eq("project_id", data.projectId)
+          .order("created_at", { ascending: false }),
+        sb.from("project_assets").select("*").eq("project_id", data.projectId),
+        sb.from("scenes").select("id, scene_number, title").eq("project_id", data.projectId),
+      ]);
 
     const grouped: Record<string, any[]> = {};
     for (const c of (candidates ?? []) as any[]) {
@@ -63,13 +171,21 @@ export const reviewAssetCandidate = createServerFn({ method: "POST" })
     const sb = context.supabase;
     const userId = context.userId;
     const { data: cand, error } = await sb
-      .from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
+      .from("asset_candidates")
+      .select("*")
+      .eq("id", data.candidateId)
+      .maybeSingle();
     if (error || !cand) {
       console.warn("reviewAssetCandidate: candidate not found", {
         candidateId: data.candidateId,
         error: error?.message,
       });
-      return { ok: false as const, status: "not_found", assetId: null, error: "Candidate not found" };
+      return {
+        ok: false as const,
+        status: "not_found",
+        assetId: null,
+        error: "Candidate not found",
+      };
     }
 
     const now = new Date().toISOString();
@@ -81,48 +197,68 @@ export const reviewAssetCandidate = createServerFn({ method: "POST" })
     } else if (data.action === "lock") {
       nextStatus = "locked";
     } else if (data.action === "accept" || data.action === "replace") {
-      const query = data.action === "replace" && data.replacementQuery
-        ? data.replacementQuery
-        : cand.search_query;
+      const query =
+        data.action === "replace" && data.replacementQuery
+          ? data.replacementQuery
+          : cand.search_query;
+      const media = candidateMediaFields(cand);
       // Create or reuse an asset for this candidate
-      const { data: assetRow, error: aErr } = await sb.from("assets").insert({
-        project_id: cand.project_id,
-        scene_id: cand.scene_id,
-        asset_type: cand.asset_type,
-        source_type: "manual",
-        source: "review",
-        status: "approved",
-        title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
-        description: cand.description ?? null,
-        search_query: query,
-        metadata: { from_candidate: cand.id, review_action: data.action },
-        reviewed_by: userId,
-        reviewed_at: now,
-        review_note: data.note ?? null,
-      }).select("id").single();
+      const { data: assetRow, error: aErr } = await sb
+        .from("assets")
+        .insert({
+          project_id: cand.project_id,
+          scene_id: cand.scene_id,
+          asset_type: cand.asset_type,
+          source_type: "manual",
+          source: "review",
+          status: "approved",
+          title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
+          description: cand.description ?? null,
+          url: media.url,
+          thumbnail_url: media.thumbnail_url,
+          preview_url: media.preview_url,
+          duration_seconds: media.duration_seconds,
+          width: media.width,
+          height: media.height,
+          search_query: query,
+          metadata: { from_candidate: cand.id, review_action: data.action, ...media.metadata },
+          reviewed_by: userId,
+          reviewed_at: now,
+          review_note: data.note ?? null,
+        })
+        .select("id")
+        .single();
       if (aErr || !assetRow) throw new Error(aErr?.message ?? "Failed to create asset");
       linkedAssetId = assetRow.id;
       nextStatus = data.action === "replace" ? "replaced" : "approved";
 
       // Register in project_assets registry under the role
       const role = ROLE_FOR_TYPE[cand.asset_type] ?? "Other";
-      await sb.from("project_assets").upsert({
-        project_id: cand.project_id,
-        asset_id: assetRow.id,
-        role,
-        status: "approved",
-        notes: data.note ?? null,
-      }, { onConflict: "project_id,asset_id,role" });
+      await sb.from("project_assets").upsert(
+        {
+          project_id: cand.project_id,
+          asset_id: assetRow.id,
+          role,
+          status: "approved",
+          notes: data.note ?? null,
+        },
+        { onConflict: "project_id,asset_id,role" },
+      );
     }
 
-    await sb.from("asset_candidates").update({
-      status: nextStatus,
-      reviewed_by: userId,
-      reviewed_at: now,
-      review_note: data.note ?? null,
-      linked_asset_id: linkedAssetId,
-      ...(data.action === "replace" && data.replacementQuery ? { search_query: data.replacementQuery } : {}),
-    }).eq("id", cand.id);
+    await sb
+      .from("asset_candidates")
+      .update({
+        status: nextStatus,
+        reviewed_by: userId,
+        reviewed_at: now,
+        review_note: data.note ?? null,
+        linked_asset_id: linkedAssetId,
+        ...(data.action === "replace" && data.replacementQuery
+          ? { search_query: data.replacementQuery }
+          : {}),
+      })
+      .eq("id", cand.id);
 
     // After any approval/lock change, rebuild the manifest so approved assets
     // are referenced by render_manifest rows.
@@ -154,42 +290,61 @@ export const acceptAllPendingCandidates = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     let accepted = 0;
     for (const cand of (cands ?? []) as any[]) {
-      const { data: assetRow, error: aErr } = await sb.from("assets").insert({
-        project_id: cand.project_id,
-        scene_id: cand.scene_id,
-        asset_type: cand.asset_type,
-        source_type: "manual",
-        source: "bulk-accept",
-        status: "approved",
-        title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
-        description: cand.description ?? null,
-        search_query: cand.search_query,
-        metadata: { from_candidate: cand.id, review_action: "accept_all" },
-        reviewed_by: userId,
-        reviewed_at: now,
-      }).select("id").single();
+      const media = candidateMediaFields(cand);
+      const { data: assetRow, error: aErr } = await sb
+        .from("assets")
+        .insert({
+          project_id: cand.project_id,
+          scene_id: cand.scene_id,
+          asset_type: cand.asset_type,
+          source_type: "manual",
+          source: "bulk-accept",
+          status: "approved",
+          title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
+          description: cand.description ?? null,
+          url: media.url,
+          thumbnail_url: media.thumbnail_url,
+          preview_url: media.preview_url,
+          duration_seconds: media.duration_seconds,
+          width: media.width,
+          height: media.height,
+          search_query: cand.search_query,
+          metadata: { from_candidate: cand.id, review_action: "accept_all", ...media.metadata },
+          reviewed_by: userId,
+          reviewed_at: now,
+        })
+        .select("id")
+        .single();
       if (aErr || !assetRow) continue;
       const role = ROLE_FOR_TYPE[cand.asset_type] ?? "Other";
-      await sb.from("project_assets").upsert({
-        project_id: cand.project_id,
-        asset_id: assetRow.id,
-        role,
-        status: "approved",
-        notes: null,
-      }, { onConflict: "project_id,asset_id,role" });
-      await sb.from("asset_candidates").update({
-        status: "approved",
-        reviewed_by: userId,
-        reviewed_at: now,
-        linked_asset_id: assetRow.id,
-      }).eq("id", cand.id);
+      await sb.from("project_assets").upsert(
+        {
+          project_id: cand.project_id,
+          asset_id: assetRow.id,
+          role,
+          status: "approved",
+          notes: null,
+        },
+        { onConflict: "project_id,asset_id,role" },
+      );
+      await sb
+        .from("asset_candidates")
+        .update({
+          status: "approved",
+          reviewed_by: userId,
+          reviewed_at: now,
+          linked_asset_id: assetRow.id,
+        })
+        .eq("id", cand.id);
       accepted += 1;
     }
     if (accepted > 0) {
       try {
         const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
         const { ensureApprovedAssetsForEditActions } = await import("./assets/asset-linker.server");
-        await ensureApprovedAssetsForEditActions(sb, data.projectId, userId, { createMissing: true });
+        await ensureApprovedAssetsForEditActions(sb, data.projectId, userId, {
+          createMissing: true,
+        });
         await buildRenderManifestForProject(sb, data.projectId);
       } catch (e) {
         console.warn("manifest rebuild after bulk accept failed", e);
@@ -206,17 +361,37 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const sb = context.supabase;
     const pid = data.projectId;
     const [tx, sp, sb_, ed, ld, ac, rm, ti] = await Promise.all([
-      sb.from("transcripts").select("project_id", { count: "exact", head: true }).eq("project_id", pid),
-      sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "scene_plan"),
-      sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "visual_storyboard"),
-      sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "editorial_decisions"),
-      sb.from("layout_decisions").select("id", { count: "exact", head: true }).eq("project_id", pid),
+      sb
+        .from("transcripts")
+        .select("project_id", { count: "exact", head: true })
+        .eq("project_id", pid),
+      sb
+        .from("analysis_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid)
+        .eq("task", "scene_plan"),
+      sb
+        .from("analysis_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid)
+        .eq("task", "visual_storyboard"),
+      sb
+        .from("analysis_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid)
+        .eq("task", "editorial_decisions"),
+      sb
+        .from("layout_decisions")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", pid),
       sb.from("asset_candidates").select("id, status", { count: "exact" }).eq("project_id", pid),
       sb.from("render_manifest").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("timeline_items").select("id", { count: "exact", head: true }).eq("project_id", pid),
     ]);
     const totalCand = ac.data?.length ?? 0;
-    const approvedCand = (ac.data ?? []).filter((r: any) => r.status === "approved" || r.status === "locked" || r.status === "replaced").length;
+    const approvedCand = (ac.data ?? []).filter(
+      (r: any) => r.status === "approved" || r.status === "locked" || r.status === "replaced",
+    ).length;
     const assetsScore = totalCand === 0 ? 0 : Math.min(1, approvedCand / Math.max(1, totalCand));
 
     // Layout gate: explicit layout_decisions rows OR layouts baked into the
@@ -235,8 +410,12 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
         const { validateTimelineForProject } = await import("./timeline/timeline-composer.server");
         const v = await validateTimelineForProject(sb, pid);
         timelineScore = v.valid ? 1 : 0.5;
-        timelineBlockers = v.issues.filter((i: any) => i.level === "error").map((i: any) => i.message);
-      } catch { timelineScore = 0.5; }
+        timelineBlockers = v.issues
+          .filter((i: any) => i.level === "error")
+          .map((i: any) => i.message);
+      } catch {
+        timelineScore = 0.5;
+      }
     }
 
     const gates = [
@@ -247,7 +426,12 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       { key: "layout", label: "Layout", weight: 0.08, score: layoutScore },
       { key: "assets", label: "Assets approved", weight: 0.18, score: assetsScore },
       { key: "timeline", label: "Timeline valid", weight: 0.18, score: timelineScore },
-      { key: "manifest", label: "Render Manifest", weight: 0.12, score: (rm.count ?? 0) > 0 ? 1 : 0 },
+      {
+        key: "manifest",
+        label: "Render Manifest",
+        weight: 0.12,
+        score: (rm.count ?? 0) > 0 ? 1 : 0,
+      },
     ];
     const pct = Math.round(gates.reduce((s, g) => s + g.weight * g.score, 0) * 100);
     type BlockerAction =
@@ -257,14 +441,48 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       | { kind: "approve_assets"; label: string }
       | { kind: "navigate"; tab: string; label: string };
     const blockerActions: { id: string; message: string; fix?: BlockerAction }[] = [];
-    if ((tx.count ?? 0) === 0) blockerActions.push({ id: "transcript", message: "Transcript missing", fix: { kind: "navigate", tab: "transcript", label: "Open transcript" } });
-    if ((sp.count ?? 0) === 0 && (tx.count ?? 0) > 0) blockerActions.push({ id: "scene_plan", message: "Scene plan missing", fix: { kind: "task", task: "scene_plan", label: "Generate scene plan" } });
-    if ((ed.count ?? 0) === 0) blockerActions.push({ id: "editorial", message: "Editorial decisions missing", fix: { kind: "task", task: "editorial_decisions", label: "Generate editorial" } });
-    if (totalCand > 0 && approvedCand === 0) blockerActions.push({ id: "assets", message: "No assets approved yet", fix: { kind: "approve_assets", label: "Accept all candidates" } });
-    if ((ti.count ?? 0) === 0) blockerActions.push({ id: "timeline", message: "Timeline not composed", fix: { kind: "timeline", label: "Compose timeline" } });
-    if ((rm.count ?? 0) === 0) blockerActions.push({ id: "manifest", message: "Render manifest not generated", fix: { kind: "manifest", label: "Build manifest" } });
+    if ((tx.count ?? 0) === 0)
+      blockerActions.push({
+        id: "transcript",
+        message: "Transcript missing",
+        fix: { kind: "navigate", tab: "transcript", label: "Open transcript" },
+      });
+    if ((sp.count ?? 0) === 0 && (tx.count ?? 0) > 0)
+      blockerActions.push({
+        id: "scene_plan",
+        message: "Scene plan missing",
+        fix: { kind: "task", task: "scene_plan", label: "Generate scene plan" },
+      });
+    if ((ed.count ?? 0) === 0)
+      blockerActions.push({
+        id: "editorial",
+        message: "Editorial decisions missing",
+        fix: { kind: "task", task: "editorial_decisions", label: "Generate editorial" },
+      });
+    if (totalCand > 0 && approvedCand === 0)
+      blockerActions.push({
+        id: "assets",
+        message: "No assets approved yet",
+        fix: { kind: "approve_assets", label: "Accept all candidates" },
+      });
+    if ((ti.count ?? 0) === 0)
+      blockerActions.push({
+        id: "timeline",
+        message: "Timeline not composed",
+        fix: { kind: "timeline", label: "Compose timeline" },
+      });
+    if ((rm.count ?? 0) === 0)
+      blockerActions.push({
+        id: "manifest",
+        message: "Render manifest not generated",
+        fix: { kind: "manifest", label: "Build manifest" },
+      });
     for (const tb of timelineBlockers.slice(0, 3)) {
-      blockerActions.push({ id: `tl_${tb.slice(0, 20)}`, message: tb, fix: { kind: "timeline", label: "Recompose timeline" } });
+      blockerActions.push({
+        id: `tl_${tb.slice(0, 20)}`,
+        message: tb,
+        fix: { kind: "timeline", label: "Recompose timeline" },
+      });
     }
     const blockers = blockerActions.map((b) => b.message);
     return {
@@ -294,7 +512,8 @@ export const getAssetDashboardSummary = createServerFn({ method: "POST" })
       sb.from("render_manifest").select("project_id").in("project_id", ids),
     ]);
     const candByProject: Record<string, { total: number; approved: number }> = {};
-    let pending = 0, approved = 0;
+    let pending = 0,
+      approved = 0;
     for (const c of (cands.data ?? []) as any[]) {
       const e = (candByProject[c.project_id] ??= { total: 0, approved: 0 });
       e.total += 1;
