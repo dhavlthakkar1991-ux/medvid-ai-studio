@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getProjectTimeline } from "@/lib/timeline.functions";
@@ -121,8 +121,8 @@ function Stage({
   const layout = primary?.layout ?? (overlays.length === 0 ? "full_screen" : "doctor_with_infographic");
 
   // Decide presenter + main asset placement
-  let mainEl: JSX.Element | null = null;
-  let presenterEl: JSX.Element | null = null;
+  let mainEl: React.ReactNode = null;
+  let presenterEl: React.ReactNode = null;
   if (presenter && !primary) {
     mainEl = <PresenterPlaceholder size="full" />;
   } else if (primary && !presenter) {
