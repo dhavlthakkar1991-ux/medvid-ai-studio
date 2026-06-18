@@ -1140,6 +1140,7 @@ function ProjectView() {
                   projectId={id}
                   task="editorial_decisions"
                   headerLabel="render pipeline"
+                  mode="render_fix"
                   invalidateKeys={[["project-canonical", id], ["timeline-composer", id], ["render-readiness", id]]}
                 />
               </div>
