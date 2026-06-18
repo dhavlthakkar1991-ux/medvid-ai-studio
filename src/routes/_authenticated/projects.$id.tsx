@@ -1290,6 +1290,10 @@ function ProjectView() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="preview">
+          <TimelinePreview projectId={id} />
+        </TabsContent>
+
         <TabsContent value="composer">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
