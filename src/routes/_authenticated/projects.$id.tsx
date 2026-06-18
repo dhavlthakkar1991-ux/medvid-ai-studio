@@ -10,7 +10,7 @@ import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRen
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
-import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
+import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,6 +123,7 @@ function ProjectView() {
   const readinessFn = useServerFn(getProjectReadiness);
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
+  const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
@@ -236,6 +237,18 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["project-canonical", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
+  });
+  const aiFixTimelineMut = useMutation({
+    mutationFn: () => aiFixTimelineFn({ data: { projectId: id } }),
+    onSuccess: (res: any) => {
+      const fixes = res?.fixesApplied?.length ? res.fixesApplied.join(" · ") : "No repairs needed";
+      if (res?.ok) toast.success(`Timeline fixed — ${fixes}`);
+      else toast.warning(`Partial fix — ${fixes}. ${res?.validation?.errorCount ?? 0} error(s) remain.`);
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "AI fix failed"),
   });
   const fixBlockerMut = useMutation({
     mutationFn: async (fix: any) => {
