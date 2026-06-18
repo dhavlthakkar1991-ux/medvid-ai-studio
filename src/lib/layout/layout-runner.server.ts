@@ -97,7 +97,7 @@ export function defaultLayoutForAction(actionType: string): LayoutDecision {
   return map[actionType] ?? { layout_name: "doctor_with_callout", doctor_visibility: "visible", doctor_size: "100%", attention_focus: "doctor", rationale: "Default — doctor remains the anchor." };
 }
 
-const SYSTEM = `You are OncoVideo Layout Director — a senior medical video editor.
+const SYSTEM = `You are MedVideo Layout Director — a senior medical video editor.
 You decide HOW each edit action is composed on screen given a doctor talking-head as Track 0.
 Output strictly structured JSON, no prose.
 

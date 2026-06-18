@@ -63,7 +63,7 @@
 
 :root {
   --radius: 0.625rem;
-  /* OncoVideo dark medical theme — applied globally (no light mode). */
+  /* MedVideo dark medical theme — applied globally (no light mode). */
   --background: oklch(0.16 0.03 250);
   --foreground: oklch(0.97 0.01 250);
   --card: oklch(0.20 0.035 250);

@@ -29,6 +29,8 @@ const ContextSchema = z.object({
   retention_priority: z.string().nullable(),
   presenter_name: z.string().nullable().optional(),
   grounding_mode: z.string().nullable().optional(),
+  template_id: z.string().nullable().optional(),
+  specialty_id: z.string().nullable().optional(),
 });
 
 const CreateProjectInput = z.object({

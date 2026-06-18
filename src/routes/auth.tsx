@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Stethoscope } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "Sign in — OncoVideo AI Studio" }] }),
+  head: () => ({ meta: [{ title: "Sign in — MedVideo AI Studio" }] }),
   component: AuthPage,
 });
 
@@ -55,7 +55,7 @@ function AuthPage() {
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-6">
           <Stethoscope className="h-6 w-6 text-primary" />
-          <span className="text-lg font-semibold">OncoVideo<span className="text-primary"> AI</span></span>
+          <span className="text-lg font-semibold">MedVideo<span className="text-primary"> AI</span></span>
         </Link>
         <Card>
           <CardHeader>

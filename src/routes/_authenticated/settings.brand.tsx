@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 export const Route = createFileRoute("/_authenticated/settings/brand")({
   component: BrandPage,
-  head: () => ({ meta: [{ title: "Brand profile — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "Brand profile — MedVideo AI" }] }),
 });
 
 function BrandPage() {

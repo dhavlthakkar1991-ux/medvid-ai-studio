@@ -12,7 +12,7 @@ import { Plus, Film, CheckCircle2, ClipboardList, Image as ImageIcon, Activity, 
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Dashboard — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — MedVideo AI" }] }),
 });
 
 function Dashboard() {

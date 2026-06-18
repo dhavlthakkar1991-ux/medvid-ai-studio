@@ -9,7 +9,7 @@ import { Activity, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/system-health")({
   component: SystemHealthPage,
-  head: () => ({ meta: [{ title: "System health — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "System health — MedVideo AI" }] }),
 });
 
 function SystemHealthPage() {

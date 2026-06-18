@@ -14,7 +14,7 @@ import { Copy, Trash2, Save } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/templates")({
   component: TemplatesPage,
-  head: () => ({ meta: [{ title: "Specialty templates — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "Specialty templates — MedVideo AI" }] }),
 });
 
 function TemplatesPage() {
@@ -62,8 +62,12 @@ function TemplatesPage() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-10 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Specialty templates</h1>
-        <p className="text-sm text-muted-foreground mt-1">Built-in oncology templates plus your own customizations.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Legacy templates</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          The Medical Template + Medical Specialty selectors on the new-project
+          page have replaced these. Custom entries here remain available for
+          backwards compatibility.
+        </p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3">
