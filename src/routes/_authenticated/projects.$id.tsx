@@ -1058,11 +1058,22 @@ function ProjectView() {
                   <div className="text-xs text-muted-foreground">
                     {readinessQ.data.approvedAssets} of {readinessQ.data.totalCandidates} asset candidates approved.
                   </div>
-                  {readinessQ.data.blockers && readinessQ.data.blockers.length > 0 ? (
+                  {readinessQ.data.blockerActions && readinessQ.data.blockerActions.length > 0 ? (
                     <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
-                      <div className="font-semibold text-destructive mb-1">BLOCKED · {readinessQ.data.blockers.length} reason{readinessQ.data.blockers.length === 1 ? "" : "s"}</div>
-                      <ul className="list-disc list-inside space-y-0.5">
-                        {readinessQ.data.blockers.map((b: string, i: number) => <li key={i}>{b}</li>)}
+                      <div className="font-semibold text-destructive mb-2">BLOCKED · {readinessQ.data.blockerActions.length} reason{readinessQ.data.blockerActions.length === 1 ? "" : "s"}</div>
+                      <ul className="space-y-1.5">
+                        {readinessQ.data.blockerActions.map((b: any, i: number) => (
+                          <li key={i} className="flex items-center justify-between gap-2">
+                            <span>• {b.message}</span>
+                            {b.fix && b.fix.kind !== "navigate" ? (
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
+                                disabled={fixBlockerMut.isPending}
+                                onClick={() => fixBlockerMut.mutate(b.fix)}>
+                                {b.fix.label}
+                              </Button>
+                            ) : null}
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   ) : readinessQ.data.readyForRender ? (
