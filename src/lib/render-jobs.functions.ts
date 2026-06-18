@@ -119,7 +119,7 @@ async function persistAdapterTick(sb: Sb, job: any) {
         output_type: isPreview ? "preview" : "landscape",
         file_url: dl.url ?? report.outputUrl ?? null,
         thumbnail_url: report.thumbnailUrl ?? null,
-        duration_seconds: dl.durationSeconds ?? Number(project?.duration_seconds) || 0,
+        duration_seconds: dl.durationSeconds ?? (Number(project?.duration_seconds) || 0),
         resolution: dl.resolution ?? report.resolution ?? (isPreview ? "1280x720" : "1920x1080"),
         file_size: isPreview ? 4_000_000 : 80_000_000,
       });
