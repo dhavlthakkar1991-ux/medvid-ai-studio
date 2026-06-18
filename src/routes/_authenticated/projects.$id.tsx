@@ -114,6 +114,7 @@ function ProjectView() {
   const rebuildFn = useServerFn(rebuildRenderManifest);
   const validateFn = useServerFn(validateTimeline);
   const exportManifestFn = useServerFn(exportRenderManifestJson);
+  const compileGraphicsFn = useServerFn(compileProjectGraphics);
   const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
   const regenLayoutFn = useServerFn(regenerateLayoutDecisions);
   const healthFn = useServerFn(getPipelineHealth);
