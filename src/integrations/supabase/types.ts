@@ -390,6 +390,76 @@ export type Database = {
           },
         ]
       }
+      compiled_graphics: {
+        Row: {
+          created_at: string
+          edit_action_id: string | null
+          graphic_type: string
+          id: string
+          preview_url: string | null
+          project_id: string
+          spec: Json
+          status: string
+          svg: string
+          template_id: string | null
+          template_name: string | null
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          edit_action_id?: string | null
+          graphic_type: string
+          id?: string
+          preview_url?: string | null
+          project_id: string
+          spec?: Json
+          status?: string
+          svg?: string
+          template_id?: string | null
+          template_name?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          edit_action_id?: string | null
+          graphic_type?: string
+          id?: string
+          preview_url?: string | null
+          project_id?: string
+          spec?: Json
+          status?: string
+          svg?: string
+          template_id?: string | null
+          template_name?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compiled_graphics_edit_action_id_fkey"
+            columns: ["edit_action_id"]
+            isOneToOne: true
+            referencedRelation: "edit_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compiled_graphics_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compiled_graphics_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "graphic_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       edit_actions: {
         Row: {
           action_type: string
@@ -495,6 +565,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      graphic_templates: {
+        Row: {
+          created_at: string
+          graphic_type: string
+          id: string
+          is_system: boolean
+          owner_user_id: string | null
+          spec: Json
+          svg_template: string
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          graphic_type: string
+          id?: string
+          is_system?: boolean
+          owner_user_id?: string | null
+          spec?: Json
+          svg_template?: string
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          graphic_type?: string
+          id?: string
+          is_system?: boolean
+          owner_user_id?: string | null
+          spec?: Json
+          svg_template?: string
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       infographic_items: {
         Row: {
@@ -1048,6 +1154,7 @@ export type Database = {
           asset_url: string | null
           attention_focus: string | null
           caption_style: string
+          compiled_graphic_id: string | null
           created_at: string
           doctor_size: string | null
           doctor_visibility: string | null
@@ -1056,6 +1163,7 @@ export type Database = {
           layer: number | null
           layout_id: string | null
           layout_name: string | null
+          manifest_version: number
           priority: number | null
           project_id: string
           rationale: string | null
@@ -1078,6 +1186,7 @@ export type Database = {
           asset_url?: string | null
           attention_focus?: string | null
           caption_style?: string
+          compiled_graphic_id?: string | null
           created_at?: string
           doctor_size?: string | null
           doctor_visibility?: string | null
@@ -1086,6 +1195,7 @@ export type Database = {
           layer?: number | null
           layout_id?: string | null
           layout_name?: string | null
+          manifest_version?: number
           priority?: number | null
           project_id: string
           rationale?: string | null
@@ -1108,6 +1218,7 @@ export type Database = {
           asset_url?: string | null
           attention_focus?: string | null
           caption_style?: string
+          compiled_graphic_id?: string | null
           created_at?: string
           doctor_size?: string | null
           doctor_visibility?: string | null
@@ -1116,6 +1227,7 @@ export type Database = {
           layer?: number | null
           layout_id?: string | null
           layout_name?: string | null
+          manifest_version?: number
           priority?: number | null
           project_id?: string
           rationale?: string | null
@@ -1135,6 +1247,13 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_manifest_compiled_graphic_id_fkey"
+            columns: ["compiled_graphic_id"]
+            isOneToOne: false
+            referencedRelation: "compiled_graphics"
             referencedColumns: ["id"]
           },
           {
@@ -1738,6 +1857,7 @@ export type Database = {
         Row: {
           asset_id: string | null
           asset_type: string
+          compiled_graphic_id: string | null
           created_at: string
           duration: number
           edit_action_id: string | null
@@ -1760,6 +1880,7 @@ export type Database = {
         Insert: {
           asset_id?: string | null
           asset_type?: string
+          compiled_graphic_id?: string | null
           created_at?: string
           duration?: number
           edit_action_id?: string | null
@@ -1782,6 +1903,7 @@ export type Database = {
         Update: {
           asset_id?: string | null
           asset_type?: string
+          compiled_graphic_id?: string | null
           created_at?: string
           duration?: number
           edit_action_id?: string | null
@@ -1807,6 +1929,13 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_items_compiled_graphic_id_fkey"
+            columns: ["compiled_graphic_id"]
+            isOneToOne: false
+            referencedRelation: "compiled_graphics"
             referencedColumns: ["id"]
           },
           {

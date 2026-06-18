@@ -66,6 +66,12 @@ export async function buildRenderManifestForProject(
       else coveredEnd = Math.max(coveredEnd, e);
     }
     if (coveredEnd > coveredStart) covered += coveredEnd - coveredStart;
+    try {
+      const { compileGraphicsForProject } = await import("../graphics/graphic-compiler.server");
+      await compileGraphicsForProject(supabase, projectId);
+    } catch (e) {
+      console.warn("graphics compile after manifest failed", e);
+    }
     return { count: rows.length, editorialCoverage: duration > 0 ? covered / duration : 0, editorialActionCount: rows.length, source: "timeline" };
   }
 
@@ -313,5 +319,11 @@ export async function buildRenderManifestForProject(
     if (curE > curS) editorialCovered += curE - curS;
   }
   const coverage = duration > 0 ? editorialCovered / duration : 0;
+  try {
+    const { compileGraphicsForProject } = await import("../graphics/graphic-compiler.server");
+    await compileGraphicsForProject(supabase, projectId);
+  } catch (e) {
+    console.warn("graphics compile after legacy manifest failed", e);
+  }
   return { count: rows.length, editorialCoverage: coverage, editorialActionCount: eas.length };
 }
