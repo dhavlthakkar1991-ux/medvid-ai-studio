@@ -197,6 +197,7 @@ function buildTimelinePdf(pkg: Pkg): Uint8Array {
 
 export function ProductionPackageExport({ projectId }: { projectId: string }) {
   const pkgFn = useServerFn(getProductionPackage);
+  const specFn = useServerFn(previewRenderSpec);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function fetchPkg(): Promise<Pkg> {
@@ -252,6 +253,48 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
       const pdf = buildSummaryPdf(pkg);
       saveBlob(`${title}_editorial_report.pdf`,
         new Blob([new Uint8Array(pdf)], { type: "application/pdf" }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    } finally { setBusy(null); }
+  }
+
+  async function downloadRenderDebugPackage() {
+    setBusy("debug");
+    try {
+      const [pkg, specRes] = await Promise.all([
+        fetchPkg(),
+        specFn({ data: { projectId, quality: "full" as const } }),
+      ]);
+      const title = safeTitle(pkg.project.title);
+      const files: Record<string, Uint8Array> = {
+        "renderspec.json": strToU8(JSON.stringify(JSON.parse(specRes.specJson), null, 2)),
+        "manifest_v6.json": strToU8(JSON.stringify(pkg.jsonFiles["manifest_v6.json"], null, 2)),
+        "timeline.json": strToU8(JSON.stringify(pkg.jsonFiles["timeline.json"], null, 2)),
+        "assets.json": strToU8(JSON.stringify(pkg.jsonFiles["assets.json"], null, 2)),
+        "compiled_graphics.json": strToU8(JSON.stringify(pkg.jsonFiles["compiled_graphics.json"], null, 2)),
+        "README.txt": strToU8(
+          [
+            "OncoVideo Render Debug Package",
+            `Generated: ${new Date(pkg.generatedAt).toLocaleString()}`,
+            `Project: ${pkg.project.title ?? pkg.project.id}`,
+            "",
+            "Contents:",
+            " - renderspec.json        Canonical RenderSpec v1 (provider-agnostic)",
+            " - manifest_v6.json       Manifest V6 rows (editorial source of truth)",
+            " - timeline.json          Composed timeline tracks + items",
+            " - assets.json            All project assets",
+            " - compiled_graphics.json Compiled overlay/lower-third graphics",
+            " - captions.srt           Burned-caption source",
+            "",
+            "Hand directly to an external render worker (FFmpeg / Node / Docker).",
+          ].join("\n"),
+        ),
+      };
+      if (pkg.srt) files["captions.srt"] = strToU8(pkg.srt);
+      const zipped = zipSync(files, { level: 6 });
+      saveBlob(`${title}_render_debug_package.zip`,
+        new Blob([new Uint8Array(zipped)], { type: "application/zip" }));
+      toast.success("Render debug package downloaded.");
     } catch (e: any) {
       toast.error(e?.message ?? "Export failed");
     } finally { setBusy(null); }
