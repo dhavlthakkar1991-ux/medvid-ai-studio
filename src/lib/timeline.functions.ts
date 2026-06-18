@@ -3,6 +3,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 const Input = z.object({ projectId: z.string() });
+const AddCtaInput = z.object({
+  projectId: z.string(),
+  text: z.string().min(1).max(300),
+  durationSeconds: z.number().min(1).max(30).optional(),
+});
 
 export const getProjectTimeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
