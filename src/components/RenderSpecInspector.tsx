@@ -1,23 +1,24 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { previewRenderSpec } from "@/lib/render-providers.functions";
+import { getRenderBundle } from "@/lib/render-providers.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Download, RefreshCw } from "lucide-react";
+import { Copy, Download, RefreshCw, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 /** Phase 2B-5 RenderSpec Inspector — visualise the canonical render contract. */
 export function RenderSpecInspector({ projectId }: { projectId: string }) {
-  const fn = useServerFn(previewRenderSpec);
+  const fn = useServerFn(getRenderBundle);
   const [quality, setQuality] = useState<"preview" | "full">("full");
   const q = useQuery({
-    queryKey: ["render-spec", projectId, quality],
+    queryKey: ["render-bundle", projectId, quality],
     queryFn: () => fn({ data: { projectId, quality } }),
   });
   const specJson = q.data?.specJson ?? "";
   const spec = (() => { try { return specJson ? JSON.parse(specJson) : null; } catch { return null; } })();
+  const validation = (() => { try { return q.data?.validationJson ? JSON.parse(q.data.validationJson) : null; } catch { return null; } })();
 
   function copy() {
     if (!specJson) return;
@@ -80,6 +81,56 @@ export function RenderSpecInspector({ projectId }: { projectId: string }) {
                 <Stat label="Graphics" value={spec.graphics?.length ?? 0} />
                 <Stat label="Captions" value={spec.captions?.length ?? 0} />
               </div>
+
+              {validation && (
+                <Section title="Render readiness">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <ReadinessTile
+                      label="Worker compatible"
+                      ok={validation.summary.workerCompatible}
+                      detail={`${validation.errorCount} errors · ${validation.warningCount} warnings`}
+                    />
+                    <ReadinessTile
+                      label="Asset readiness"
+                      ok={validation.summary.assets.missingUrl === 0 && validation.summary.assets.orphan === 0}
+                      detail={`${validation.summary.assets.total} total · ${validation.summary.assets.missingUrl} missing url · ${validation.summary.assets.unused} unused`}
+                    />
+                    <ReadinessTile
+                      label="Graphics readiness"
+                      ok={validation.summary.graphics.missingPayload === 0}
+                      detail={`${validation.summary.graphics.total} total · ${validation.summary.graphics.missingPayload} empty`}
+                    />
+                    <ReadinessTile
+                      label="Timeline integrity"
+                      ok={validation.summary.timeline.outOfBounds === 0 && validation.summary.timeline.items > 0}
+                      detail={`${validation.summary.timeline.items} items · ${validation.summary.timeline.overlaps} overlaps · ${validation.summary.timeline.outOfBounds} oob · ${validation.summary.timeline.gaps} gaps`}
+                    />
+                    <ReadinessTile
+                      label="Video metadata"
+                      ok={validation.summary.canvas.hasDuration && validation.summary.canvas.hasDimensions && validation.summary.canvas.hasFps}
+                      detail={`duration:${validation.summary.canvas.hasDuration ? "✓" : "✗"} dims:${validation.summary.canvas.hasDimensions ? "✓" : "✗"} fps:${validation.summary.canvas.hasFps ? "✓" : "✗"}`}
+                    />
+                    <ReadinessTile
+                      label="Orphan references"
+                      ok={validation.summary.assets.orphan === 0}
+                      detail={`${validation.summary.assets.orphan} orphan`}
+                    />
+                  </div>
+                  {validation.issues.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto rounded border border-border divide-y divide-border">
+                      {validation.issues.slice(0, 50).map((iss: any, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2 px-2 py-1 text-xs">
+                          {iss.level === "error" ? <XCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" /> :
+                            iss.level === "warning" ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" /> :
+                            <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />}
+                          <span className="font-mono text-[10px] text-muted-foreground w-32 shrink-0">{iss.code}</span>
+                          <span className="flex-1">{iss.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+              )}
 
               <Section title="Tracks">
                 <table className="w-full text-xs">
@@ -167,6 +218,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="space-y-1">
       <div className="text-xs font-semibold">{title}</div>
       {children}
+    </div>
+  );
+}
+function ReadinessTile({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+  return (
+    <div className={`rounded border p-2 ${ok ? "border-emerald-500/40" : "border-destructive/40"}`}>
+      <div className="flex items-center gap-1 text-muted-foreground">
+        {ok ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <XCircle className="h-3 w-3 text-destructive" />}
+        {label}
+      </div>
+      <div className="font-semibold text-[11px] mt-0.5">{detail}</div>
     </div>
   );
 }
