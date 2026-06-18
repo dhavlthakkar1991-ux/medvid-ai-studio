@@ -148,3 +148,26 @@ export const getRenderWorkerStatus = createServerFn({ method: "GET" })
       lastStatus,
     };
   });
+
+/**
+ * Canonical fix for RenderSpec validation issues. Builds the current spec,
+ * validates, then applies deterministic repairs (backfill URLs, drop unused/
+ * orphan rows, clamp out-of-bounds items) and rebuilds the manifest.
+ */
+export const fixRenderSpec = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => ProjectIdInput.parse(i))
+  .handler(async ({ context, data }) => {
+    const { buildRenderSpec } = await import("./render/render-spec-builder.server");
+    const { validateRenderSpec } = await import("./render/render-validation");
+    const { fixRenderSpecIssues } = await import("./render/render-spec-fix.server");
+    const spec = await buildRenderSpec(context.supabase, data.projectId, { quality: data.quality });
+    const validation = validateRenderSpec(spec);
+    const result = await fixRenderSpecIssues(
+      context.supabase,
+      data.projectId,
+      validation,
+      spec.canvas.duration_seconds,
+    );
+    return { ok: true, ...result };
+  });

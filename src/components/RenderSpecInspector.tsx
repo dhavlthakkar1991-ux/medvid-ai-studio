@@ -1,20 +1,36 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRenderBundle } from "@/lib/render-providers.functions";
+import { fixRenderSpec, getRenderBundle } from "@/lib/render-providers.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Download, RefreshCw, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Copy, Download, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 /** Phase 2B-5 RenderSpec Inspector — visualise the canonical render contract. */
 export function RenderSpecInspector({ projectId }: { projectId: string }) {
   const fn = useServerFn(getRenderBundle);
+  const fixFn = useServerFn(fixRenderSpec);
+  const qc = useQueryClient();
   const [quality, setQuality] = useState<"preview" | "full">("full");
   const q = useQuery({
     queryKey: ["render-bundle", projectId, quality],
     queryFn: () => fn({ data: { projectId, quality } }),
+  });
+  const fixMut = useMutation({
+    mutationFn: () => fixFn({ data: { projectId, quality } }),
+    onSuccess: (r: any) => {
+      const count = r?.fixes?.length ?? 0;
+      toast.success(`Applied ${count} fix${count === 1 ? "" : "es"}`, {
+        description: r?.fixes?.slice(0, 3).join(" · ") || "No issues remaining",
+      });
+      qc.invalidateQueries({ queryKey: ["render-bundle", projectId] });
+      qc.invalidateQueries({ queryKey: ["readiness", projectId] });
+      qc.invalidateQueries({ queryKey: ["preview-canonical", projectId] });
+      qc.invalidateQueries({ queryKey: ["preview-timeline", projectId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Fix failed"),
   });
   const specJson = q.data?.specJson ?? "";
   const spec = (() => { try { return specJson ? JSON.parse(specJson) : null; } catch { return null; } })();
@@ -59,6 +75,15 @@ export function RenderSpecInspector({ projectId }: { projectId: string }) {
             </select>
             <Button size="sm" variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}>
               <RefreshCw className={`h-3.5 w-3.5 mr-1 ${q.isFetching ? "animate-spin" : ""}`} />Rebuild
+            </Button>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => fixMut.mutate()}
+              disabled={fixMut.isPending || !validation || (validation.errorCount === 0 && validation.warningCount === 0)}
+            >
+              <Wrench className={`h-3.5 w-3.5 mr-1 ${fixMut.isPending ? "animate-pulse" : ""}`} />
+              {fixMut.isPending ? "Fixing…" : "Fix issues"}
             </Button>
             <Button size="sm" variant="outline" onClick={copy} disabled={!specJson}>
               <Copy className="h-3.5 w-3.5 mr-1" />Copy JSON
