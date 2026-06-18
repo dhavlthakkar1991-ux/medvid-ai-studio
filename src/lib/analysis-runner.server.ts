@@ -9,7 +9,7 @@ import { generateAssetCandidatesForProject } from "./assets/asset-matcher.server
 import { compileTimelineForProject } from "./render/timeline-compiler.server";
 import { validateTaskOutput, type TaskValidatorKey, type ValidationResult } from "./qa/validators";
 import { FALLBACK_PROMPTS } from "./qa/fallback-prompts.server";
-import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions, fallbackSeo } from "./qa/fallback-generators.server";
+import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions, fallbackSeo, fallbackChapters } from "./qa/fallback-generators.server";
 
 const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
   lovable: "google/gemini-2.5-flash",
@@ -190,6 +190,7 @@ export async function runTaskForProject(
     const t0 = Date.now();
     let gen: any = null;
     if (task === "scene_plan") gen = await fallbackScenePlan(supabase, projectId, project);
+    else if (task === "chapters") gen = await fallbackChapters(supabase, projectId, project);
     else if (task === "broll") gen = await fallbackBroll(supabase, projectId, project);
     else if (task === "visual_storyboard") gen = await fallbackVisualStoryboard(supabase, projectId, project);
     else if (task === "editorial_decisions") gen = await fallbackEditorialDecisions(supabase, projectId, project);
