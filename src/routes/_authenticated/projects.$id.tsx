@@ -253,7 +253,7 @@ function ProjectView() {
   const fixBlockerMut = useMutation({
     mutationFn: async (fix: any) => {
       if (fix.kind === "task") return regenFn({ data: { projectId: id, task: fix.task } });
-      if (fix.kind === "timeline") return recomposeFn({ data: { projectId: id } });
+      if (fix.kind === "timeline") return aiFixTimelineFn({ data: { projectId: id } });
       if (fix.kind === "manifest") return rebuildFn({ data: { projectId: id } });
       if (fix.kind === "approve_assets") return acceptAllFn({ data: { projectId: id } });
       return null;
