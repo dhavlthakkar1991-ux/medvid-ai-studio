@@ -44,7 +44,7 @@ export const updateRenderProviderConfiguration = createServerFn({ method: "POST"
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
-      .from("render_providers").update({ configuration: data.configuration }).eq("id", data.providerId);
+      .from("render_providers").update({ configuration: data.configuration as any }).eq("id", data.providerId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -70,5 +70,6 @@ export const previewRenderSpec = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { buildRenderSpec } = await import("./render/render-spec-builder.server");
     const spec = await buildRenderSpec(context.supabase, data.projectId, { quality: data.quality });
-    return { spec };
+    // serialize to plain JSON to satisfy TanStack's strict serializer
+    return { spec: JSON.parse(JSON.stringify(spec)) as unknown };
   });
