@@ -138,6 +138,64 @@ export const reviewAssetCandidate = createServerFn({ method: "POST" })
     return { ok: true, status: nextStatus, assetId: linkedAssetId };
   });
 
+/** Bulk-accept every pending/searched candidate for a project. */
+export const acceptAllPendingCandidates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => ProjectIdInput.parse(i))
+  .handler(async ({ context, data }) => {
+    const sb = context.supabase;
+    const userId = context.userId;
+    const { data: cands, error } = await sb
+      .from("asset_candidates")
+      .select("*")
+      .eq("project_id", data.projectId)
+      .in("status", ["pending", "searched"]);
+    if (error) throw new Error(error.message);
+    const now = new Date().toISOString();
+    let accepted = 0;
+    for (const cand of (cands ?? []) as any[]) {
+      const { data: assetRow, error: aErr } = await sb.from("assets").insert({
+        project_id: cand.project_id,
+        scene_id: cand.scene_id,
+        asset_type: cand.asset_type,
+        source_type: "manual",
+        source: "bulk-accept",
+        status: "approved",
+        title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
+        description: cand.description ?? null,
+        search_query: cand.search_query,
+        metadata: { from_candidate: cand.id, review_action: "accept_all" },
+        reviewed_by: userId,
+        reviewed_at: now,
+      }).select("id").single();
+      if (aErr || !assetRow) continue;
+      const role = ROLE_FOR_TYPE[cand.asset_type] ?? "Other";
+      await sb.from("project_assets").upsert({
+        project_id: cand.project_id,
+        asset_id: assetRow.id,
+        role,
+        status: "approved",
+        notes: null,
+      }, { onConflict: "project_id,asset_id,role" });
+      await sb.from("asset_candidates").update({
+        status: "approved",
+        reviewed_by: userId,
+        reviewed_at: now,
+        linked_asset_id: assetRow.id,
+      }).eq("id", cand.id);
+      accepted += 1;
+    }
+    if (accepted > 0) {
+      try {
+        const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+        await buildRenderManifestForProject(sb, data.projectId);
+      } catch (e) {
+        console.warn("manifest rebuild after bulk accept failed", e);
+      }
+    }
+    return { ok: true, accepted };
+  });
+
 /** Project readiness score. 7 weighted gates; each scored 0..1. */
 export const getProjectReadiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
