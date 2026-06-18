@@ -356,6 +356,9 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
   const errors = (validation?.issues ?? []).filter((i: any) => i.level === "error");
   const warnings = (validation?.issues ?? []).filter((i: any) => i.level === "warning");
 
+  const qc = useQueryClient();
+  const addCtaFn = useServerFn(addCtaToTimeline);
+
   if (timelineQ.isLoading || canonicalQ.isLoading) {
     return <Card><CardContent className="py-12 text-sm text-muted-foreground text-center">Loading preview…</CardContent></Card>;
   }
