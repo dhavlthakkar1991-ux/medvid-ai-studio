@@ -1785,3 +1785,101 @@ function ProjectView() {
     </div>
   );
 }
+
+function DurationCard(props: {
+  projectId: string;
+  currentDuration: number;
+  getVideoUrl: () => Promise<string>;
+  setDuration: (d: number) => Promise<any>;
+  onUpdated: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [override, setOverride] = useState<string>("");
+
+  const apply = async (seconds: number, label: string) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      toast.error("Invalid duration");
+      return;
+    }
+    setBusy(true);
+    try {
+      await props.setDuration(seconds);
+      toast.success(`Duration set to ${seconds.toFixed(2)}s (${label}). Timeline + manifest rebuilt.`);
+      props.onUpdated();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update duration");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const autoDetect = async () => {
+    setBusy(true);
+    try {
+      const url = await props.getVideoUrl();
+      const seconds = await new Promise<number>((resolve, reject) => {
+        const v = document.createElement("video");
+        v.preload = "metadata";
+        v.muted = true;
+        v.crossOrigin = "anonymous";
+        const timer = setTimeout(() => reject(new Error("Probe timed out")), 30_000);
+        v.onloadedmetadata = () => {
+          // Some MP4s report Infinity until we seek to the end.
+          if (v.duration === Infinity || Number.isNaN(v.duration)) {
+            v.currentTime = 1e9;
+            v.ontimeupdate = () => {
+              v.ontimeupdate = null;
+              clearTimeout(timer);
+              resolve(v.duration);
+            };
+          } else {
+            clearTimeout(timer);
+            resolve(v.duration);
+          }
+        };
+        v.onerror = () => { clearTimeout(timer); reject(new Error("Failed to load video metadata")); };
+        v.src = url;
+      });
+      await apply(Math.round(seconds * 1000) / 1000, "auto-detected");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Auto-detect failed");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="py-3 flex flex-wrap items-center gap-3">
+        <div className="text-sm">
+          <span className="font-medium">Video duration:</span>{" "}
+          <span className="tabular-nums">{props.currentDuration.toFixed(2)}s</span>
+          <span className="text-xs text-muted-foreground ml-2">
+            If the presenter video is longer than this, the timeline will be too short.
+          </span>
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button size="sm" variant="outline" disabled={busy} onClick={autoDetect}>
+            Auto-detect from file
+          </Button>
+          <Input
+            type="number"
+            step="0.01"
+            min="1"
+            placeholder="seconds"
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+            className="w-28 h-8"
+            disabled={busy}
+          />
+          <Button
+            size="sm"
+            disabled={busy || !override}
+            onClick={() => apply(Number(override), "manual")}
+          >
+            Override
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
