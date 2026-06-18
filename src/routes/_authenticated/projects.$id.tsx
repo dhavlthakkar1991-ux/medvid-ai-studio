@@ -118,6 +118,8 @@ function ProjectView() {
   const deleteFn = useServerFn(deleteProject);
   const reviewListFn = useServerFn(listAssetReview);
   const reviewActFn = useServerFn(reviewAssetCandidate);
+  const acceptAllFn = useServerFn(acceptAllPendingCandidates);
+  const updateTranscriptFn = useServerFn(updateTranscript);
   const readinessFn = useServerFn(getProjectReadiness);
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
@@ -179,6 +181,47 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Review failed"),
+  });
+  const acceptAllMut = useMutation({
+    mutationFn: () => acceptAllFn({ data: { projectId: id } }),
+    onSuccess: (res: any) => {
+      toast.success(`Accepted ${res?.accepted ?? 0} candidate(s)`);
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Accept-all failed"),
+  });
+  const [transcriptDraft, setTranscriptDraft] = useState<string | null>(null);
+  const [transcriptDirty, setTranscriptDirty] = useState(false);
+  const updateTxMut = useMutation({
+    mutationFn: (fullText: string) => updateTranscriptFn({ data: { projectId: id, fullText } }),
+    onSuccess: () => {
+      toast.success("Transcript saved");
+      setTranscriptDirty(true);
+      qc.invalidateQueries({ queryKey: ["project", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Save failed"),
+  });
+  const rerunFromTranscriptMut = useMutation({
+    mutationFn: async () => {
+      await resetFn({ data: { projectId: id, stage: "transcript" } });
+      const r = await startPipelineFn({ data: { projectId: id } });
+      return r;
+    },
+    onSuccess: (r: any) => {
+      toast.success("Pipeline restarted from transcript");
+      setTranscriptDirty(false);
+      if (r?.runnerUrl) {
+        try { fetch(r.runnerUrl, { method: "POST" }); } catch {}
+      }
+      qc.invalidateQueries({ queryKey: ["project", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Rerun failed"),
   });
   const composerQ = useQuery({
     queryKey: ["timeline-composer", id],
