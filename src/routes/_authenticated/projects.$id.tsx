@@ -486,11 +486,76 @@ function ProjectView() {
         </TabsList>
 
         <TabsContent value="transcript">
-          <Card><CardContent className="py-4">
-            {transcript ? (
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed">{transcript.full_text}</pre>
-            ) : <p className="text-muted-foreground text-sm">Transcript not ready yet.</p>}
-          </CardContent></Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Transcript</CardTitle>
+              {transcript && (
+                <div className="flex items-center gap-2">
+                  {transcriptDraft === null ? (
+                    <Button size="sm" variant="outline" onClick={() => setTranscriptDraft(transcript.full_text ?? "")}>
+                      Edit
+                    </Button>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => setTranscriptDraft(null)} disabled={updateTxMut.isPending}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const text = transcriptDraft ?? "";
+                          if (!text.trim()) { toast.error("Transcript cannot be empty"); return; }
+                          updateTxMut.mutate(text, {
+                            onSuccess: () => setTranscriptDraft(null),
+                          });
+                        }}
+                        disabled={updateTxMut.isPending || transcriptDraft === transcript.full_text}
+                      >
+                        {updateTxMut.isPending ? "Saving…" : "Save"}
+                      </Button>
+                    </>
+                  )}
+                  {transcriptDirty && transcriptDraft === null && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => rerunFromTranscriptMut.mutate()}
+                      disabled={rerunFromTranscriptMut.isPending}
+                    >
+                      <Play className="h-3 w-3 mr-1" />
+                      {rerunFromTranscriptMut.isPending ? "Restarting…" : "Rerun pipeline from transcript"}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="py-4">
+              {!transcript ? (
+                <p className="text-muted-foreground text-sm">Transcript not ready yet.</p>
+              ) : transcriptDraft !== null ? (
+                <>
+                  <Textarea
+                    value={transcriptDraft}
+                    onChange={(e) => setTranscriptDraft(e.target.value)}
+                    className="min-h-[60vh] text-sm leading-relaxed font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    After saving, click "Rerun pipeline from transcript" to regenerate every downstream stage
+                    (scenes, storyboard, editorial, assets, manifest) using the corrected text.
+                  </p>
+                </>
+              ) : (
+                <>
+                  {transcriptDirty && (
+                    <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                      Transcript edited. Downstream stages are stale until you rerun the pipeline.
+                    </div>
+                  )}
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed">{transcript.full_text}</pre>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {Object.keys(TASK_LABELS).map((t) => {
