@@ -9,6 +9,7 @@ import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
+import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -338,6 +339,8 @@ function ProjectView() {
           ))}
           <TabsTrigger value="render_manifest">Render Manifest</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
+          <TabsTrigger value="review">Review Assets</TabsTrigger>
+          <TabsTrigger value="readiness">Readiness</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
           <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
