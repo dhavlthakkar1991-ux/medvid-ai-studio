@@ -150,7 +150,24 @@ function ProviderConfigDialog({ provider, onSaved }: { provider: any; onSaved: (
               <code> /api/public/render-callback </code> when finished.
             </p>
           )}
-          {(provider.provider_type === "creatomate" || provider.provider_type === "shotstack") && (
+          {provider.provider_type === "creatomate" && (
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>
+                Supported configuration keys:
+              </p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                <li><code>webhook_url</code> — full URL Creatomate calls when a render finishes. Use
+                  <code> https://&lt;your-domain&gt;/api/public/render-callback/creatomate</code>.</li>
+                <li><code>default_template_id</code> — optional Creatomate template id (reserved for template-based renders).</li>
+                <li><code>environment</code> — <code>"production"</code> or <code>"staging"</code> tag stored on jobs.</li>
+              </ul>
+              <p>
+                API key (<code>CREATOMATE_API_KEY</code>) and webhook secret (<code>CREATOMATE_WEBHOOK_SECRET</code>) are
+                stored as Lovable Cloud secrets, not in this JSON.
+              </p>
+            </div>
+          )}
+          {provider.provider_type === "shotstack" && (
             <p className="text-xs text-muted-foreground">
               API keys for external providers are stored as Lovable Cloud secrets, not in this JSON.
             </p>

@@ -1337,18 +1337,34 @@ function ProjectView() {
                 {(renderOutputsQ.data?.outputs ?? []).length === 0 ? (
                   <p className="text-xs text-muted-foreground">No outputs yet.</p>
                 ) : (
-                  <div className="space-y-1.5">
-                    {(renderOutputsQ.data?.outputs ?? []).map((o: any) => (
-                      <div key={o.id} className="flex items-center justify-between border border-border rounded-md p-2 text-xs">
-                        <div className="flex flex-col">
-                          <span className="font-medium capitalize">{o.output_type} · {o.resolution}</span>
-                          <span className="text-muted-foreground">{new Date(o.created_at).toLocaleString()} · {Math.round((o.file_size ?? 0)/1_000_000)}MB · {Number(o.duration_seconds ?? 0).toFixed(1)}s</span>
+                  <div className="space-y-3">
+                    {(renderOutputsQ.data?.outputs ?? []).map((o: any) => {
+                      const isPlayable = !!o.file_url && !String(o.file_url).startsWith("mock://");
+                      return (
+                        <div key={o.id} className="border border-border rounded-md p-2 space-y-2">
+                          {isPlayable && (
+                            <video
+                              src={o.file_url}
+                              poster={o.thumbnail_url ?? undefined}
+                              controls
+                              preload="metadata"
+                              className="w-full rounded bg-black aspect-video"
+                            />
+                          )}
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex flex-col">
+                              <span className="font-medium capitalize">{o.output_type} · {o.resolution}</span>
+                              <span className="text-muted-foreground">
+                                {new Date(o.created_at).toLocaleString()} · {Math.round((o.file_size ?? 0)/1_000_000)}MB · {Number(o.duration_seconds ?? 0).toFixed(1)}s
+                              </span>
+                            </div>
+                            <Button size="sm" variant="outline" asChild={!!o.file_url} disabled={!o.file_url}>
+                              {o.file_url ? <a href={o.file_url} target="_blank" rel="noreferrer" download>Download</a> : <span>Pending</span>}
+                            </Button>
+                          </div>
                         </div>
-                        <Button size="sm" variant="outline" asChild={!!o.file_url} disabled={!o.file_url}>
-                          {o.file_url ? <a href={o.file_url} target="_blank" rel="noreferrer">Download</a> : <span>Pending</span>}
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
