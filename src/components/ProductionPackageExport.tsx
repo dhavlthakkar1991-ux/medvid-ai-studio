@@ -4,9 +4,10 @@ import { zipSync, strToU8 } from "fflate";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getProductionPackage } from "@/lib/exports.functions";
+import { previewRenderSpec } from "@/lib/render-providers.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Package } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Package, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 type Pkg = Awaited<ReturnType<typeof getProductionPackage>>;
@@ -196,6 +197,7 @@ function buildTimelinePdf(pkg: Pkg): Uint8Array {
 
 export function ProductionPackageExport({ projectId }: { projectId: string }) {
   const pkgFn = useServerFn(getProductionPackage);
+  const specFn = useServerFn(previewRenderSpec);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function fetchPkg(): Promise<Pkg> {
@@ -256,6 +258,48 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
     } finally { setBusy(null); }
   }
 
+  async function downloadRenderDebugPackage() {
+    setBusy("debug");
+    try {
+      const [pkg, specRes] = await Promise.all([
+        fetchPkg(),
+        specFn({ data: { projectId, quality: "full" as const } }),
+      ]);
+      const title = safeTitle(pkg.project.title);
+      const files: Record<string, Uint8Array> = {
+        "renderspec.json": strToU8(JSON.stringify(JSON.parse(specRes.specJson), null, 2)),
+        "manifest_v6.json": strToU8(JSON.stringify(pkg.jsonFiles["manifest_v6.json"], null, 2)),
+        "timeline.json": strToU8(JSON.stringify(pkg.jsonFiles["timeline.json"], null, 2)),
+        "assets.json": strToU8(JSON.stringify(pkg.jsonFiles["assets.json"], null, 2)),
+        "compiled_graphics.json": strToU8(JSON.stringify(pkg.jsonFiles["compiled_graphics.json"], null, 2)),
+        "README.txt": strToU8(
+          [
+            "OncoVideo Render Debug Package",
+            `Generated: ${new Date(pkg.generatedAt).toLocaleString()}`,
+            `Project: ${pkg.project.title ?? pkg.project.id}`,
+            "",
+            "Contents:",
+            " - renderspec.json        Canonical RenderSpec v1 (provider-agnostic)",
+            " - manifest_v6.json       Manifest V6 rows (editorial source of truth)",
+            " - timeline.json          Composed timeline tracks + items",
+            " - assets.json            All project assets",
+            " - compiled_graphics.json Compiled overlay/lower-third graphics",
+            " - captions.srt           Burned-caption source",
+            "",
+            "Hand directly to an external render worker (FFmpeg / Node / Docker).",
+          ].join("\n"),
+        ),
+      };
+      if (pkg.srt) files["captions.srt"] = strToU8(pkg.srt);
+      const zipped = zipSync(files, { level: 6 });
+      saveBlob(`${title}_render_debug_package.zip`,
+        new Blob([new Uint8Array(zipped)], { type: "application/zip" }));
+      toast.success("Render debug package downloaded.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    } finally { setBusy(null); }
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -294,6 +338,24 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
           </Button>
           <Button variant="outline" size="sm" disabled={busy !== null} onClick={downloadSummaryPdf}>
             <FileText className="h-4 w-4 mr-1.5" /> Editorial report PDF
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wrench className="h-4 w-4" /> Render debug package
+          </CardTitle>
+          <CardDescription>
+            Slim ZIP containing RenderSpec + Manifest V6 + timeline + assets + compiled graphics + captions —
+            everything an external FFmpeg / Node / Docker render worker needs to reproduce the render.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" disabled={busy !== null} onClick={downloadRenderDebugPackage}>
+            <Download className="h-4 w-4 mr-2" />
+            {busy === "debug" ? "Building debug package…" : "Download render debug package"}
           </Button>
         </CardContent>
       </Card>

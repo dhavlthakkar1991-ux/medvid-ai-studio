@@ -8,6 +8,7 @@ import {
   setDefaultRenderProvider,
   updateRenderProviderConfiguration,
 } from "@/lib/render-providers.functions";
+import { runProviderDiagnostics } from "@/lib/render-debug.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, CheckCircle2, Circle } from "lucide-react";
+import { Settings as SettingsIcon, CheckCircle2, Circle, Activity } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/render-providers")({
   component: RenderProvidersPage,
@@ -91,6 +92,7 @@ function RenderProvidersPage() {
                   Set default
                 </Button>
                 <ProviderConfigDialog provider={p} onSaved={invalidate} />
+                <ProviderDiagnosticsDialog providerId={p.id} providerName={p.name} />
               </div>
             </div>
           ))}
@@ -188,6 +190,74 @@ function ProviderConfigDialog({ provider, onSaved }: { provider: any; onSaved: (
               catch { toast.error("Invalid JSON"); }
             }} disabled={mut.isPending}>Save</Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+function ProviderDiagnosticsDialog({ providerId, providerName }: { providerId: string; providerName: string }) {
+  const fn = useServerFn(runProviderDiagnostics);
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [report, setReport] = useState<any>(null);
+
+  async function run() {
+    setRunning(true);
+    try {
+      const r = await fn({ data: { providerId } });
+      setReport(r);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Diagnostics failed");
+    } finally { setRunning(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !report) run(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" title="Test connection">
+          <Activity className="h-3.5 w-3.5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{providerName} — diagnostics</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Validates configuration, secret presence, worker reachability, and the webhook receiver.
+            </p>
+            <Button size="sm" variant="outline" onClick={run} disabled={running}>
+              {running ? "Running…" : "Re-run"}
+            </Button>
+          </div>
+          {report && (
+            <>
+              <div className="flex items-center gap-2 text-sm">
+                <span>Overall:</span>
+                <Badge variant={report.overall === "ok" ? "outline" : report.overall === "warn" ? "secondary" : "destructive"}
+                  className="capitalize">
+                  {report.overall}
+                </Badge>
+              </div>
+              <div className="rounded-md border border-border divide-y divide-border">
+                {(report.checks as any[]).map((c, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2 text-xs">
+                    <Badge
+                      variant={c.status === "ok" ? "outline" : c.status === "warn" ? "secondary" : "destructive"}
+                      className="uppercase shrink-0"
+                    >
+                      {c.status}
+                    </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-muted-foreground break-all">{c.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
