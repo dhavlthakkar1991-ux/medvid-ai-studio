@@ -5,9 +5,9 @@ import { Stethoscope, Sparkles, Film, FileText, Image as ImageIcon, ListChecks, 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "OncoVideo AI Studio — AI video production for medical educators" },
+      { title: "MedVideo AI Studio — AI video production for medical educators" },
       { name: "description", content: "Turn a raw clinical talking-head video into a chaptered, storyboarded, SEO-ready educational package — transcripts, scene plans, storyboards, B-roll prompts, thumbnails and shorts." },
-      { property: "og:title", content: "OncoVideo AI Studio" },
+      { property: "og:title", content: "MedVideo AI Studio" },
       { property: "og:description", content: "AI video production assistant for medical educators." },
     ],
   }),
@@ -21,7 +21,7 @@ function Index() {
         <div className="mx-auto max-w-7xl px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2 font-semibold">
             <Stethoscope className="h-5 w-5 text-primary" />
-            OncoVideo<span className="text-primary"> AI</span>
+            MedVideo<span className="text-primary"> AI</span>
           </div>
           <Button asChild size="sm"><Link to="/auth">Sign in</Link></Button>
         </div>

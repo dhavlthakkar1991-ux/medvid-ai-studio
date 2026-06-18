@@ -14,7 +14,7 @@ export function AppHeader() {
       <div className="mx-auto max-w-7xl px-6 h-14 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2 font-semibold tracking-tight">
           <Stethoscope className="h-5 w-5 text-primary" />
-          <span>OncoVideo<span className="text-primary"> AI</span></span>
+          <span>MedVideo<span className="text-primary"> AI</span></span>
         </Link>
         <nav className="flex items-center gap-1">
           <Button asChild variant="ghost" size="sm">

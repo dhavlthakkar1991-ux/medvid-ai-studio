@@ -39,7 +39,7 @@ function buildSummaryPdf(pkg: Pkg): Uint8Array {
   doc.text(`${title}`, margin, y); y += 24;
   doc.setFont("helvetica", "normal"); doc.setFontSize(10);
   doc.setTextColor(100);
-  doc.text(`OncoVideo AI Studio — Production Package`, margin, y); y += 14;
+  doc.text(`MedVideo AI Studio — Production Package`, margin, y); y += 14;
   doc.text(`Generated: ${new Date(pkg.generatedAt).toLocaleString()}`, margin, y); y += 18;
   doc.setTextColor(0);
 
@@ -274,7 +274,7 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
         "compiled_graphics.json": strToU8(JSON.stringify(pkg.jsonFiles["compiled_graphics.json"], null, 2)),
         "README.txt": strToU8(
           [
-            "OncoVideo Render Debug Package",
+            "MedVideo Render Debug Package",
             `Generated: ${new Date(pkg.generatedAt).toLocaleString()}`,
             `Project: ${pkg.project.title ?? pkg.project.id}`,
             "",

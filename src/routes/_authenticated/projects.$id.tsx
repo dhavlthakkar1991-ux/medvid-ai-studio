@@ -32,7 +32,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
   component: ProjectView,
-  head: () => ({ meta: [{ title: "Project — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "Project — MedVideo AI" }] }),
 });
 
 const TASK_LABELS: Record<string, string> = {

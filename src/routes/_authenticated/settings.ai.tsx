@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings/ai")({
   component: AISettings,
-  head: () => ({ meta: [{ title: "AI settings — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "AI settings — MedVideo AI" }] }),
 });
 
 const TASK_LIST = Object.keys(TASK_DEFAULT_MODELS) as Array<keyof typeof TASK_DEFAULT_MODELS>;

@@ -21,7 +21,7 @@ import { Settings as SettingsIcon, CheckCircle2, Circle, Activity } from "lucide
 
 export const Route = createFileRoute("/_authenticated/settings/render-providers")({
   component: RenderProvidersPage,
-  head: () => ({ meta: [{ title: "Render providers — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "Render providers — MedVideo AI" }] }),
 });
 
 function RenderProvidersPage() {

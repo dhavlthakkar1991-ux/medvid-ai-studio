@@ -79,10 +79,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "OncoVideo AI Studio" },
+      { title: "MedVideo AI Studio" },
       { name: "description", content: "AI video production assistant for medical educators — transcripts, scene plans, storyboards, SEO and shorts in one workflow." },
-      { name: "author", content: "OncoVideo" },
-      { property: "og:title", content: "OncoVideo AI Studio" },
+      { name: "author", content: "MedVideo AI" },
+      { property: "og:title", content: "MedVideo AI Studio" },
       { property: "og:description", content: "AI video production assistant for medical educators." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

@@ -14,7 +14,7 @@ import { Copy, Trash2, Save } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/templates")({
   component: TemplatesPage,
-  head: () => ({ meta: [{ title: "Specialty templates — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "Specialty templates — MedVideo AI" }] }),
 });
 
 function TemplatesPage() {
