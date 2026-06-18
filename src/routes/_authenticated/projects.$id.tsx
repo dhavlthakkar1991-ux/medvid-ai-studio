@@ -19,6 +19,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw, Play } from "lucide-react";
 import { AiToolPrompt } from "@/components/AiToolPrompt";
+import { TimelinePreview } from "@/components/TimelinePreview";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -563,6 +564,7 @@ function ProjectView() {
           <TabsTrigger value="readiness">Readiness</TabsTrigger>
           <TabsTrigger value="render">Render</TabsTrigger>
           <TabsTrigger value="composer">Timeline Composer</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
           <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
