@@ -63,7 +63,21 @@ export const aiModifyTaskOutput = createServerFn({ method: "POST" })
     const currentJson = JSON.stringify(prev.analysis_data, null, 2);
     const prompt = `User instruction:\n${data.prompt}\n\nCurrent ${task} JSON (modify per instruction, return full updated JSON):\n${currentJson}`;
 
-    const res = await generateJSON<any>(provider, userKeys, { model, system, prompt, schema });
+    // Gemini 2.5 Pro frequently returns 503 "Service Unavailable" — fall back
+    // to a faster/lighter model on transient upstream errors so the user's
+    // edit isn't lost.
+    const isTransient = (err: unknown) => {
+      const m = String((err as any)?.message ?? err).toLowerCase();
+      return m.includes("service unavailable") || m.includes("503") || m.includes("overloaded") || m.includes("timeout");
+    };
+    let res;
+    try {
+      res = await generateJSON<any>(provider, userKeys, { model, system, prompt, schema });
+    } catch (e) {
+      if (!isTransient(e) || model === BUDGET_MODEL) throw e;
+      console.warn(`ai-modify: ${model} unavailable, falling back to ${BUDGET_MODEL}`, e);
+      res = await generateJSON<any>(provider, userKeys, { model: BUDGET_MODEL, system, prompt, schema });
+    }
 
     const nextVersion = (prev.version ?? 0) + 1;
     const { error: insErr } = await supabase.from("analysis_versions").insert({
