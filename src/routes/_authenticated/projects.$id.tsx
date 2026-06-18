@@ -10,7 +10,7 @@ import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRen
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
-import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
+import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,6 +123,7 @@ function ProjectView() {
   const readinessFn = useServerFn(getProjectReadiness);
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
+  const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
@@ -237,10 +238,22 @@ function ProjectView() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
   });
+  const aiFixTimelineMut = useMutation({
+    mutationFn: () => aiFixTimelineFn({ data: { projectId: id } }),
+    onSuccess: (res: any) => {
+      const fixes = res?.fixesApplied?.length ? res.fixesApplied.join(" · ") : "No repairs needed";
+      if (res?.ok) toast.success(`Timeline fixed — ${fixes}`);
+      else toast.warning(`Partial fix — ${fixes}. ${res?.validation?.errorCount ?? 0} error(s) remain.`);
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "AI fix failed"),
+  });
   const fixBlockerMut = useMutation({
     mutationFn: async (fix: any) => {
       if (fix.kind === "task") return regenFn({ data: { projectId: id, task: fix.task } });
-      if (fix.kind === "timeline") return recomposeFn({ data: { projectId: id } });
+      if (fix.kind === "timeline") return aiFixTimelineFn({ data: { projectId: id } });
       if (fix.kind === "manifest") return rebuildFn({ data: { projectId: id } });
       if (fix.kind === "approve_assets") return acceptAllFn({ data: { projectId: id } });
       return null;
@@ -1310,13 +1323,20 @@ function ProjectView() {
                   {/* Issues list */}
                   {composerQ.data.validation.issues.length > 0 && (
                     <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-1 gap-2">
                         <div className="text-xs font-semibold">Validation issues</div>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
-                          disabled={recomposeMut.isPending}
-                          onClick={() => recomposeMut.mutate()}>
-                          <RefreshCw className="h-3 w-3 mr-1" />Fix (Recompose)
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
+                            disabled={recomposeMut.isPending || aiFixTimelineMut.isPending}
+                            onClick={() => recomposeMut.mutate()}>
+                            <RefreshCw className="h-3 w-3 mr-1" />Recompose
+                          </Button>
+                          <Button size="sm" className="h-6 px-2 text-[11px]"
+                            disabled={aiFixTimelineMut.isPending || recomposeMut.isPending}
+                            onClick={() => aiFixTimelineMut.mutate()}>
+                            {aiFixTimelineMut.isPending ? "Fixing…" : "AI Fix"}
+                          </Button>
+                        </div>
                       </div>
                       <ul className="space-y-1 text-[11px]">
                         {composerQ.data.validation.issues.map((iss: any, i: number) => (
