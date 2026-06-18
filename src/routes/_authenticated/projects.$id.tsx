@@ -10,7 +10,7 @@ import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRen
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
-import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues } from "@/lib/timeline.functions";
+import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues, addCtaToTimeline } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { getProviderJobForRender } from "@/lib/render-providers.functions";
 import { compileProjectGraphics } from "@/lib/graphics/graphics.functions";
@@ -132,6 +132,7 @@ function ProjectView() {
   const timelineFn = useServerFn(getProjectTimeline);
   const recomposeFn = useServerFn(recomposeTimeline);
   const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
+  const addCtaFn = useServerFn(addCtaToTimeline);
   const setDurationFn = useServerFn(setProjectDuration);
   const getVideoUrlFn = useServerFn(getProjectVideoUrl);
   const qc = useQueryClient();
@@ -139,6 +140,8 @@ function ProjectView() {
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
+  const [ctaFixOpen, setCtaFixOpen] = useState(false);
+  const [ctaFixText, setCtaFixText] = useState("Subscribe for more medical updates");
   const [busy, setBusy] = useState(false);
 
   const q = useQuery({
