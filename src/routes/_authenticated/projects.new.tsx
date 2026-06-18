@@ -151,7 +151,7 @@ function NewProject() {
           duration_seconds: meta.duration,
           width: meta.width,
           height: meta.height,
-          fps: null,
+          fps: meta.fps,
           file_size: file.size,
           context: ctx,
         },
