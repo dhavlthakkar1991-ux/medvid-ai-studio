@@ -398,7 +398,7 @@ function ProjectView() {
         projectId={id}
         currentDuration={Number(project.duration_seconds) || 0}
         getVideoUrl={async () => (await getVideoUrlFn({ data: { projectId: id } })).url}
-        setDuration={async (d) => setDurationFn({ data: { projectId: id, durationSeconds: d } })}
+        setDuration={async (d: number) => setDurationFn({ data: { projectId: id, durationSeconds: d } })}
         onUpdated={() => {
           qc.invalidateQueries({ queryKey: ["project", id] });
           qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
