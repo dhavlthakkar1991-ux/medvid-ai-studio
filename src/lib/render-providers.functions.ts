@@ -70,6 +70,7 @@ export const previewRenderSpec = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { buildRenderSpec } = await import("./render/render-spec-builder.server");
     const spec = await buildRenderSpec(context.supabase, data.projectId, { quality: data.quality });
-    // serialize to plain JSON to satisfy TanStack's strict serializer
-    return { spec: JSON.parse(JSON.stringify(spec)) as unknown };
+    // Return as a JSON string — RenderSpec contains free-form fields that
+    // don't pass TanStack's strict serializer otherwise.
+    return { specJson: JSON.stringify(spec) };
   });
