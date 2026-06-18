@@ -12,6 +12,7 @@ import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admi
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
 import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
+import { getProviderJobForRender } from "@/lib/render-providers.functions";
 import { compileProjectGraphics } from "@/lib/graphics/graphics.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsTemplatesRouteImport } from './routes/_authenticated/settings.templates'
+import { Route as AuthenticatedSettingsRenderProvidersRouteImport } from './routes/_authenticated/settings.render-providers'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings.ai'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
@@ -44,6 +45,12 @@ const AuthenticatedSettingsTemplatesRoute =
   AuthenticatedSettingsTemplatesRouteImport.update({
     id: '/settings/templates',
     path: '/settings/templates',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsRenderProvidersRoute =
+  AuthenticatedSettingsRenderProvidersRouteImport.update({
+    id: '/settings/render-providers',
+    path: '/settings/render-providers',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSettingsBrandRoute =
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
@@ -99,6 +107,7 @@ export interface FileRoutesByTo {
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
@@ -113,6 +122,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
   '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/_authenticated/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/_authenticated/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/settings/ai'
     | '/settings/brand'
+    | '/settings/render-providers'
     | '/settings/templates'
     | '/api/jobs/run/$jobId'
     | '/api/public/jobs/run/$jobId'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/settings/ai'
     | '/settings/brand'
+    | '/settings/render-providers'
     | '/settings/templates'
     | '/api/jobs/run/$jobId'
     | '/api/public/jobs/run/$jobId'
@@ -152,6 +164,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/new'
     | '/_authenticated/settings/ai'
     | '/_authenticated/settings/brand'
+    | '/_authenticated/settings/render-providers'
     | '/_authenticated/settings/templates'
     | '/api/jobs/run/$jobId'
     | '/api/public/jobs/run/$jobId'
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/templates'
       fullPath: '/settings/templates'
       preLoaderRoute: typeof AuthenticatedSettingsTemplatesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/render-providers': {
+      id: '/_authenticated/settings/render-providers'
+      path: '/settings/render-providers'
+      fullPath: '/settings/render-providers'
+      preLoaderRoute: typeof AuthenticatedSettingsRenderProvidersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings/brand': {
@@ -253,6 +273,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
   AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
+  AuthenticatedSettingsRenderProvidersRoute: typeof AuthenticatedSettingsRenderProvidersRoute
   AuthenticatedSettingsTemplatesRoute: typeof AuthenticatedSettingsTemplatesRoute
 }
 
@@ -262,6 +283,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsNewRoute: AuthenticatedProjectsNewRoute,
   AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
+  AuthenticatedSettingsRenderProvidersRoute:
+    AuthenticatedSettingsRenderProvidersRoute,
   AuthenticatedSettingsTemplatesRoute: AuthenticatedSettingsTemplatesRoute,
 }
 
