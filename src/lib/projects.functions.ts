@@ -134,3 +134,66 @@ export const updateTranscript = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** Return a short-lived signed URL for the project's source video. */
+export const getProjectVideoUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ projectId: z.string().uuid() }).parse(i))
+  .handler(async ({ context, data }) => {
+    const { data: p, error } = await context.supabase
+      .from("projects").select("id, user_id, video_path")
+      .eq("id", data.projectId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!p || p.user_id !== context.userId) throw new Error("Project not found");
+    if (!p.video_path) throw new Error("No video uploaded");
+    const { data: signed, error: sErr } = await context.supabase.storage
+      .from("videos").createSignedUrl(p.video_path, 60 * 10);
+    if (sErr) throw new Error(sErr.message);
+    return { url: signed.signedUrl };
+  });
+
+const SetDurationInput = z.object({
+  projectId: z.string().uuid(),
+  durationSeconds: z.number().positive().max(60 * 60 * 4),
+});
+
+/**
+ * Authoritative override for projects.duration_seconds.
+ * Also re-composes the multi-track timeline and rebuilds the render manifest
+ * so the presenter-video track and downstream readiness reflect the real
+ * length immediately.
+ */
+export const setProjectDuration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => SetDurationInput.parse(i))
+  .handler(async ({ context, data }) => {
+    const sb = context.supabase;
+    const { data: p, error } = await sb
+      .from("projects").select("id, user_id, duration_seconds")
+      .eq("id", data.projectId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!p || p.user_id !== context.userId) throw new Error("Project not found");
+    const duration = Math.round(data.durationSeconds * 1000) / 1000;
+    const previous = Number(p.duration_seconds) || 0;
+    const { error: uErr } = await sb
+      .from("projects").update({ duration_seconds: duration }).eq("id", data.projectId);
+    if (uErr) throw new Error(uErr.message);
+
+    let composed: any = null;
+    let manifest = false;
+    let manifestError: string | null = null;
+    try {
+      const { composeTimelineForProject } = await import("./timeline/timeline-composer.server");
+      composed = await composeTimelineForProject(sb, data.projectId);
+    } catch (e: any) {
+      console.warn("composeTimeline failed after duration update", e);
+    }
+    try {
+      const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
+      await buildRenderManifestForProject(sb, data.projectId);
+      manifest = true;
+    } catch (e: any) {
+      manifestError = e?.message ?? "manifest build failed";
+    }
+    return { ok: true, previous, duration, composed, manifest, manifestError };
+  });
