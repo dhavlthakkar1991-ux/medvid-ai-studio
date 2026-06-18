@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { getProject, updateTranscript } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
-import { runQueuedJob, startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
+import { startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
@@ -105,7 +105,6 @@ function ProjectView() {
   const navigate = useNavigate();
   const getFn = useServerFn(getProject);
   const regenFn = useServerFn(regenerateTask);
-  const runJobFn = useServerFn(runQueuedJob);
   const startPipelineFn = useServerFn(startFullPipeline);
   const retryPipelineFn = useServerFn(retryPipeline);
   const exportFn = useServerFn(getExportBundle);
@@ -127,7 +126,6 @@ function ProjectView() {
   const recomposeFn = useServerFn(recomposeTimeline);
   const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
   const qc = useQueryClient();
-  const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
