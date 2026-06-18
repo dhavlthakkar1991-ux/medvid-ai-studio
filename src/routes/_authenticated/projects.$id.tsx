@@ -939,7 +939,7 @@ function ProjectView() {
 
         <TabsContent value="review">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
                 Review Workspace {reviewQ.data && (
                   <Badge variant="outline" className="ml-2">
@@ -947,6 +947,25 @@ function ProjectView() {
                   </Badge>
                 )}
               </CardTitle>
+              {(() => {
+                const pending = (reviewQ.data?.candidates ?? []).filter(
+                  (c: any) => c.status === "pending" || c.status === "searched",
+                ).length;
+                return (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    disabled={pending === 0 || acceptAllMut.isPending || reviewMut.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Accept all ${pending} pending candidate(s)?`)) {
+                        acceptAllMut.mutate();
+                      }
+                    }}
+                  >
+                    {acceptAllMut.isPending ? "Accepting…" : `Accept all (${pending})`}
+                  </Button>
+                );
+              })()}
             </CardHeader>
             <CardContent>
               {!reviewQ.data || reviewQ.data.candidates.length === 0 ? (
