@@ -64,7 +64,13 @@ export const reviewAssetCandidate = createServerFn({ method: "POST" })
     const userId = context.userId;
     const { data: cand, error } = await sb
       .from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) throw new Error("Candidate not found");
+    if (error || !cand) {
+      console.warn("reviewAssetCandidate: candidate not found", {
+        candidateId: data.candidateId,
+        error: error?.message,
+      });
+      return { ok: false as const, status: "not_found", assetId: null, error: "Candidate not found" };
+    }
 
     const now = new Date().toISOString();
     let nextStatus: string = cand.status;
