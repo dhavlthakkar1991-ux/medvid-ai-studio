@@ -1332,6 +1332,14 @@ function ProjectView() {
                       </div>
                     </details>
                   )}
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-muted-foreground">Request payload</summary>
+                    <pre className="mt-2 text-[10px] font-mono bg-background border border-border rounded p-2 max-h-56 overflow-auto whitespace-pre">{JSON.stringify(providerJobQ.data.providerJob.request_payload ?? {}, null, 2)}</pre>
+                  </details>
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-muted-foreground">Response payload / last callback</summary>
+                    <pre className="mt-2 text-[10px] font-mono bg-background border border-border rounded p-2 max-h-56 overflow-auto whitespace-pre">{JSON.stringify(providerJobQ.data.providerJob.response_payload ?? {}, null, 2)}</pre>
+                  </details>
                 </div>
               )}
 
