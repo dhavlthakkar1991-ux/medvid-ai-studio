@@ -1,23 +1,24 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { previewRenderSpec } from "@/lib/render-providers.functions";
+import { getRenderBundle } from "@/lib/render-providers.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Download, RefreshCw } from "lucide-react";
+import { Copy, Download, RefreshCw, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 /** Phase 2B-5 RenderSpec Inspector — visualise the canonical render contract. */
 export function RenderSpecInspector({ projectId }: { projectId: string }) {
-  const fn = useServerFn(previewRenderSpec);
+  const fn = useServerFn(getRenderBundle);
   const [quality, setQuality] = useState<"preview" | "full">("full");
   const q = useQuery({
-    queryKey: ["render-spec", projectId, quality],
+    queryKey: ["render-bundle", projectId, quality],
     queryFn: () => fn({ data: { projectId, quality } }),
   });
   const specJson = q.data?.specJson ?? "";
   const spec = (() => { try { return specJson ? JSON.parse(specJson) : null; } catch { return null; } })();
+  const validation = (() => { try { return q.data?.validationJson ? JSON.parse(q.data.validationJson) : null; } catch { return null; } })();
 
   function copy() {
     if (!specJson) return;
