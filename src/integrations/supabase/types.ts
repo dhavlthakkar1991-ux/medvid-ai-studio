@@ -967,7 +967,9 @@ export type Database = {
           retention_priority: string | null
           scene_patterns: Json
           specialty: string | null
+          specialty_id: string | null
           target_platform: string | null
+          template_id: string | null
           thumbnail_style: Json
           updated_at: string
           visual_density: string | null
@@ -987,7 +989,9 @@ export type Database = {
           retention_priority?: string | null
           scene_patterns?: Json
           specialty?: string | null
+          specialty_id?: string | null
           target_platform?: string | null
+          template_id?: string | null
           thumbnail_style?: Json
           updated_at?: string
           visual_density?: string | null
@@ -1007,7 +1011,9 @@ export type Database = {
           retention_priority?: string | null
           scene_patterns?: Json
           specialty?: string | null
+          specialty_id?: string | null
           target_platform?: string | null
+          template_id?: string | null
           thumbnail_style?: Json
           updated_at?: string
           visual_density?: string | null
