@@ -932,6 +932,20 @@ function ProjectView() {
               >
                 <RefreshCw className="h-3 w-3 mr-1" />Rebuild
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const r = await compileGraphicsFn({ data: { projectId: id } });
+                    qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+                    qc.invalidateQueries({ queryKey: ["preview-canonical", id] });
+                    toast.success(`Compiled ${r.compiled}/${r.graphicActions} graphics (V${r.manifestVersion}, ${r.virtualItemsRemaining} virtual left)`);
+                  } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                }}
+              >
+                Compile Graphics
+              </Button>
               <AiToolPrompt
                 projectId={id}
                 task="editorial_decisions"
