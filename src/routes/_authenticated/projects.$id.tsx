@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { getProject, updateTranscript } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
-import { runQueuedJob, startFullPipeline } from "@/lib/jobs.functions";
+import { runQueuedJob, startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
@@ -107,6 +107,7 @@ function ProjectView() {
   const regenFn = useServerFn(regenerateTask);
   const runJobFn = useServerFn(runQueuedJob);
   const startPipelineFn = useServerFn(startFullPipeline);
+  const retryPipelineFn = useServerFn(retryPipeline);
   const exportFn = useServerFn(getExportBundle);
   const canonFn = useServerFn(getCanonicalProject);
   const rebuildFn = useServerFn(rebuildRenderManifest);
@@ -412,7 +413,34 @@ function ProjectView() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-medium capitalize">{latestJob.state}…</div>
-              <div className="text-xs text-muted-foreground">{latestJob.progress}%</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-muted-foreground">{latestJob.progress}%</div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      const res = await retryPipelineFn({ data: { projectId: id } });
+                      if (res.runnerUrl) fetch(res.runnerUrl, { method: "POST" }).catch(() => undefined);
+                      const parts: string[] = [];
+                      if (res.clearedRunning) parts.push(`${res.clearedRunning} stuck`);
+                      if (res.clearedFailed) parts.push(`${res.clearedFailed} failed`);
+                      toast.success(parts.length ? `Retrying — cleared ${parts.join(" + ")} task(s).` : "Pipeline re-fired.");
+                      qc.invalidateQueries({ queryKey: ["project", id] });
+                      qc.invalidateQueries({ queryKey: ["pipeline-health", id] });
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Retry failed.");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Retry stuck tasks
+                </Button>
+              </div>
             </div>
             <Progress value={latestJob.progress} />
             {latestJob.error && <p className="text-xs text-destructive mt-2">{latestJob.error}</p>}
@@ -431,6 +459,31 @@ function ProjectView() {
                 <div className="text-xs text-destructive mt-1 break-all">{latestJob.error}</div>
               )}
             </div>
+            <div className="flex items-center gap-2">
+            {latestJob && (latestJob.state === "failed" || latestJob.state === "needs_review") && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const res = await retryPipelineFn({ data: { projectId: id } });
+                    if (res.runnerUrl) fetch(res.runnerUrl, { method: "POST" }).catch(() => undefined);
+                    toast.success("Retrying failed tasks…");
+                    qc.invalidateQueries({ queryKey: ["project", id] });
+                    qc.invalidateQueries({ queryKey: ["pipeline-health", id] });
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Retry failed.");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Retry failed tasks
+              </Button>
+            )}
             <Button
               size="sm"
               disabled={busy}
@@ -451,6 +504,7 @@ function ProjectView() {
               <Play className="h-3 w-3 mr-1" />
               {latestJob ? "Restart Pipeline" : "Start Pipeline"}
             </Button>
+            </div>
           </CardContent>
         </Card>
       )}
