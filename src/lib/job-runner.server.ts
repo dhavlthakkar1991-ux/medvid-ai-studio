@@ -137,12 +137,28 @@ export async function runAnalysisJob(jobId: string) {
     // ---- STEP 2: run the next pending analysis task ---------------------
     const { data: execRows } = await supabaseAdmin
       .from("task_executions")
-      .select("id, task_name, status")
+      .select("id, task_name, status, started_at")
       .eq("project_id", project.id)
       .eq("pipeline_run_id", runId);
+    // Mark stale "running" rows as failed so the pipeline can retry/skip them.
+    // A worker invocation can die mid-task (timeout, crash) and leave the row
+    // in `running` forever, which blocks progress and causes endless polling.
+    const STALE_MS = 180_000; // 3 minutes
+    const now = Date.now();
+    const stale = (execRows ?? []).filter(
+      (r: any) => r.status === "running" && r.started_at && now - new Date(r.started_at).getTime() > STALE_MS,
+    );
+    for (const r of stale) {
+      await supabaseAdmin.from("task_executions").update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_message: "Task timed out — worker invocation did not complete.",
+      }).eq("id", r.id);
+      (r as any).status = "failed";
+    }
     const doneSet = new Set(
       (execRows ?? [])
-        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings" || r.status === "failed")
+        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings" || r.status === "failed" || r.status === "running")
         .map((r: any) => r.task_name as string),
     );
     const pending = ALL_TASKS.filter((t) => !doneSet.has(t));
