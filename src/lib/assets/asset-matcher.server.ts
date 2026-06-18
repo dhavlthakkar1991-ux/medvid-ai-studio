@@ -1,10 +1,10 @@
+import { ACTION_TO_ASSET_TYPE } from "./asset-linker.server";
+
 // Server-only: convert normalized storyboard_items into asset_candidates.
 // Provider-independent: every candidate row carries `search_query` + `asset_type`
 // that any AssetProvider implementation can consume.
 
 type SupabaseLike = any;
-
-import { ACTION_TO_ASSET_TYPE } from "./asset-linker.server";
 
 const VISUAL_TYPE_TO_ASSET: Record<string, string> = {
   "B-Roll": "broll",
