@@ -237,6 +237,24 @@ function ProjectView() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
   });
+  const fixBlockerMut = useMutation({
+    mutationFn: async (fix: any) => {
+      if (fix.kind === "task") return regenFn({ data: { projectId: id, task: fix.task } });
+      if (fix.kind === "timeline") return recomposeFn({ data: { projectId: id } });
+      if (fix.kind === "manifest") return rebuildFn({ data: { projectId: id } });
+      if (fix.kind === "approve_assets") return acceptAllFn({ data: { projectId: id } });
+      return null;
+    },
+    onSuccess: () => {
+      toast.success("Fix applied");
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["project", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Fix failed"),
+  });
   const [composerZoom, setComposerZoom] = useState(8); // pixels per second
 
   // ---------- Render Queue ----------
