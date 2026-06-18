@@ -930,29 +930,125 @@ function ProjectView() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="composer">
-          {/* placeholder marker */}
-          <></>
-        </TabsContent>
-
         <TabsContent value="render">
-          <RenderTabBody
-            ready={renderReadyQ.data}
-            status={renderStatusQ.data}
-            outputs={renderOutputsQ.data?.outputs ?? []}
-            readiness={readinessQ.data}
-            composer={composerQ.data}
-            manifestCount={canonQ.data?.manifest?.length ?? 0}
-            projectDuration={canonQ.data?.projectDuration ?? 0}
-            onPreview={() => createRenderMut.mutate({ renderType: "preview" })}
-            onFull={() => createRenderMut.mutate({ renderType: "full" })}
-            onCancel={(jobId) => cancelRenderMut.mutate(jobId)}
-            isQueuing={createRenderMut.isPending}
-            isCancelling={cancelRenderMut.isPending}
-          />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Render
+                {renderStatusQ.data?.latest && (
+                  <Badge variant="outline" className="ml-2 capitalize">{renderStatusQ.data.latest.status}</Badge>
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline"
+                  disabled={createRenderMut.isPending || !renderReadyQ.data?.ok}
+                  onClick={() => createRenderMut.mutate({ renderType: "preview" })}>
+                  <Play className="h-3.5 w-3.5 mr-1" />Generate Preview Render
+                </Button>
+                <Button size="sm"
+                  disabled={createRenderMut.isPending || !renderReadyQ.data?.ok}
+                  onClick={() => createRenderMut.mutate({ renderType: "full" })}>
+                  <Play className="h-3.5 w-3.5 mr-1" />Generate Full Render
+                </Button>
+                {renderStatusQ.data?.latest && ["queued","preparing","rendering"].includes(renderStatusQ.data.latest.status) && (
+                  <Button size="sm" variant="destructive" disabled={cancelRenderMut.isPending}
+                    onClick={() => cancelRenderMut.mutate(renderStatusQ.data!.latest!.id)}>
+                    Cancel Render
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Pre-flight summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                <div className="rounded border border-border p-2">
+                  <div className="text-muted-foreground">Readiness</div>
+                  <div className="font-semibold">{readinessQ.data ? `${readinessQ.data.percent}%` : "—"}</div>
+                </div>
+                <div className="rounded border border-border p-2">
+                  <div className="text-muted-foreground">Timeline</div>
+                  <div className="font-semibold">{renderReadyQ.data?.checks.timelineValid ? "Valid" : "Invalid / missing"}</div>
+                </div>
+                <div className="rounded border border-border p-2">
+                  <div className="text-muted-foreground">Manifest</div>
+                  <div className="font-semibold">{renderReadyQ.data?.checks.manifestExists ? "Ready" : "Missing"}</div>
+                </div>
+                <div className="rounded border border-border p-2">
+                  <div className="text-muted-foreground">Duration</div>
+                  <div className="font-semibold">{renderReadyQ.data?.checks.durationSeconds?.toFixed(1) ?? "—"}s</div>
+                </div>
+              </div>
+
+              {renderReadyQ.data && !renderReadyQ.data.ok && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
+                  <div className="font-semibold text-destructive mb-1">BLOCKED</div>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {renderReadyQ.data.blockers.map((b: string, i: number) => <li key={i}>{b}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {/* Latest job */}
+              {renderStatusQ.data?.latest ? (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="font-medium capitalize">{renderStatusQ.data.latest.render_type}</span>
+                      <span className="text-muted-foreground"> · {new Date(renderStatusQ.data.latest.created_at).toLocaleString()}</span>
+                    </div>
+                    <Badge variant="outline" className="capitalize">{renderStatusQ.data.latest.status}</Badge>
+                  </div>
+                  <Progress value={renderStatusQ.data.latest.progress_percent ?? 0} />
+                  <div className="text-xs text-muted-foreground">
+                    {renderStatusQ.data.latest.progress_percent ?? 0}%
+                    {renderStatusQ.data.latest.error_message ? ` · ${renderStatusQ.data.latest.error_message}` : ""}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No render jobs yet. Approve assets, compose timeline, then queue a render.</p>
+              )}
+
+              {/* Outputs */}
+              <div>
+                <div className="text-sm font-semibold mb-2">Render Outputs</div>
+                {(renderOutputsQ.data?.outputs ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No outputs yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {(renderOutputsQ.data?.outputs ?? []).map((o: any) => (
+                      <div key={o.id} className="flex items-center justify-between border border-border rounded-md p-2 text-xs">
+                        <div className="flex flex-col">
+                          <span className="font-medium capitalize">{o.output_type} · {o.resolution}</span>
+                          <span className="text-muted-foreground">{new Date(o.created_at).toLocaleString()} · {Math.round((o.file_size ?? 0)/1_000_000)}MB · {Number(o.duration_seconds ?? 0).toFixed(1)}s</span>
+                        </div>
+                        <Button size="sm" variant="outline" asChild={!!o.file_url} disabled={!o.file_url}>
+                          {o.file_url ? <a href={o.file_url} target="_blank" rel="noreferrer">Download</a> : <span>Pending</span>}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* History */}
+              {renderStatusQ.data?.history && renderStatusQ.data.history.length > 1 && (
+                <div>
+                  <div className="text-sm font-semibold mb-2">History</div>
+                  <div className="space-y-1">
+                    {renderStatusQ.data.history.slice(1).map((j: any) => (
+                      <div key={j.id} className="flex items-center justify-between text-xs border border-border rounded-md p-2">
+                        <span className="capitalize">{j.render_type} · <span className="text-muted-foreground">{new Date(j.created_at).toLocaleString()}</span></span>
+                        <Badge variant="outline" className="capitalize">{j.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="composer-real">
+        <TabsContent value="composer">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
