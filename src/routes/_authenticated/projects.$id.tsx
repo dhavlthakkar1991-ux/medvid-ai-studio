@@ -1,10 +1,10 @@
 import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getProject, updateTranscript } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
-import { runQueuedJob, startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
+import { startFullPipeline, retryPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
@@ -105,7 +105,6 @@ function ProjectView() {
   const navigate = useNavigate();
   const getFn = useServerFn(getProject);
   const regenFn = useServerFn(regenerateTask);
-  const runJobFn = useServerFn(runQueuedJob);
   const startPipelineFn = useServerFn(startFullPipeline);
   const retryPipelineFn = useServerFn(retryPipeline);
   const exportFn = useServerFn(getExportBundle);
@@ -127,7 +126,6 @@ function ProjectView() {
   const recomposeFn = useServerFn(recomposeTimeline);
   const aiFixTimelineFn = useServerFn(aiFixTimelineIssues);
   const qc = useQueryClient();
-  const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -322,24 +320,10 @@ function ProjectView() {
 
   const latestJobForLaunch = q.data?.latestJob;
 
-  // The runner is step-based: each HTTP call advances one stage (transcribe →
-  // one analysis task → … → finalize). Re-fire whenever the job isn't done.
-  // We key on `${id}:${updated_at}` so each progress tick triggers the next step.
-  useEffect(() => {
-    if (!latestJobForLaunch) return;
-    const state = latestJobForLaunch.state;
-    if (!ACTIVE_JOB_STATES.has(state)) return;
-    const updatedAt = latestJobForLaunch.updated_at ?? "";
-    const key = `${latestJobForLaunch.id}:${state}:${updatedAt}`;
-    if (launchedJobs.current.has(key)) return;
-    launchedJobs.current.add(key);
-    runJobFn({ data: { jobId: latestJobForLaunch.id } })
-      .then((job) => {
-        if (job.runnerUrl) return fetch(job.runnerUrl, { method: "POST" });
-      })
-      .catch(() => undefined)
-      .finally(() => qc.invalidateQueries({ queryKey: ["project", id] }));
-  }, [latestJobForLaunch, qc, id, runJobFn]);
+  // NOTE: the client no longer auto-fires the runner on every progress tick —
+  // that burned tokens whenever a job got stuck. The pipeline now self-chains
+  // server-side after each successful step. Use Start / Retry buttons to
+  // (re)start it manually if it stalls.
 
   const regen = useMutation({
     mutationFn: (task: string) => regenFn({ data: { projectId: id, task: task as any } }),
