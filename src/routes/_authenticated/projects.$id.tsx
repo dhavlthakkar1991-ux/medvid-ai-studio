@@ -1496,18 +1496,25 @@ function ProjectView() {
                 <p className="text-sm text-muted-foreground">No timeline items yet. Run Editorial Decisions, then click Recompose.</p>
               ) : (
                 <div className="space-y-3">
+                  {(() => {
+                    const actionableIssues = composerQ.data.validation.issues.filter(isActionableTimelineIssue);
+                    const actionableErrors = actionableIssues.filter((iss: any) => iss.level === "error");
+                    const actionableWarnings = actionableIssues.filter((iss: any) => iss.level === "warning");
+                    return <>
                   {/* Validation summary */}
                   <div className="flex items-center gap-2 text-xs">
-                    {composerQ.data.validation.valid ? (
+                    {actionableErrors.length === 0 ? (
                       <Badge className="bg-emerald-600 hover:bg-emerald-600">✓ Valid</Badge>
                     ) : (
-                      <Badge variant="destructive">{composerQ.data.validation.errorCount} error{composerQ.data.validation.errorCount === 1 ? "" : "s"}</Badge>
+                      <Badge variant="destructive">{actionableErrors.length} error{actionableErrors.length === 1 ? "" : "s"}</Badge>
                     )}
-                    {composerQ.data.validation.warningCount > 0 && (
-                      <Badge variant="secondary">{composerQ.data.validation.warningCount} warning{composerQ.data.validation.warningCount === 1 ? "" : "s"}</Badge>
+                    {actionableWarnings.length > 0 && (
+                      <Badge variant="secondary">{actionableWarnings.length} warning{actionableWarnings.length === 1 ? "" : "s"}</Badge>
                     )}
                     <span className="text-muted-foreground">Duration: {composerQ.data.duration.toFixed(1)}s</span>
                   </div>
+                    </>;
+                  })()}
 
                   {/* Timeline grid */}
                   {(() => {
@@ -1573,7 +1580,7 @@ function ProjectView() {
                   })()}
 
                   {/* Issues list */}
-                  {composerQ.data.validation.issues.length > 0 && (
+                  {composerQ.data.validation.issues.filter(isActionableTimelineIssue).length > 0 && (
                     <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
                       <div className="flex items-center justify-between mb-1 gap-2">
                         <div className="text-xs font-semibold">Validation issues</div>
@@ -1591,7 +1598,7 @@ function ProjectView() {
                         </div>
                       </div>
                       <ul className="space-y-1 text-[11px]">
-                        {composerQ.data.validation.issues.map((iss: any, i: number) => (
+                        {composerQ.data.validation.issues.filter(isActionableTimelineIssue).map((iss: any, i: number) => (
                           <li key={i} className="flex items-start gap-2">
                             <Badge variant={iss.level === "error" ? "destructive" : "secondary"} className="text-[9px] uppercase">{iss.level}</Badge>
                             <span>{iss.message}</span>
