@@ -289,6 +289,10 @@ export async function runTaskForProject(
         // show_medical_diagram, show_broll, etc.) become reviewable candidates.
         try { await generateAssetCandidatesForProject(supabase, projectId); }
         catch (e) { console.warn("asset candidates regen after editorial failed", e); }
+        try {
+          const { composeTimelineForProject } = await import("./timeline/timeline-composer.server");
+          await composeTimelineForProject(supabase, projectId);
+        } catch (e) { console.warn("timeline compose after editorial failed", e); }
         await buildRenderManifestForProject(supabase, projectId);
       }
     }
