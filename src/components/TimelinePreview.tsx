@@ -110,11 +110,13 @@ function Stage({
   active,
   trackById,
   assetById,
+  compiledById,
   onSelect,
 }: {
   active: Item[];
   trackById: Map<string, Track>;
   assetById: Map<string, Asset>;
+  compiledById: Map<string, any>;
   onSelect: (it: Item) => void;
 }) {
   const byKind: Record<string, Item[]> = {};
@@ -144,14 +146,14 @@ function Stage({
         onClick={() => onSelect(primary)}
         className="w-full h-full text-left"
       >
-        <AssetVisual item={primary} asset={primary.asset_id ? assetById.get(primary.asset_id) : null} />
+        <AssetVisual item={primary} asset={primary.asset_id ? assetById.get(primary.asset_id) : null} compiledGraphic={primary.compiled_graphic_id ? compiledById.get(primary.compiled_graphic_id) : null} />
       </button>
     );
   } else if (primary && presenter) {
     const presenterNode = <PresenterPlaceholder size={layout === "split_screen" ? "half" : "pip"} />;
     const assetNode = (
       <button type="button" onClick={() => onSelect(primary)} className="w-full h-full text-left">
-        <AssetVisual item={primary} asset={primary.asset_id ? assetById.get(primary.asset_id) : null} />
+        <AssetVisual item={primary} asset={primary.asset_id ? assetById.get(primary.asset_id) : null} compiledGraphic={primary.compiled_graphic_id ? compiledById.get(primary.compiled_graphic_id) : null} />
       </button>
     );
     if (layout === "pip_left") {
@@ -200,27 +202,47 @@ function Stage({
       {/* Text overlays — top stack */}
       <div className="absolute top-3 left-3 right-3 flex flex-col gap-1 z-20">
         {textOverlays.slice(0, 3).map((it) => (
-          <button
+          (() => {
+            const cg = it.compiled_graphic_id ? compiledById.get(it.compiled_graphic_id) : null;
+            if (cg?.preview_url) {
+              return (
+                <button key={it.id} type="button" onClick={() => onSelect(it)} className="block">
+                  <img src={cg.preview_url} alt={it.title ?? it.asset_type} className="w-full max-h-32 object-contain drop-shadow-xl" />
+                </button>
+              );
+            }
+            return <button
             key={it.id}
             type="button"
             onClick={() => onSelect(it)}
             className={`text-left px-3 py-1.5 rounded backdrop-blur bg-yellow-500/30 border ${it.status === "missing_asset" ? "border-red-500" : "border-yellow-300/60"} text-yellow-50 text-sm font-semibold drop-shadow`}
           >
             {it.title || it.asset_type}
-          </button>
+          </button>;
+          })()
         ))}
       </div>
 
       {/* CTA — center card */}
       {ctas.length > 0 && (
         <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-          <button
+          {(() => {
+            const ctaCg = ctas[0].compiled_graphic_id ? compiledById.get(ctas[0].compiled_graphic_id) : null;
+            if (ctaCg?.preview_url) {
+              return (
+                <button type="button" onClick={() => onSelect(ctas[0])} className="pointer-events-auto max-w-[70%] max-h-[70%]">
+                  <img src={ctaCg.preview_url} alt="CTA" className="w-full h-full object-contain drop-shadow-2xl" />
+                </button>
+              );
+            }
+            return <button
             type="button"
             onClick={() => onSelect(ctas[0])}
             className="pointer-events-auto px-6 py-3 rounded-lg bg-pink-500/90 text-white font-bold shadow-2xl"
           >
             {ctas[0].title || "Call to Action"}
-          </button>
+          </button>;
+          })()}
         </div>
       )}
 
