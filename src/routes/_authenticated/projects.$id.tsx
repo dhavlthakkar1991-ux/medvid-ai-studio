@@ -299,6 +299,17 @@ function ProjectView() {
     queryKey: ["render-ready", id],
     queryFn: () => renderReadyFn({ data: { projectId: id } }),
   });
+  const providerJobFn = useServerFn(getProviderJobForRender);
+  const latestJobId = (renderStatusQ.data as any)?.latest?.id as string | undefined;
+  const providerJobQ = useQuery({
+    queryKey: ["provider-job", latestJobId],
+    enabled: !!latestJobId,
+    queryFn: () => providerJobFn({ data: { renderJobId: latestJobId! } }),
+    refetchInterval: (q) => {
+      const status = (q.state.data as any)?.providerJob?.status;
+      return status && ["queued","preparing","rendering"].includes(status) ? 2000 : false;
+    },
+  });
   const createRenderMut = useMutation({
     mutationFn: (v: { renderType: "preview" | "full" }) =>
       renderCreateFn({ data: { projectId: id, renderType: v.renderType } }),
