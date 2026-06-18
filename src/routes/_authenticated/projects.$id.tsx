@@ -1323,13 +1323,20 @@ function ProjectView() {
                   {/* Issues list */}
                   {composerQ.data.validation.issues.length > 0 && (
                     <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-1 gap-2">
                         <div className="text-xs font-semibold">Validation issues</div>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
-                          disabled={recomposeMut.isPending}
-                          onClick={() => recomposeMut.mutate()}>
-                          <RefreshCw className="h-3 w-3 mr-1" />Fix (Recompose)
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
+                            disabled={recomposeMut.isPending || aiFixTimelineMut.isPending}
+                            onClick={() => recomposeMut.mutate()}>
+                            <RefreshCw className="h-3 w-3 mr-1" />Recompose
+                          </Button>
+                          <Button size="sm" className="h-6 px-2 text-[11px]"
+                            disabled={aiFixTimelineMut.isPending || recomposeMut.isPending}
+                            onClick={() => aiFixTimelineMut.mutate()}>
+                            {aiFixTimelineMut.isPending ? "Fixing…" : "AI Fix"}
+                          </Button>
+                        </div>
                       </div>
                       <ul className="space-y-1 text-[11px]">
                         {composerQ.data.validation.issues.map((iss: any, i: number) => (
