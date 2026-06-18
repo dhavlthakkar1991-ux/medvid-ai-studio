@@ -978,32 +978,53 @@ export type Database = {
       }
       render_jobs: {
         Row: {
+          completed_at: string | null
           created_at: string
+          error_message: string | null
           id: string
+          manifest_version: number | null
           output_url: string | null
+          progress_percent: number
           project_id: string
           provider: string | null
+          render_type: string
+          requested_by: string | null
           settings: Json
+          started_at: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          completed_at?: string | null
           created_at?: string
+          error_message?: string | null
           id?: string
+          manifest_version?: number | null
           output_url?: string | null
+          progress_percent?: number
           project_id: string
           provider?: string | null
+          render_type?: string
+          requested_by?: string | null
           settings?: Json
+          started_at?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          completed_at?: string | null
           created_at?: string
+          error_message?: string | null
           id?: string
+          manifest_version?: number | null
           output_url?: string | null
+          progress_percent?: number
           project_id?: string
           provider?: string | null
+          render_type?: string
+          requested_by?: string | null
           settings?: Json
+          started_at?: string | null
           status?: string
           updated_at?: string
         }
@@ -1163,6 +1184,60 @@ export type Database = {
             columns: ["transition_out_id"]
             isOneToOne: false
             referencedRelation: "transition_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      render_outputs: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          file_size: number | null
+          file_url: string | null
+          id: string
+          output_type: string
+          project_id: string
+          render_job_id: string
+          resolution: string | null
+          thumbnail_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          output_type?: string
+          project_id: string
+          render_job_id: string
+          resolution?: string | null
+          thumbnail_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          output_type?: string
+          project_id?: string
+          render_job_id?: string
+          resolution?: string | null
+          thumbnail_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_outputs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_outputs_render_job_id_fkey"
+            columns: ["render_job_id"]
+            isOneToOne: false
+            referencedRelation: "render_jobs"
             referencedColumns: ["id"]
           },
         ]

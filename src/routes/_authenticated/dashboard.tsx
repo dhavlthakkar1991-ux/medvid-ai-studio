@@ -4,10 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { listProjects } from "@/lib/projects.functions";
 import { getUsageTotals } from "@/lib/settings.functions";
 import { getAssetDashboardSummary } from "@/lib/assets.functions";
+import { getRenderDashboardSummary } from "@/lib/render-jobs.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Film, CheckCircle2, ClipboardList, Image as ImageIcon, Activity } from "lucide-react";
+import { Plus, Film, CheckCircle2, ClipboardList, Image as ImageIcon, Activity, Hourglass, CheckCheck, XCircle, Timer } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -18,9 +19,11 @@ function Dashboard() {
   const listFn = useServerFn(listProjects);
   const usageFn = useServerFn(getUsageTotals);
   const summaryFn = useServerFn(getAssetDashboardSummary);
+  const renderSummaryFn = useServerFn(getRenderDashboardSummary);
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => listFn() });
   const usage = useQuery({ queryKey: ["usage"], queryFn: () => usageFn() });
   const summary = useQuery({ queryKey: ["asset-summary"], queryFn: () => summaryFn() });
+  const renderSummary = useQuery({ queryKey: ["render-summary"], queryFn: () => renderSummaryFn() });
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10">
@@ -50,6 +53,25 @@ function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Avg Readiness</CardTitle></CardHeader>
           <CardContent className="text-2xl font-semibold">{summary.data ? `${summary.data.avgReadiness}%` : "—"}</CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><Hourglass className="h-3.5 w-3.5" /> Queued Renders</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{renderSummary.data?.queued ?? "—"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><CheckCheck className="h-3.5 w-3.5" /> Completed Renders</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{renderSummary.data?.completed ?? "—"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><XCircle className="h-3.5 w-3.5" /> Failed Renders</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{renderSummary.data?.failed ?? "—"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><Timer className="h-3.5 w-3.5" /> Avg Render Time</CardTitle></CardHeader>
+          <CardContent className="text-2xl font-semibold">{renderSummary.data ? `${renderSummary.data.avgRenderSeconds}s` : "—"}</CardContent>
         </Card>
       </div>
 
