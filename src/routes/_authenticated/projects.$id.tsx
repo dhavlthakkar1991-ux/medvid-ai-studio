@@ -1399,6 +1399,10 @@ function ProjectView() {
           <ProductionPackageExport projectId={id} />
         </TabsContent>
 
+        <TabsContent value="renderspec">
+          <RenderSpecInspector projectId={id} />
+        </TabsContent>
+
         <TabsContent value="composer">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
