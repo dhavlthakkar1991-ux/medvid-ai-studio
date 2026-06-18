@@ -24,6 +24,7 @@ import { AiToolPrompt } from "@/components/AiToolPrompt";
 import { TimelinePreview } from "@/components/TimelinePreview";
 import { ProductionPackageExport } from "@/components/ProductionPackageExport";
 import { RenderSpecInspector } from "@/components/RenderSpecInspector";
+import { RenderWorkerStatusCard } from "@/components/RenderWorkerStatusCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
