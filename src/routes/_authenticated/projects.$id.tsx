@@ -2,14 +2,14 @@ import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { getProject } from "@/lib/projects.functions";
+import { getProject, updateTranscript } from "@/lib/projects.functions";
 import { regenerateTask } from "@/lib/analysis.functions";
 import { runQueuedJob, startFullPipeline } from "@/lib/jobs.functions";
 import { getExportBundle } from "@/lib/exports.functions";
 import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRenderManifestJson, regenerateEditorialDecisions, regenerateLayoutDecisions } from "@/lib/render.functions";
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
-import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
+import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
 import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
