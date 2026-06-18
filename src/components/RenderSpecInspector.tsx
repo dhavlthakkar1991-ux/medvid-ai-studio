@@ -221,3 +221,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </div>
   );
 }
+function ReadinessTile({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+  return (
+    <div className={`rounded border p-2 ${ok ? "border-emerald-500/40" : "border-destructive/40"}`}>
+      <div className="flex items-center gap-1 text-muted-foreground">
+        {ok ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <XCircle className="h-3 w-3 text-destructive" />}
+        {label}
+      </div>
+      <div className="font-semibold text-[11px] mt-0.5">{detail}</div>
+    </div>
+  );
+}
+}
