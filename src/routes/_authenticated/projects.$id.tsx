@@ -931,6 +931,28 @@ function ProjectView() {
         </TabsContent>
 
         <TabsContent value="composer">
+          {/* placeholder marker */}
+          <></>
+        </TabsContent>
+
+        <TabsContent value="render">
+          <RenderTabBody
+            ready={renderReadyQ.data}
+            status={renderStatusQ.data}
+            outputs={renderOutputsQ.data?.outputs ?? []}
+            readiness={readinessQ.data}
+            composer={composerQ.data}
+            manifestCount={canonQ.data?.manifest?.length ?? 0}
+            projectDuration={canonQ.data?.projectDuration ?? 0}
+            onPreview={() => createRenderMut.mutate({ renderType: "preview" })}
+            onFull={() => createRenderMut.mutate({ renderType: "full" })}
+            onCancel={(jobId) => cancelRenderMut.mutate(jobId)}
+            isQueuing={createRenderMut.isPending}
+            isCancelling={cancelRenderMut.isPending}
+          />
+        </TabsContent>
+
+        <TabsContent value="composer-real">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
