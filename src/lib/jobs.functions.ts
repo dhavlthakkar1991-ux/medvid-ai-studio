@@ -6,6 +6,30 @@ export const startFullPipeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ projectId: z.string() }).parse(input))
   .handler(async ({ context, data }) => {
+    const terminal = new Set(["completed", "completed_with_warnings", "needs_review", "failed"]);
+    const { data: project } = await context.supabase
+      .from("projects")
+      .select("status")
+      .eq("id", data.projectId)
+      .maybeSingle();
+    const { data: active } = await context.supabase
+      .from("jobs")
+      .select("id")
+      .eq("project_id", data.projectId)
+      .in("state", ["queued", "transcribing", "analyzing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (active?.id) {
+      if (project?.status && terminal.has(project.status)) {
+        await context.supabase.from("jobs").update({ state: project.status, progress: 100, error: null }).eq("id", active.id);
+      } else {
+      const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+      const token = await createJobRunnerToken(active.id);
+      return { jobId: active.id, runnerUrl: `/api/public/jobs/run/${active.id}?token=${encodeURIComponent(token)}` };
+      }
+    }
+
     const { data: job, error } = await context.supabase
       .from("jobs")
       .insert({ project_id: data.projectId, kind: "full", state: "queued", progress: 0 })
@@ -26,12 +50,16 @@ export const runQueuedJob = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { data: job, error } = await context.supabase
       .from("jobs")
-      .select("id, state, updated_at, project_id, projects!inner(user_id)")
+      .select("id, state, updated_at, project_id, projects!inner(user_id, status)")
       .eq("id", data.jobId)
       .single();
     if (error) throw new Error(error.message);
-    const project = job.projects as unknown as { user_id: string };
+    const project = job.projects as unknown as { user_id: string; status?: string };
     if (project.user_id !== context.userId) throw new Error("Not authorized to run this job.");
+    if (project.status && ["completed", "completed_with_warnings", "needs_review", "failed"].includes(project.status)) {
+      await context.supabase.from("jobs").update({ state: project.status, progress: 100, error: null }).eq("id", job.id);
+      return { ok: true };
+    }
     // Job is finished — nothing to fire.
     if (["completed", "completed_with_warnings", "needs_review", "failed"].includes(job.state)) return { ok: true };
     // Otherwise (queued / failed / transcribing / analyzing): always issue a

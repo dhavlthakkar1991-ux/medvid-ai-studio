@@ -137,13 +137,13 @@ export async function runAnalysisJob(jobId: string) {
     // ---- STEP 2: run the next pending analysis task ---------------------
     const { data: execRows } = await supabaseAdmin
       .from("task_executions")
-      .select("id, task_name, status, started_at")
+      .select("id, task_name, status, started_at, retry_count, attempts")
       .eq("project_id", project.id)
       .eq("pipeline_run_id", runId);
     // Mark stale "running" rows as failed so the pipeline can retry/skip them.
     // A worker invocation can die mid-task (timeout, crash) and leave the row
     // in `running` forever, which blocks progress and causes endless polling.
-    const STALE_MS = 180_000; // 3 minutes
+    const STALE_MS = 150_000; // long enough for slow AI calls, short enough to auto-recover
     const now = Date.now();
     const stale = (execRows ?? []).filter(
       (r: any) => r.status === "running" && r.started_at && now - new Date(r.started_at).getTime() > STALE_MS,
@@ -156,9 +156,25 @@ export async function runAnalysisJob(jobId: string) {
       }).eq("id", r.id);
       (r as any).status = "failed";
     }
+    const activeRunning = (execRows ?? []).filter((r: any) => r.status === "running");
+    if (activeRunning.length > 0) {
+      // Duplicate invocations can happen from browser refreshes or callback races.
+      // Do not treat an in-flight task as complete; otherwise the runner can skip
+      // ahead and start dependent tasks out of order.
+      return { body: `busy:${activeRunning[0].task_name}`, status: 200 };
+    }
+    const isRetryableFailed = (r: any) =>
+      r.status === "failed" &&
+      (Number(r.retry_count) || 0) < 1 &&
+      (!Array.isArray(r.attempts) || r.attempts.length === 0);
     const doneSet = new Set(
       (execRows ?? [])
-        .filter((r: any) => r.status === "completed" || r.status === "completed_with_warnings" || r.status === "failed" || r.status === "running")
+        .filter(
+          (r: any) =>
+            r.status === "completed" ||
+            r.status === "completed_with_warnings" ||
+            (r.status === "failed" && !isRetryableFailed(r)),
+        )
         .map((r: any) => r.task_name as string),
     );
     const pending = ALL_TASKS.filter((t) => !doneSet.has(t));
@@ -167,19 +183,28 @@ export async function runAnalysisJob(jobId: string) {
       const task = pending[0];
       const doneCount = ALL_TASKS.length - pending.length;
       await setState("analyzing", 20 + Math.round((doneCount / ALL_TASKS.length) * 70));
-      const { data: claimed, error: claimError } = await supabaseAdmin
-        .from("task_executions")
-        .insert({
-          pipeline_run_id: runId,
-          project_id: project.id,
-          task_name: task,
-          status: "running",
-          provider: "pending",
-          model: "pending",
-          attempts: [],
-        })
-        .select("id")
-        .single();
+      const retryable = (execRows ?? []).find((r: any) => r.task_name === task && isRetryableFailed(r));
+      const claimQuery = retryable
+        ? supabaseAdmin
+            .from("task_executions")
+            .update({
+              status: "running",
+              started_at: new Date().toISOString(),
+              completed_at: null,
+              error_message: null,
+              retry_count: (Number(retryable.retry_count) || 0) + 1,
+            })
+            .eq("id", retryable.id)
+        : supabaseAdmin.from("task_executions").insert({
+            pipeline_run_id: runId,
+            project_id: project.id,
+            task_name: task,
+            status: "running",
+            provider: "pending",
+            model: "pending",
+            attempts: [],
+          });
+      const { data: claimed, error: claimError } = await claimQuery.select("id").single();
       if (claimError || !claimed) {
         // Another runner invocation claimed this task first. Return cleanly; the
         // browser poller will pick up the next progress update instead of
@@ -198,7 +223,7 @@ export async function runAnalysisJob(jobId: string) {
             status: "failed",
             completed_at: new Date().toISOString(),
             duration_ms: 0,
-            retry_count: 0,
+            retry_count: 1,
             fallback_used: false,
             error_message: String((error as any)?.message ?? error),
             attempts: [],
@@ -206,7 +231,11 @@ export async function runAnalysisJob(jobId: string) {
         } catch {}
       }
       await setState("analyzing", 20 + Math.round(((doneCount + 1) / ALL_TASKS.length) * 70));
-      return { body: `task:${task}`, status: 200 };
+      if (doneCount + 1 < ALL_TASKS.length) {
+        return { body: `task:${task}`, status: 200 };
+      }
+      // Last task is done; finalize in the same invocation so the pipeline
+      // cannot sit at 90% waiting for one more external retry/nudge.
     }
 
     // ---- STEP 3: finalize -----------------------------------------------

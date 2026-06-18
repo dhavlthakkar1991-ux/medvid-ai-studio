@@ -17,14 +17,22 @@ export const Route = createFileRoute("/api/public/jobs/run/$jobId")({
         // user explicitly clicks Start / Retry.
         try {
           const body = String(result.body ?? "");
-          const advanced = body === "transcribed" || body.startsWith("task:") || body.startsWith("claimed:");
+          const advanced = body === "transcribed" || body.startsWith("task:") || body.startsWith("claimed:") || body.startsWith("busy:");
           if (advanced) {
             const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
             const { data: job } = await supabaseAdmin.from("jobs").select("state").eq("id", jobId).single();
             const terminal = new Set(["completed", "completed_with_warnings", "needs_review", "failed"]);
             if (job && !terminal.has(job.state)) {
               const url = new URL(request.url);
-              fetch(url.toString(), { method: "POST" }).catch(() => undefined);
+              const delayMs = body.startsWith("busy:") ? 15_000 : 750;
+              const chain = new Promise<void>((resolve) => {
+                setTimeout(() => {
+                  fetch(url.toString(), { method: "POST" }).catch(() => undefined).finally(resolve);
+                }, delayMs);
+              });
+              const waitUntil = (globalThis as any).EdgeRuntime?.waitUntil;
+              if (typeof waitUntil === "function") waitUntil(chain);
+              else chain.catch(() => undefined);
             }
           }
         } catch {}
