@@ -254,13 +254,31 @@ function ProjectView() {
     mutationFn: () => aiFixTimelineFn({ data: { projectId: id } }),
     onSuccess: (res: any) => {
       const fixes = res?.fixesApplied?.length ? res.fixesApplied.join(" · ") : "No repairs needed";
-      if (res?.ok) toast.success(`Timeline fixed — ${fixes}`);
+      const remainingIssues = res?.validation?.issues ?? [];
+      const needsCta = remainingIssues.some((iss: any) => iss.code === "empty_track" && iss.track_kind === "cta");
+      if (needsCta) {
+        toast.info("CTA text is needed to finish this fix.");
+        setCtaFixOpen(true);
+      } else if (res?.ok) toast.success(`Timeline fixed — ${fixes}`);
       else toast.warning(`Partial fix — ${fixes}. ${res?.validation?.errorCount ?? 0} error(s) remain.`);
       qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
       qc.invalidateQueries({ queryKey: ["readiness", id] });
       qc.invalidateQueries({ queryKey: ["project-canonical", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "AI fix failed"),
+  });
+  const addCtaMut = useMutation({
+    mutationFn: () => addCtaFn({ data: { projectId: id, text: ctaFixText.trim() } }),
+    onSuccess: () => {
+      toast.success("CTA added and timeline rebuilt");
+      setCtaFixOpen(false);
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["preview-timeline", id] });
+      qc.invalidateQueries({ queryKey: ["preview-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "CTA fix failed"),
   });
   const fixBlockerMut = useMutation({
     mutationFn: async (fix: any) => {
