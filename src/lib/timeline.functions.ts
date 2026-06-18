@@ -201,7 +201,6 @@ export const addCtaToTimeline = createServerFn({ method: "POST" })
       priority: 10,
       asset_query: data.text.slice(0, 300),
       source: "user_fix",
-      metadata: { cta_text: data.text, added_via: "validation_fix" },
       parameters: { cta_text: data.text, added_via: "validation_fix" },
     };
 
