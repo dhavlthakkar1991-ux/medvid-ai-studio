@@ -144,11 +144,20 @@ function ProviderConfigDialog({ provider, onSaved }: { provider: any; onSaved: (
             onChange={(e) => setText(e.target.value)}
           />
           {provider.provider_type === "custom_worker" && (
-            <p className="text-xs text-muted-foreground">
-              Set <code>webhook_url</code> to your render worker's HTTP endpoint. The worker
-              receives the FFmpeg-flavored payload and calls back into
-              <code> /api/public/render-callback </code> when finished.
-            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>Supported configuration keys:</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                <li><code>worker_url</code> — base URL of your render worker. Adapter POSTs to <code>{`{worker_url}/render`}</code>, <code>{`{worker_url}/cancel`}</code>, and optionally <code>{`{worker_url}/status/:id`}</code>.</li>
+                <li><code>callback_url</code> — optional. Full URL the worker calls when finished. Defaults to <code>/api/public/render-callback</code> on this app.</li>
+                <li><code>timeout_ms</code> — request timeout for the initial dispatch (default 30000).</li>
+                <li><code>api_token</code> — optional bearer token sent to the worker.</li>
+                <li><code>simulate_worker</code> — <code>true</code> to skip the HTTP call and advance the render lifecycle locally for testing.</li>
+              </ul>
+              <p>
+                HMAC secret <code>CUSTOM_WORKER_SECRET</code> is stored as a Lovable Cloud secret.
+                The worker must sign callbacks using header <code>x-render-signature</code> = HMAC-SHA256(secret, raw_body).
+              </p>
+            </div>
           )}
           {provider.provider_type === "creatomate" && (
             <div className="text-xs text-muted-foreground space-y-1">
