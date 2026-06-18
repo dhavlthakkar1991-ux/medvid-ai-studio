@@ -4,9 +4,10 @@ import { zipSync, strToU8 } from "fflate";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getProductionPackage } from "@/lib/exports.functions";
+import { previewRenderSpec } from "@/lib/render-providers.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Package } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Package, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 type Pkg = Awaited<ReturnType<typeof getProductionPackage>>;
