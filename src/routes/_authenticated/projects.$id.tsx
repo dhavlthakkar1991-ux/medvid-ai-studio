@@ -1006,6 +1006,30 @@ function ProjectView() {
               )}
             </CardContent>
           </Card>
+          {canonQ.data?.compiledGraphics && canonQ.data.compiledGraphics.length > 0 && (
+            <Card className="mt-3">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Compiled Graphics
+                  <Badge variant="outline" className="ml-2">{canonQ.data.compiledGraphics.length} assets</Badge>
+                  <Badge variant="outline" className="ml-1">Manifest V6</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {canonQ.data.compiledGraphics.map((g: any) => (
+                    <div key={g.id} className="border border-border rounded overflow-hidden bg-muted/30">
+                      <img src={g.thumbnail_url ?? g.preview_url} alt={g.template_name} className="w-full h-32 object-contain bg-black/40" />
+                      <div className="p-2 text-xs">
+                        <div className="font-semibold truncate">{g.graphic_type}</div>
+                        <div className="text-muted-foreground truncate">{g.template_name}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="assets">
