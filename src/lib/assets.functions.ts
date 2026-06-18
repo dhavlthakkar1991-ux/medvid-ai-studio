@@ -139,7 +139,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
     const pid = data.projectId;
-    const [tx, sp, sb_, ed, ld, ac, rm] = await Promise.all([
+    const [tx, sp, sb_, ed, ld, ac, rm, ti] = await Promise.all([
       sb.from("transcripts").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "scene_plan"),
       sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "visual_storyboard"),
@@ -147,27 +147,49 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       sb.from("layout_decisions").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("asset_candidates").select("id, status", { count: "exact" }).eq("project_id", pid),
       sb.from("render_manifest").select("id", { count: "exact", head: true }).eq("project_id", pid),
+      sb.from("timeline_items").select("id", { count: "exact", head: true }).eq("project_id", pid),
     ]);
     const totalCand = ac.data?.length ?? 0;
     const approvedCand = (ac.data ?? []).filter((r: any) => r.status === "approved" || r.status === "locked" || r.status === "replaced").length;
     const assetsScore = totalCand === 0 ? 0 : Math.min(1, approvedCand / Math.max(1, totalCand));
 
+    // Timeline validity gate
+    let timelineScore = 0;
+    let timelineBlockers: string[] = [];
+    if ((ti.count ?? 0) > 0) {
+      try {
+        const { validateTimelineForProject } = await import("./timeline/timeline-composer.server");
+        const v = await validateTimelineForProject(sb, pid);
+        timelineScore = v.valid ? 1 : 0.5;
+        timelineBlockers = v.issues.filter((i: any) => i.level === "error").map((i: any) => i.message);
+      } catch { timelineScore = 0.5; }
+    }
+
     const gates = [
-      { key: "transcript", label: "Transcript", weight: 0.10, score: (tx.count ?? 0) > 0 ? 1 : 0 },
-      { key: "scene_plan", label: "Scene Plan", weight: 0.15, score: (sp.count ?? 0) > 0 ? 1 : 0 },
-      { key: "storyboard", label: "Storyboard", weight: 0.15, score: (sb_.count ?? 0) > 0 ? 1 : 0 },
-      { key: "editorial", label: "Editorial", weight: 0.15, score: (ed.count ?? 0) > 0 ? 1 : 0 },
-      { key: "layout", label: "Layout", weight: 0.10, score: (ld.count ?? 0) > 0 ? 1 : 0 },
-      { key: "assets", label: "Assets approved", weight: 0.20, score: assetsScore },
-      { key: "manifest", label: "Render Manifest", weight: 0.15, score: (rm.count ?? 0) > 0 ? 1 : 0 },
+      { key: "transcript", label: "Transcript", weight: 0.08, score: (tx.count ?? 0) > 0 ? 1 : 0 },
+      { key: "scene_plan", label: "Scene Plan", weight: 0.12, score: (sp.count ?? 0) > 0 ? 1 : 0 },
+      { key: "storyboard", label: "Storyboard", weight: 0.12, score: (sb_.count ?? 0) > 0 ? 1 : 0 },
+      { key: "editorial", label: "Editorial", weight: 0.12, score: (ed.count ?? 0) > 0 ? 1 : 0 },
+      { key: "layout", label: "Layout", weight: 0.08, score: (ld.count ?? 0) > 0 ? 1 : 0 },
+      { key: "assets", label: "Assets approved", weight: 0.18, score: assetsScore },
+      { key: "timeline", label: "Timeline valid", weight: 0.18, score: timelineScore },
+      { key: "manifest", label: "Render Manifest", weight: 0.12, score: (rm.count ?? 0) > 0 ? 1 : 0 },
     ];
     const pct = Math.round(gates.reduce((s, g) => s + g.weight * g.score, 0) * 100);
+    const blockers: string[] = [];
+    if ((tx.count ?? 0) === 0) blockers.push("Transcript missing");
+    if ((ed.count ?? 0) === 0) blockers.push("Editorial decisions missing");
+    if ((ti.count ?? 0) === 0) blockers.push("Timeline not composed");
+    if ((rm.count ?? 0) === 0) blockers.push("Render manifest not generated");
+    if (totalCand > 0 && approvedCand === 0) blockers.push("No assets approved yet");
+    blockers.push(...timelineBlockers.slice(0, 3));
     return {
       percent: pct,
       gates,
       approvedAssets: approvedCand,
       totalCandidates: totalCand,
-      readyForRender: pct >= 80,
+      readyForRender: pct >= 80 && blockers.length === 0,
+      blockers,
     };
   });
 
