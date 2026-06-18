@@ -92,6 +92,7 @@ function RenderProvidersPage() {
                   Set default
                 </Button>
                 <ProviderConfigDialog provider={p} onSaved={invalidate} />
+                <ProviderDiagnosticsDialog providerId={p.id} providerName={p.name} />
               </div>
             </div>
           ))}
