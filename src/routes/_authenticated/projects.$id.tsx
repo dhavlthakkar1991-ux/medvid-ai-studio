@@ -875,6 +875,12 @@ function ProjectView() {
               >
                 <RefreshCw className="h-3 w-3 mr-1" />Rebuild
               </Button>
+              <AiToolPrompt
+                projectId={id}
+                task="editorial_decisions"
+                headerLabel="render manifest"
+                invalidateKeys={[["project-canonical", id], ["timeline-composer", id], ["render-readiness", id]]}
+              />
             </CardHeader>
             <CardContent>
               {!canonQ.data || canonQ.data.manifest.length === 0 ? (
@@ -1130,6 +1136,12 @@ function ProjectView() {
                     Cancel Render
                   </Button>
                 )}
+                <AiToolPrompt
+                  projectId={id}
+                  task="editorial_decisions"
+                  headerLabel="render pipeline"
+                  invalidateKeys={[["project-canonical", id], ["timeline-composer", id], ["render-readiness", id]]}
+                />
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1239,6 +1251,12 @@ function ProjectView() {
                 <Button size="sm" onClick={() => recomposeMut.mutate()} disabled={recomposeMut.isPending}>
                   <RefreshCw className="h-3.5 w-3.5 mr-1" />Recompose
                 </Button>
+                <AiToolPrompt
+                  projectId={id}
+                  task="editorial_decisions"
+                  headerLabel="timeline composer"
+                  invalidateKeys={[["timeline-composer", id], ["project-canonical", id], ["render-readiness", id]]}
+                />
               </div>
             </CardHeader>
             <CardContent>
@@ -1379,6 +1397,12 @@ function ProjectView() {
               >
                 Validate
               </Button>
+              <AiToolPrompt
+                projectId={id}
+                task="editorial_decisions"
+                headerLabel="timeline"
+                invalidateKeys={[["project-canonical", id], ["timeline-composer", id], ["render-readiness", id]]}
+              />
             </CardHeader>
             <CardContent>
               {!canonQ.data || canonQ.data.timelineInstructions.length === 0 ? (
@@ -1556,6 +1580,12 @@ function ProjectView() {
               >
                 <RefreshCw className="h-3 w-3 mr-1" />Regenerate
               </Button>
+              <AiToolPrompt
+                projectId={id}
+                task="editorial_decisions"
+                headerLabel="layout decisions"
+                invalidateKeys={[["project-canonical", id], ["timeline-composer", id], ["render-readiness", id]]}
+              />
             </CardHeader>
             <CardContent>
               {!canonQ.data || ((canonQ.data as any).layoutDecisions?.length ?? 0) === 0 ? (
