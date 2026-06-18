@@ -4,7 +4,7 @@ import { zipSync, strToU8 } from "fflate";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getProductionPackage } from "@/lib/exports.functions";
-import { previewRenderSpec } from "@/lib/render-providers.functions";
+import { getRenderBundle } from "@/lib/render-providers.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Download, FileJson, FileSpreadsheet, FileText, Package, Wrench } from "lucide-react";
@@ -197,7 +197,7 @@ function buildTimelinePdf(pkg: Pkg): Uint8Array {
 
 export function ProductionPackageExport({ projectId }: { projectId: string }) {
   const pkgFn = useServerFn(getProductionPackage);
-  const specFn = useServerFn(previewRenderSpec);
+  const bundleFn = useServerFn(getRenderBundle);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function fetchPkg(): Promise<Pkg> {
@@ -261,13 +261,17 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
   async function downloadRenderDebugPackage() {
     setBusy("debug");
     try {
-      const [pkg, specRes] = await Promise.all([
+      const [pkg, bundle] = await Promise.all([
         fetchPkg(),
-        specFn({ data: { projectId, quality: "full" as const } }),
+        bundleFn({ data: { projectId, quality: "full" as const } }),
       ]);
       const title = safeTitle(pkg.project.title);
       const files: Record<string, Uint8Array> = {
-        "renderspec.json": strToU8(JSON.stringify(JSON.parse(specRes.specJson), null, 2)),
+        "render_spec.json": strToU8(JSON.stringify(JSON.parse(bundle.specJson), null, 2)),
+        "render_validation.json": strToU8(JSON.stringify(JSON.parse(bundle.validationJson), null, 2)),
+        "asset_manifest.json": strToU8(JSON.stringify(JSON.parse(bundle.assetManifestJson), null, 2)),
+        "graphics_manifest.json": strToU8(JSON.stringify(JSON.parse(bundle.graphicsManifestJson), null, 2)),
+        "worker_handoff.json": strToU8(JSON.stringify(JSON.parse(bundle.workerHandoffJson), null, 2)),
         "manifest_v6.json": strToU8(JSON.stringify(pkg.jsonFiles["manifest_v6.json"], null, 2)),
         "timeline.json": strToU8(JSON.stringify(pkg.jsonFiles["timeline.json"], null, 2)),
         "assets.json": strToU8(JSON.stringify(pkg.jsonFiles["assets.json"], null, 2)),
@@ -279,14 +283,18 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
             `Project: ${pkg.project.title ?? pkg.project.id}`,
             "",
             "Contents:",
-            " - renderspec.json        Canonical RenderSpec v1 (provider-agnostic)",
+            " - render_spec.json       Canonical RenderSpec v1 (provider-agnostic)",
+            " - render_validation.json Pre-flight validation report",
+            " - asset_manifest.json    Resolved asset list (urls, mime, durations)",
+            " - graphics_manifest.json Compiled overlay/lower-third graphics",
+            " - worker_handoff.json    Worker payload + canvas + tracks + items",
             " - manifest_v6.json       Manifest V6 rows (editorial source of truth)",
             " - timeline.json          Composed timeline tracks + items",
             " - assets.json            All project assets",
             " - compiled_graphics.json Compiled overlay/lower-third graphics",
             " - captions.srt           Burned-caption source",
             "",
-            "Hand directly to an external render worker (FFmpeg / Node / Docker).",
+            "Hand directly to medvideo-render-worker (FFmpeg / Node / Docker).",
           ].join("\n"),
         ),
       };
