@@ -28,7 +28,7 @@ function Index() {
       </header>
       <section className="mx-auto max-w-5xl px-6 pt-20 pb-16 text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground mb-6">
-          <Sparkles className="h-3 w-3 text-primary" /> Built for oncology, surgery, and clinical educators
+          <Sparkles className="h-3 w-3 text-primary" /> Built for clinicians, surgeons, and medical educators
         </div>
         <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
           From talking-head to <span className="text-primary">publish-ready</span> medical video.
