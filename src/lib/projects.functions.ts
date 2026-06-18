@@ -92,12 +92,20 @@ export const getProject = createServerFn({ method: "GET" })
     ]);
     if (proj.error) throw new Error(proj.error.message);
     if (!proj.data) return { project: null, context: null, transcript: null, versions: [], latestJob: null, usage: [] };
+    const latestJob = jobs.data?.[0] ?? null;
+    const terminal = new Set(["completed", "completed_with_warnings", "needs_review", "failed"]);
+    const active = new Set(["queued", "transcribing", "analyzing"]);
+    if (latestJob && terminal.has(proj.data.status) && active.has(latestJob.state)) {
+      latestJob.state = proj.data.status;
+      latestJob.progress = 100;
+      latestJob.error = null;
+    }
     return {
       project: proj.data,
       context: ctx.data,
       transcript: tx.data,
       versions: vers.data ?? [],
-      latestJob: jobs.data?.[0] ?? null,
+      latestJob,
       usage: usage.data ?? [],
     };
   });
