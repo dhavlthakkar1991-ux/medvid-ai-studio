@@ -1566,14 +1566,17 @@ function ProjectView() {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!canonQ.data || (canonQ.data.editActions?.length ?? 0) === 0}
+                disabled={!canonQ.data}
                 onClick={async () => {
                   try {
                     toast.info("Generating layout decisions…");
-                    await regenLayoutFn({ data: { projectId: id } });
+                    const res: any = await regenLayoutFn({ data: { projectId: id } });
                     qc.invalidateQueries({ queryKey: ["project-canonical", id] });
                     qc.invalidateQueries({ queryKey: ["project-health", id] });
-                    toast.success("Layout decisions regenerated.");
+                    const summary = Array.isArray(res?.steps) && res.steps.length > 0
+                      ? res.steps.join(" • ")
+                      : `Wrote ${res?.count ?? 0} layout decision(s)`;
+                    toast.success(summary);
                   } catch (e: any) {
                     toast.error(e?.message ?? "Failed");
                   }
