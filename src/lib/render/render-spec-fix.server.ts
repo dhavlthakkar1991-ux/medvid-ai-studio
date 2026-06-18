@@ -8,8 +8,9 @@
  *
  * Fix policy:
  *   missing_asset_url       → backfill assets.url from assets.preview_url
- *                              or thumbnail_url. If still empty, delete the
- *                              asset row and remove its references.
+ *                              or thumbnail_url. If still empty, reject the
+ *                              asset row and unlink candidates/references so
+ *                              the composer cannot pick it again.
  *   missing_graphic_payload → delete the compiled_graphic row.
  *   unused_asset            → delete the unused asset / compiled_graphic.
  *   orphan_item             → delete the offending timeline_item & manifest row.
@@ -21,13 +22,30 @@
 import type { RenderValidationReport } from "./render-validation";
 
 type Sb = any;
+type ParsedRef = { kind: "asset" | "graphic" | "url" | "item"; id: string };
 
-function parseRef(ref?: string | null): { kind: "asset" | "graphic" | "url" | "item"; id: string } | null {
+function parseRef(ref?: string | null): ParsedRef | null {
   if (!ref) return null;
   if (ref.startsWith("asset:")) return { kind: "asset", id: ref.slice(6) };
   if (ref.startsWith("graphic:")) return { kind: "graphic", id: ref.slice(8) };
   if (ref.startsWith("url:")) return { kind: "url", id: ref.slice(4) };
   return { kind: "item", id: ref };
+}
+
+function refLabel(r: ParsedRef | null) {
+  return r?.id ? r.id.slice(0, 8) : "unknown";
+}
+
+async function rejectUnusableAssets(sb: Sb, projectId: string, ids: string[]) {
+  if (ids.length === 0) return;
+  await sb.from("asset_candidates")
+    .update({ status: "rejected", linked_asset_id: null, review_note: "RenderSpec fix: asset has no renderable URL" })
+    .eq("project_id", projectId)
+    .in("linked_asset_id", ids);
+  await sb.from("project_assets").delete().eq("project_id", projectId).in("asset_id", ids);
+  await sb.from("render_manifest").update({ asset_id: null, asset_url: null, status: "pending", asset_source: "unresolved_asset" }).eq("project_id", projectId).in("asset_id", ids);
+  await sb.from("timeline_items").update({ asset_id: null, status: "missing_asset" }).eq("project_id", projectId).in("asset_id", ids);
+  await sb.from("assets").update({ status: "rejected", review_note: "RenderSpec fix: asset has no renderable URL" }).eq("project_id", projectId).in("id", ids);
 }
 
 export async function fixRenderSpecIssues(
