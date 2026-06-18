@@ -1278,6 +1278,9 @@ function ProjectView() {
         </TabsContent>
 
         <TabsContent value="render">
+          <div className="mb-4">
+            <RenderWorkerStatusCard />
+          </div>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
