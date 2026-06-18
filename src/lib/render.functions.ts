@@ -83,9 +83,48 @@ export const regenerateLayoutDecisions = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { runLayoutDecisionsForProject } = await import("./layout/layout-runner.server");
     const { buildRenderManifestForProject } = await import("./render/timeline-builder.server");
-    const res = await runLayoutDecisionsForProject(context.supabase, context.userId, data.projectId);
-    await buildRenderManifestForProject(context.supabase, data.projectId);
-    return res;
+    const { ensureEditActionsForProject } = await import("./editorial/backfill.server");
+    const sb = context.supabase;
+    const steps: string[] = [];
+
+    // 1) If no edit_actions exist, try to backfill from storyboard/b-roll/editorial.
+    let { count: eaCount } = await sb
+      .from("edit_actions").select("id", { count: "exact", head: true })
+      .eq("project_id", data.projectId);
+    if (!eaCount || eaCount === 0) {
+      try {
+        await ensureEditActionsForProject(sb, data.projectId);
+        const r = await sb.from("edit_actions").select("id", { count: "exact", head: true }).eq("project_id", data.projectId);
+        eaCount = r.count ?? 0;
+        if (eaCount > 0) steps.push(`Backfilled ${eaCount} edit action(s) from storyboard/b-roll`);
+      } catch (e: any) {
+        steps.push(`Backfill failed: ${e?.message ?? "unknown"}`);
+      }
+    }
+    // 2) If still no edit_actions, run the editorial AI task to generate them.
+    if (!eaCount || eaCount === 0) {
+      try {
+        const { runTaskForProject } = await import("./analysis-runner.server");
+        await runTaskForProject(sb, context.userId, data.projectId, "editorial_decisions");
+        await ensureEditActionsForProject(sb, data.projectId);
+        const r = await sb.from("edit_actions").select("id", { count: "exact", head: true }).eq("project_id", data.projectId);
+        eaCount = r.count ?? 0;
+        steps.push(`Generated ${eaCount} edit action(s) via AI editorial`);
+      } catch (e: any) {
+        steps.push(`AI editorial generation failed: ${e?.message ?? "unknown"}`);
+      }
+    }
+    if (!eaCount || eaCount === 0) {
+      throw new Error(
+        "Cannot generate layout decisions: no edit actions exist. Run the pipeline (transcript → scene plan → storyboard → editorial decisions) first.",
+      );
+    }
+
+    // 3) Run layout decisions and rebuild manifest.
+    const res = await runLayoutDecisionsForProject(sb, context.userId, data.projectId);
+    await buildRenderManifestForProject(sb, data.projectId);
+    steps.push(`Wrote ${res.count} layout decision(s) (${res.aiCount} AI, ${res.fallbackCount} fallback)`);
+    return { ...res, steps };
   });
 
 export const validateTimeline = createServerFn({ method: "POST" })
