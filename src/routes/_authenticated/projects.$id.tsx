@@ -579,6 +579,7 @@ function ProjectView() {
           <TabsTrigger value="review">Review Assets</TabsTrigger>
           <TabsTrigger value="readiness">Readiness</TabsTrigger>
           <TabsTrigger value="render">Render</TabsTrigger>
+          <TabsTrigger value="renderspec">RenderSpec</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
           <TabsTrigger value="composer">Timeline Composer</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
