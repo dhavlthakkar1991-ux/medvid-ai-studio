@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw, Play } from "lucide-react";
+import { AiToolPrompt } from "@/components/AiToolPrompt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -596,9 +597,12 @@ function ProjectView() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-base">{TASK_LABELS[t]} {v && <Badge variant="outline" className="ml-2">v{v.version}</Badge>}</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => regen.mutate(t)} disabled={regen.isPending || !transcript}>
-                    <RefreshCw className="h-3 w-3 mr-1" />Regenerate
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <AiToolPrompt projectId={id} task={t as any} disabled={!v} />
+                    <Button size="sm" variant="outline" onClick={() => regen.mutate(t)} disabled={regen.isPending || !transcript}>
+                      <RefreshCw className="h-3 w-3 mr-1" />Regenerate
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {!v ? <p className="text-sm text-muted-foreground">Not generated yet.</p> :
@@ -1455,6 +1459,8 @@ function ProjectView() {
               <CardTitle className="text-base">
                 Editorial Decisions {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.editActions.length} actions</Badge>}
               </CardTitle>
+              <div className="flex items-center gap-2">
+              <AiToolPrompt projectId={id} task="editorial_decisions" invalidateKeys={[["project-canonical", id]]} />
               <Button
                 size="sm"
                 variant="outline"
@@ -1473,6 +1479,7 @@ function ProjectView() {
               >
                 <RefreshCw className="h-3 w-3 mr-1" />Regenerate Editorial Decisions
               </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {!canonQ.data || canonQ.data.editActions.length === 0 ? (
