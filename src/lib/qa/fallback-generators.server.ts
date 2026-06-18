@@ -7,6 +7,24 @@ function fmt(s: number): string {
   return `${m}:${sec}`;
 }
 
+export async function fallbackChapters(_supabase: any, _projectId: string, project: any) {
+  const duration = Math.max(60, Number(project?.duration_seconds) || 60);
+  const topic = project?.topic || project?.title || "Topic";
+  const count = duration < 180 ? 4 : duration < 360 ? 5 : 6;
+  const step = duration / count;
+  const labels = ["Introduction", "Background", "Key concept", "What to do", "Next steps", "Summary", "Q&A", "Closing"];
+  const chapters = Array.from({ length: count }, (_, i) => {
+    const start = Math.round(i * step);
+    const end = i === count - 1 ? Math.round(duration) : Math.round((i + 1) * step);
+    return {
+      title: `${labels[i] ?? `Chapter ${i + 1}`} — ${topic}`.slice(0, 80),
+      start: fmt(start),
+      end: fmt(end),
+    };
+  });
+  return { chapters };
+}
+
 type SceneRow = {
   scene_number: number;
   title: string;

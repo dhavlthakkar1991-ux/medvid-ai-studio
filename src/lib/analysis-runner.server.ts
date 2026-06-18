@@ -9,7 +9,7 @@ import { generateAssetCandidatesForProject } from "./assets/asset-matcher.server
 import { compileTimelineForProject } from "./render/timeline-compiler.server";
 import { validateTaskOutput, type TaskValidatorKey, type ValidationResult } from "./qa/validators";
 import { FALLBACK_PROMPTS } from "./qa/fallback-prompts.server";
-import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions, fallbackSeo } from "./qa/fallback-generators.server";
+import { fallbackScenePlan, fallbackBroll, fallbackVisualStoryboard, fallbackEditorialDecisions, fallbackSeo, fallbackChapters } from "./qa/fallback-generators.server";
 
 const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
   lovable: "google/gemini-2.5-flash",
@@ -45,7 +45,7 @@ You produce strictly structured JSON. Never include markdown, prose, or explanat
 All times are mm:ss strings. Keep medical content accurate, evidence-based, and patient-safe.`;
 
 const TASK_PROMPTS: Record<TaskKey, string> = {
-  chapters: `Segment the transcript into 4–8 educational chapters with mm:ss start/end timestamps inside the duration.`,
+  chapters: `Segment the transcript into EXACTLY 4–8 educational chapters. Return JSON shaped { "chapters": [ { "title": string, "start": "mm:ss", "end": "mm:ss" }, ... ] }. EVERY chapter MUST include a non-empty title AND non-empty mm:ss start AND non-empty mm:ss end. Chapters must be contiguous: first starts at 00:00, last ends at the full duration, and each end equals the next start. NEVER return fewer than 4 chapters or empty timestamps.`,
   scene_plan: `Plan 6–14 scenes (talking-head, infographic, b-roll, callout, chapter-card). Each scene MUST include: t (mm:ss), kind, title, scene_number, narration_text (verbatim or close paraphrase of the transcript slice for that scene — REQUIRED, non-empty), objective (one-sentence editorial purpose — REQUIRED, non-empty). Timestamps are advisory only; the pipeline derives final scene timing from transcript segments.`,
   visual_storyboard: `Produce a 8–20 step visual storyboard. Each step: time, visual_type, title, screen_layout, asset_prompt (vivid, image/video generation ready), animation, priority, duration_seconds. Tune to specialty and visual_density.`,
   broll: `Suggest 5–12 B-roll cutaways. Each item MUST have EXACTLY these fields: scene_number (1-based, matching scene_plan), keyword (<=4 words), search_prompt (cinematic generation-ready description), placement_reason (why this clip supports the narration), recommended_start (mm:ss), recommended_end (mm:ss). Do NOT emit legacy fields (prompt, asset_prompt, keywords[], t).`,
@@ -190,6 +190,7 @@ export async function runTaskForProject(
     const t0 = Date.now();
     let gen: any = null;
     if (task === "scene_plan") gen = await fallbackScenePlan(supabase, projectId, project);
+    else if (task === "chapters") gen = await fallbackChapters(supabase, projectId, project);
     else if (task === "broll") gen = await fallbackBroll(supabase, projectId, project);
     else if (task === "visual_storyboard") gen = await fallbackVisualStoryboard(supabase, projectId, project);
     else if (task === "editorial_decisions") gen = await fallbackEditorialDecisions(supabase, projectId, project);

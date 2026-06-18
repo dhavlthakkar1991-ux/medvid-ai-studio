@@ -237,6 +237,24 @@ function ProjectView() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
   });
+  const fixBlockerMut = useMutation({
+    mutationFn: async (fix: any) => {
+      if (fix.kind === "task") return regenFn({ data: { projectId: id, task: fix.task } });
+      if (fix.kind === "timeline") return recomposeFn({ data: { projectId: id } });
+      if (fix.kind === "manifest") return rebuildFn({ data: { projectId: id } });
+      if (fix.kind === "approve_assets") return acceptAllFn({ data: { projectId: id } });
+      return null;
+    },
+    onSuccess: () => {
+      toast.success("Fix applied");
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["project", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Fix failed"),
+  });
   const [composerZoom, setComposerZoom] = useState(8); // pixels per second
 
   // ---------- Render Queue ----------
@@ -1040,11 +1058,22 @@ function ProjectView() {
                   <div className="text-xs text-muted-foreground">
                     {readinessQ.data.approvedAssets} of {readinessQ.data.totalCandidates} asset candidates approved.
                   </div>
-                  {readinessQ.data.blockers && readinessQ.data.blockers.length > 0 ? (
+                  {readinessQ.data.blockerActions && readinessQ.data.blockerActions.length > 0 ? (
                     <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
-                      <div className="font-semibold text-destructive mb-1">BLOCKED · {readinessQ.data.blockers.length} reason{readinessQ.data.blockers.length === 1 ? "" : "s"}</div>
-                      <ul className="list-disc list-inside space-y-0.5">
-                        {readinessQ.data.blockers.map((b: string, i: number) => <li key={i}>{b}</li>)}
+                      <div className="font-semibold text-destructive mb-2">BLOCKED · {readinessQ.data.blockerActions.length} reason{readinessQ.data.blockerActions.length === 1 ? "" : "s"}</div>
+                      <ul className="space-y-1.5">
+                        {readinessQ.data.blockerActions.map((b: any, i: number) => (
+                          <li key={i} className="flex items-center justify-between gap-2">
+                            <span>• {b.message}</span>
+                            {b.fix && b.fix.kind !== "navigate" ? (
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
+                                disabled={fixBlockerMut.isPending}
+                                onClick={() => fixBlockerMut.mutate(b.fix)}>
+                                {b.fix.label}
+                              </Button>
+                            ) : null}
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   ) : readinessQ.data.readyForRender ? (
@@ -1281,7 +1310,14 @@ function ProjectView() {
                   {/* Issues list */}
                   {composerQ.data.validation.issues.length > 0 && (
                     <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
-                      <div className="text-xs font-semibold mb-1">Validation issues</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs font-semibold">Validation issues</div>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]"
+                          disabled={recomposeMut.isPending}
+                          onClick={() => recomposeMut.mutate()}>
+                          <RefreshCw className="h-3 w-3 mr-1" />Fix (Recompose)
+                        </Button>
+                      </div>
                       <ul className="space-y-1 text-[11px]">
                         {composerQ.data.validation.issues.map((iss: any, i: number) => (
                           <li key={i} className="flex items-start gap-2">

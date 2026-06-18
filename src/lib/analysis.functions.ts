@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const TaskInput = z.object({
   projectId: z.string(),
-  task: z.enum(["chapters", "scene_plan", "visual_storyboard", "broll", "infographics", "thumbnails", "seo", "shorts"]),
+  task: z.enum(["chapters", "scene_plan", "visual_storyboard", "broll", "infographics", "thumbnails", "seo", "shorts", "editorial_decisions"]),
 });
 
 export const regenerateTask = createServerFn({ method: "POST" })

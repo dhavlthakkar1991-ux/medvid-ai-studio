@@ -204,7 +204,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const sb = context.supabase;
     const pid = data.projectId;
     const [tx, sp, sb_, ed, ld, ac, rm, ti] = await Promise.all([
-      sb.from("transcripts").select("id", { count: "exact", head: true }).eq("project_id", pid),
+      sb.from("transcripts").select("project_id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "scene_plan"),
       sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "visual_storyboard"),
       sb.from("analysis_versions").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("task", "editorial_decisions"),
@@ -240,13 +240,23 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       { key: "manifest", label: "Render Manifest", weight: 0.12, score: (rm.count ?? 0) > 0 ? 1 : 0 },
     ];
     const pct = Math.round(gates.reduce((s, g) => s + g.weight * g.score, 0) * 100);
-    const blockers: string[] = [];
-    if ((tx.count ?? 0) === 0) blockers.push("Transcript missing");
-    if ((ed.count ?? 0) === 0) blockers.push("Editorial decisions missing");
-    if ((ti.count ?? 0) === 0) blockers.push("Timeline not composed");
-    if ((rm.count ?? 0) === 0) blockers.push("Render manifest not generated");
-    if (totalCand > 0 && approvedCand === 0) blockers.push("No assets approved yet");
-    blockers.push(...timelineBlockers.slice(0, 3));
+    type BlockerAction =
+      | { kind: "task"; task: string; label: string }
+      | { kind: "timeline"; label: string }
+      | { kind: "manifest"; label: string }
+      | { kind: "approve_assets"; label: string }
+      | { kind: "navigate"; tab: string; label: string };
+    const blockerActions: { id: string; message: string; fix?: BlockerAction }[] = [];
+    if ((tx.count ?? 0) === 0) blockerActions.push({ id: "transcript", message: "Transcript missing", fix: { kind: "navigate", tab: "transcript", label: "Open transcript" } });
+    if ((sp.count ?? 0) === 0 && (tx.count ?? 0) > 0) blockerActions.push({ id: "scene_plan", message: "Scene plan missing", fix: { kind: "task", task: "scene_plan", label: "Generate scene plan" } });
+    if ((ed.count ?? 0) === 0) blockerActions.push({ id: "editorial", message: "Editorial decisions missing", fix: { kind: "task", task: "editorial_decisions", label: "Generate editorial" } });
+    if (totalCand > 0 && approvedCand === 0) blockerActions.push({ id: "assets", message: "No assets approved yet", fix: { kind: "approve_assets", label: "Accept all candidates" } });
+    if ((ti.count ?? 0) === 0) blockerActions.push({ id: "timeline", message: "Timeline not composed", fix: { kind: "timeline", label: "Compose timeline" } });
+    if ((rm.count ?? 0) === 0) blockerActions.push({ id: "manifest", message: "Render manifest not generated", fix: { kind: "manifest", label: "Build manifest" } });
+    for (const tb of timelineBlockers.slice(0, 3)) {
+      blockerActions.push({ id: `tl_${tb.slice(0, 20)}`, message: tb, fix: { kind: "timeline", label: "Recompose timeline" } });
+    }
+    const blockers = blockerActions.map((b) => b.message);
     return {
       percent: pct,
       gates,
@@ -254,6 +264,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       totalCandidates: totalCand,
       readyForRender: pct >= 80 && blockers.length === 0,
       blockers,
+      blockerActions,
     };
   });
 
