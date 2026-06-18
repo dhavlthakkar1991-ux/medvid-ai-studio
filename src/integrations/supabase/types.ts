@@ -1093,6 +1093,9 @@ export type Database = {
           progress_percent: number
           project_id: string
           provider: string | null
+          provider_id: string | null
+          provider_job_id: string | null
+          render_spec: Json | null
           render_type: string
           requested_by: string | null
           settings: Json
@@ -1110,6 +1113,9 @@ export type Database = {
           progress_percent?: number
           project_id: string
           provider?: string | null
+          provider_id?: string | null
+          provider_job_id?: string | null
+          render_spec?: Json | null
           render_type?: string
           requested_by?: string | null
           settings?: Json
@@ -1127,6 +1133,9 @@ export type Database = {
           progress_percent?: number
           project_id?: string
           provider?: string | null
+          provider_id?: string | null
+          provider_job_id?: string | null
+          render_spec?: Json | null
           render_type?: string
           requested_by?: string | null
           settings?: Json
@@ -1140,6 +1149,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_jobs_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "render_providers"
             referencedColumns: ["id"]
           },
         ]
@@ -1397,6 +1413,93 @@ export type Database = {
           updated_at?: string
           user_id?: string
           watermark?: string | null
+        }
+        Relationships: []
+      }
+      render_provider_jobs: {
+        Row: {
+          created_at: string
+          id: string
+          logs: Json
+          provider_id: string
+          provider_job_id: string | null
+          render_job_id: string
+          request_payload: Json
+          response_payload: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          logs?: Json
+          provider_id: string
+          provider_job_id?: string | null
+          render_job_id: string
+          request_payload?: Json
+          response_payload?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logs?: Json
+          provider_id?: string
+          provider_job_id?: string | null
+          render_job_id?: string
+          request_payload?: Json
+          response_payload?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_provider_jobs_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "render_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_provider_jobs_render_job_id_fkey"
+            columns: ["render_job_id"]
+            isOneToOne: false
+            referencedRelation: "render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      render_providers: {
+        Row: {
+          configuration: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          is_default: boolean
+          name: string
+          provider_type: string
+          updated_at: string
+        }
+        Insert: {
+          configuration?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_default?: boolean
+          name: string
+          provider_type: string
+          updated_at?: string
+        }
+        Update: {
+          configuration?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_default?: boolean
+          name?: string
+          provider_type?: string
+          updated_at?: string
         }
         Relationships: []
       }
