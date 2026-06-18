@@ -63,25 +63,54 @@ function NewProject() {
   };
 
   // Extract duration + dimensions from the chosen video file (client-side).
-  const extractVideoMeta = (f: File): Promise<{ duration: number | null; width: number | null; height: number | null }> =>
+  const extractVideoMeta = (
+    f: File,
+  ): Promise<{ duration: number | null; width: number | null; height: number | null; fps: number | null }> =>
     new Promise((resolve) => {
       try {
         const url = URL.createObjectURL(f);
         const v = document.createElement("video");
         v.preload = "metadata";
         v.src = url;
-        const done = (val: { duration: number | null; width: number | null; height: number | null }) => {
+        v.muted = true;
+        (v as any).playsInline = true;
+        let settled = false;
+        const done = (val: { duration: number | null; width: number | null; height: number | null; fps: number | null }) => {
+          if (settled) return;
+          settled = true;
           URL.revokeObjectURL(url);
+          try { v.pause(); } catch {}
           resolve(val);
         };
-        v.onloadedmetadata = () => done({
-          duration: Number.isFinite(v.duration) ? Math.round(v.duration) : null,
+        const baseMeta = () => ({
+          duration: Number.isFinite(v.duration) ? Math.round(v.duration * 100) / 100 : null,
           width: v.videoWidth || null,
           height: v.videoHeight || null,
         });
-        v.onerror = () => done({ duration: null, width: null, height: null });
+        v.onerror = () => done({ ...baseMeta(), fps: null });
+        v.onloadedmetadata = () => {
+          // Estimate fps via requestVideoFrameCallback over a ~600ms window.
+          const rvfc = (v as any).requestVideoFrameCallback?.bind(v);
+          if (!rvfc) { done({ ...baseMeta(), fps: null }); return; }
+          let frames = 0;
+          let firstTs = 0;
+          const onFrame = (now: number) => {
+            frames += 1;
+            if (frames === 1) firstTs = now;
+            if (now - firstTs >= 600 || frames >= 30) {
+              const elapsed = (now - firstTs) / 1000;
+              const fps = elapsed > 0 ? Math.round((frames - 1) / elapsed) : null;
+              done({ ...baseMeta(), fps: fps && fps > 0 ? fps : null });
+              return;
+            }
+            rvfc(onFrame);
+          };
+          rvfc(onFrame);
+          v.play().catch(() => done({ ...baseMeta(), fps: null }));
+          setTimeout(() => done({ ...baseMeta(), fps: null }), 2500);
+        };
       } catch {
-        resolve({ duration: null, width: null, height: null });
+        resolve({ duration: null, width: null, height: null, fps: null });
       }
     });
 
