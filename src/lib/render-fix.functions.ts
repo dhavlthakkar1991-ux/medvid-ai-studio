@@ -56,7 +56,7 @@ export const aiFixRenderReadiness = createServerFn({ method: "POST" })
         .from("asset_candidates").select("id").eq("project_id", pid).eq("status", "pending");
       if (pending && pending.length > 0) {
         await sb.from("asset_candidates")
-          .update({ status: "approved", approved_by: userId, approved_at: new Date().toISOString() })
+          .update({ status: "approved", approved_by: userId, approved_at: new Date().toISOString() } as any)
           .eq("project_id", pid).eq("status", "pending");
         steps.push(`Approved ${pending.length} pending asset candidate(s)`);
       }
