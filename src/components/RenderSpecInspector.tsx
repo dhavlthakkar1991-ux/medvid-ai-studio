@@ -22,13 +22,18 @@ export function RenderSpecInspector({ projectId }: { projectId: string }) {
     mutationFn: () => fixFn({ data: { projectId, quality } }),
     onSuccess: (r: any) => {
       const count = r?.fixes?.length ?? 0;
-      toast.success(`Applied ${count} fix${count === 1 ? "" : "es"}`, {
-        description: r?.fixes?.slice(0, 3).join(" · ") || "No issues remaining",
+      const remaining = Number(r?.remaining ?? 0);
+      const toastFn = remaining > 0 ? toast.warning : toast.success;
+      toastFn(`Applied ${count} fix${count === 1 ? "" : "es"}`, {
+        description: remaining > 0
+          ? `${remaining} issue${remaining === 1 ? "" : "s"} still need manual review`
+          : (r?.fixes?.slice(0, 3).join(" · ") || "No issues remaining"),
       });
       qc.invalidateQueries({ queryKey: ["render-bundle", projectId] });
       qc.invalidateQueries({ queryKey: ["readiness", projectId] });
       qc.invalidateQueries({ queryKey: ["preview-canonical", projectId] });
       qc.invalidateQueries({ queryKey: ["preview-timeline", projectId] });
+      q.refetch();
     },
     onError: (e: any) => toast.error(e?.message ?? "Fix failed"),
   });
