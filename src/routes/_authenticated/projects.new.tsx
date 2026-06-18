@@ -1,8 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import { listTemplates } from "@/lib/templates.functions";
+import { useMemo, useState } from "react";
 import { createProject, createUploadUrl } from "@/lib/projects.functions";
 import { startFullPipeline } from "@/lib/jobs.functions";
 import { Button } from "@/components/ui/button";
@@ -13,23 +11,28 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  MEDICAL_TEMPLATES,
+  MEDICAL_SPECIALTIES,
+  findMedicalTemplate,
+  findMedicalSpecialty,
+} from "@/lib/templates/catalog";
 
 export const Route = createFileRoute("/_authenticated/projects/new")({
   component: NewProject,
-  head: () => ({ meta: [{ title: "New project — OncoVideo" }] }),
+  head: () => ({ meta: [{ title: "New project — MedVideo AI" }] }),
 });
 
 function NewProject() {
   const router = useRouter();
-  const listFn = useServerFn(listTemplates);
   const createFn = useServerFn(createProject);
   const uploadFn = useServerFn(createUploadUrl);
   const startFn = useServerFn(startFullPipeline);
-  const tpls = useQuery({ queryKey: ["templates"], queryFn: () => listFn() });
 
+  const [templateId, setTemplateId] = useState<string>("");
+  const [specialtyId, setSpecialtyId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
-  const [tplId, setTplId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [presenterName, setPresenterName] = useState("");
   const [groundingMode, setGroundingMode] = useState<"strict" | "open">("strict");
@@ -40,7 +43,24 @@ function NewProject() {
   });
   const [busy, setBusy] = useState(false);
 
-  const tpl = (tpls.data ?? []).find(t => t.id === tplId);
+  const tpl = useMemo(() => findMedicalTemplate(templateId), [templateId]);
+  const specialty = useMemo(() => findMedicalSpecialty(specialtyId), [specialtyId]);
+
+  // Smart auto-fill: when a template is chosen, prefill the override defaults.
+  // Already-edited fields are preserved (only empty / default values change).
+  const onTemplateChange = (id: string) => {
+    setTemplateId(id);
+    const t = findMedicalTemplate(id);
+    if (!t) return;
+    setOverrides((prev) => ({
+      ...prev,
+      audience: prev.audience || t.audience,
+      brand_voice: prev.brand_voice || t.brand_voice,
+      visual_density: t.visual_density,
+      retention_priority: t.retention_priority,
+      render_intent: t.render_intent,
+    }));
+  };
 
   // Extract duration + dimensions from the chosen video file (client-side).
   const extractVideoMeta = (f: File): Promise<{ duration: number | null; width: number | null; height: number | null }> =>
@@ -66,7 +86,9 @@ function NewProject() {
     });
 
   const onSubmit = async () => {
-    if (!title || !file || !tplId) return toast.error("Title, template and video are required.");
+    if (!title || !file || !templateId) {
+      return toast.error("Title, Medical Template, and video are required.");
+    }
     setBusy(true);
     try {
       const meta = await extractVideoMeta(file);
@@ -74,25 +96,28 @@ function NewProject() {
       const { error: upErr } = await supabase.storage.from("videos").uploadToSignedUrl(path, token, file);
       if (upErr) throw upErr;
       const ctx = {
-        audience: overrides.audience || (tpl?.default_audience ?? null),
-        specialty: tpl?.specialty ?? null,
-        brand_voice: overrides.brand_voice || (tpl?.default_brand_voice ?? null),
+        audience: overrides.audience || tpl?.audience || null,
+        specialty: specialty?.name ?? null,
+        brand_voice: overrides.brand_voice || tpl?.brand_voice || null,
         target_platform: overrides.target_platform,
         content_type: overrides.content_type,
-        visual_style: overrides.visual_style || (tpl?.default_visual_style ?? null),
-        scene_patterns: (tpl?.default_scene_patterns as string[]) ?? [],
-        infographic_types: (tpl?.default_infographic_types as string[]) ?? [],
-        broll_types: (tpl?.default_broll_types as string[]) ?? [],
-        thumbnail_style: (tpl?.default_thumbnail_style as Record<string, unknown>) ?? {},
+        visual_style: overrides.visual_style || null,
+        scene_patterns: [],
+        infographic_types: [],
+        broll_types: [],
+        thumbnail_style: {},
         render_intent: overrides.render_intent,
         visual_density: overrides.visual_density,
         retention_priority: overrides.retention_priority,
         presenter_name: presenterName.trim() || null,
         grounding_mode: groundingMode,
+        template_id: templateId,
+        specialty_id: specialtyId || null,
       };
       const { id } = await createFn({
         data: {
-          title, topic, specialty_template_id: tplId,
+          title, topic,
+          specialty_template_id: null,
           video_path: path,
           duration_seconds: meta.duration,
           width: meta.width,
@@ -117,44 +142,69 @@ function NewProject() {
     <div className="mx-auto max-w-3xl px-6 py-10 space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">New project</h1>
-        <p className="text-muted-foreground text-sm mt-1">Pick a specialty template, upload your video, and we'll handle the rest.</p>
+        <p className="text-muted-foreground text-sm mt-1">
+          Pick a Medical Template and Specialty, upload your video, and we'll handle the rest.
+        </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Specialty template</CardTitle>
-          <CardDescription>Pre-fills audience, voice, visual style and asset patterns.</CardDescription>
+          <CardTitle>Medical Template</CardTitle>
+          <CardDescription>
+            Choose a content template optimized for your video goal. Templates preconfigure
+            audience, visual style, editorial strategy, asset patterns, SEO behavior and
+            retention strategy.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Select value={tplId} onValueChange={setTplId}>
+          <Select value={templateId} onValueChange={onTemplateChange}>
             <SelectTrigger><SelectValue placeholder="Choose a template…" /></SelectTrigger>
             <SelectContent>
-              {(tpls.data ?? []).map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.template_name}{t.is_builtin ? "" : " (custom)"}</SelectItem>
+              {MEDICAL_TEMPLATES.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           {tpl && (
             <div className="mt-3 text-xs text-muted-foreground space-y-1">
-              <div><b>Audience:</b> {tpl.default_audience}</div>
-              <div><b>Voice:</b> {tpl.default_brand_voice}</div>
-              <div><b>Visual style:</b> {tpl.default_visual_style}</div>
+              <div><b>Audience:</b> {tpl.audience}</div>
+              <div><b>Voice:</b> {tpl.brand_voice}</div>
+              <div><b>Focus:</b> {tpl.focus}</div>
             </div>
           )}
         </CardContent>
       </Card>
 
       <Card>
+        <CardHeader>
+          <CardTitle>Medical Specialty</CardTitle>
+          <CardDescription>
+            Adds specialty-specific terminology, visual patterns, SEO keywords, and content intelligence.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={specialtyId} onValueChange={setSpecialtyId}>
+            <SelectTrigger><SelectValue placeholder="Choose a specialty…" /></SelectTrigger>
+            <SelectContent>
+              {MEDICAL_SPECIALTIES.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle>Project details</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Oral cancer: signs you should never ignore" /></div>
+          <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Early warning signs you should never ignore" /></div>
           <div><Label>Topic / brief</Label><Textarea value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What this video covers, the key message, and the call-to-action." /></div>
           <div>
             <Label>Presenter name</Label>
             <Input
               value={presenterName}
               onChange={(e) => setPresenterName(e.target.value)}
-              placeholder="Dr. Dhaval Thakkar"
+              placeholder="Dr. Jane Doe"
             />
             <p className="text-xs text-muted-foreground mt-1">
               Authoritative spelling. Overrides whatever transcription hears, and is used in every AI output (SEO, lower-thirds, thumbnails).
@@ -183,9 +233,9 @@ function NewProject() {
           <CardDescription>Override template defaults for this project only.</CardDescription>
         </CardHeader>
         <CardContent className="grid sm:grid-cols-2 gap-3">
-          <div><Label>Audience</Label><Input value={overrides.audience} placeholder={tpl?.default_audience ?? ""} onChange={(e) => setOverrides({ ...overrides, audience: e.target.value })} /></div>
-          <div><Label>Brand voice</Label><Input value={overrides.brand_voice} placeholder={tpl?.default_brand_voice ?? ""} onChange={(e) => setOverrides({ ...overrides, brand_voice: e.target.value })} /></div>
-          <div><Label>Visual style</Label><Input value={overrides.visual_style} placeholder={tpl?.default_visual_style ?? ""} onChange={(e) => setOverrides({ ...overrides, visual_style: e.target.value })} /></div>
+          <div><Label>Audience</Label><Input value={overrides.audience} placeholder={tpl?.audience ?? ""} onChange={(e) => setOverrides({ ...overrides, audience: e.target.value })} /></div>
+          <div><Label>Brand voice</Label><Input value={overrides.brand_voice} placeholder={tpl?.brand_voice ?? ""} onChange={(e) => setOverrides({ ...overrides, brand_voice: e.target.value })} /></div>
+          <div><Label>Visual style</Label><Input value={overrides.visual_style} placeholder="" onChange={(e) => setOverrides({ ...overrides, visual_style: e.target.value })} /></div>
           <div><Label>Target platform</Label><Input value={overrides.target_platform} onChange={(e) => setOverrides({ ...overrides, target_platform: e.target.value })} /></div>
           <div><Label>Render intent</Label>
             <Select value={overrides.render_intent} onValueChange={(v) => setOverrides({ ...overrides, render_intent: v })}>
