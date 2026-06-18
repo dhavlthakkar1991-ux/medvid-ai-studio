@@ -259,9 +259,10 @@ export async function validateTimelineForProject(supabase: SupabaseLike, project
       }
     }
   }
-  // Empty tracks (warning only)
+  // Empty tracks: only CTA is actionable. Other overlay tracks are optional
+  // because the composer can choose a different visual layer for this video.
   for (const t of (tracks ?? []) as any[]) {
-    if (t.kind === "presenter_video" || t.kind === "captions") continue;
+    if (t.kind !== "cta") continue;
     if (!byTrack[t.id] || byTrack[t.id].length === 0) {
       issues.push({
         level: "warning", code: "empty_track",
