@@ -9,6 +9,15 @@ const AddCtaInput = z.object({
   durationSeconds: z.number().min(1).max(30).optional(),
 });
 
+function actionableValidation(validation: any) {
+  const issues = (validation?.issues ?? []).filter((issue: any) => {
+    const message = String(issue?.message ?? "").toLowerCase();
+    return !((issue?.code === "empty_track" || message.includes("track has no items")) && issue?.track_kind !== "cta");
+  });
+  const errors = issues.filter((issue: any) => issue.level === "error");
+  return { ...validation, valid: errors.length === 0, issues, errorCount: errors.length, warningCount: issues.length - errors.length };
+}
+
 export const getProjectTimeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => Input.parse(i))
@@ -32,7 +41,7 @@ export const getProjectTimeline = createServerFn({ method: "POST" })
       tracks: tracks ?? [],
       items: items ?? [],
       duration: Number((project as any)?.duration_seconds) || 0,
-      validation,
+      validation: actionableValidation(validation),
     };
   });
 
@@ -46,7 +55,7 @@ export const recomposeTimeline = createServerFn({ method: "POST" })
     const { ensureApprovedAssetsForEditActions } = await import("./assets/asset-linker.server");
     const linked = await ensureApprovedAssetsForEditActions(sb, data.projectId, context.userId, { createMissing: true });
     const composeResult = await composeTimelineForProject(sb, data.projectId);
-    const validation = await validateTimelineForProject(sb, data.projectId);
+    const validation = actionableValidation(await validateTimelineForProject(sb, data.projectId));
     await buildRenderManifestForProject(sb, data.projectId);
     return { ...composeResult, linked, validation };
   });
@@ -140,7 +149,7 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
 
     // 2) Recompose + validate
     await composeTimelineForProject(sb, pid);
-    let validation = await validateTimelineForProject(sb, pid);
+    let validation = actionableValidation(await validateTimelineForProject(sb, pid));
 
     // 3) If errors remain or no actions exist, ask the LLM to regenerate editorial
     const needsRegen = validation.errorCount > 0 || kept.length === 0;
@@ -150,7 +159,7 @@ export const aiFixTimelineIssues = createServerFn({ method: "POST" })
         await runTaskForProject(sb, context.userId, pid, "editorial_decisions");
         fixesApplied.push("Regenerated editorial decisions via AI");
         await composeTimelineForProject(sb, pid);
-        validation = await validateTimelineForProject(sb, pid);
+        validation = actionableValidation(await validateTimelineForProject(sb, pid));
       } catch (e: any) {
         fixesApplied.push(`AI regeneration failed: ${e?.message ?? "unknown"}`);
       }
@@ -220,6 +229,6 @@ export const addCtaToTimeline = createServerFn({ method: "POST" })
       console.warn("manifest rebuild after CTA add failed", e);
     }
 
-    const validation = await validateTimelineForProject(sb, pid);
+    const validation = actionableValidation(await validateTimelineForProject(sb, pid));
     return { ok: validation.errorCount === 0, validation };
   });
