@@ -23,6 +23,7 @@ import { RefreshCw, FileJson, FileText, Captions, Trash2, RotateCcw, Play } from
 import { AiToolPrompt } from "@/components/AiToolPrompt";
 import { TimelinePreview } from "@/components/TimelinePreview";
 import { ProductionPackageExport } from "@/components/ProductionPackageExport";
+import { RenderSpecInspector } from "@/components/RenderSpecInspector";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
