@@ -85,6 +85,16 @@ export async function buildRenderSpec(
     specAssets.push(a);
   }
 
+  function pushGraphicAsset(graphicId: string) {
+    const g = cgById.get(graphicId);
+    pushAsset({
+      id: `graphic:${graphicId}`,
+      kind: "graphic",
+      source_url: g?.preview_url ?? g?.thumbnail_url ?? null,
+      inline: g?.template_name || g?.graphic_type ? { style: { template: g.template_name ?? g.graphic_type } } : undefined,
+    });
+  }
+
   // Graphics
   const specGraphics: RenderGraphic[] = (compiledGraphics ?? []).map((g: any) => ({
     id: String(g.id),
@@ -93,15 +103,6 @@ export async function buildRenderSpec(
     preview_url: g.preview_url ?? g.thumbnail_url ?? null,
     payload: (g.specification ?? g.payload ?? {}) as Record<string, unknown>,
   }));
-  // Register graphic assets so items can reference them by asset_id.
-  for (const g of specGraphics) {
-    pushAsset({
-      id: `graphic:${g.id}`,
-      kind: "graphic",
-      source_url: g.preview_url,
-      inline: g.template ? { style: { template: g.template } } : undefined,
-    });
-  }
 
   // Items + captions
   const items: RenderItem[] = [];
@@ -137,6 +138,7 @@ export async function buildRenderSpec(
       });
     } else if (row.compiled_graphic_id && cgById.has(row.compiled_graphic_id)) {
       assetId = `graphic:${row.compiled_graphic_id}`;
+      pushGraphicAsset(String(row.compiled_graphic_id));
     } else if (row.asset_url) {
       // Loose URL (b-roll / stock) — synthesize a stable asset id.
       assetId = `url:${row.id}`;
@@ -184,6 +186,7 @@ export async function buildRenderSpec(
       pushAsset({ id: assetId, kind: (a.asset_type ?? "video") as any, source_url: a.url ?? null });
     } else if (ti.compiled_graphic_id && cgById.has(ti.compiled_graphic_id)) {
       assetId = `graphic:${ti.compiled_graphic_id}`;
+      pushGraphicAsset(String(ti.compiled_graphic_id));
     }
     if (!assetId) continue;
     items.push({

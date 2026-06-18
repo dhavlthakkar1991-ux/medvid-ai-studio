@@ -158,13 +158,22 @@ export const fixRenderSpec = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => ProjectIdInput.parse(i))
   .handler(async ({ context, data }) => {
+    const { data: project, error: projectError } = await context.supabase
+      .from("projects")
+      .select("id")
+      .eq("id", data.projectId)
+      .maybeSingle();
+    if (projectError) throw new Error(projectError.message);
+    if (!project) throw new Error("Project not found");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { buildRenderSpec } = await import("./render/render-spec-builder.server");
     const { validateRenderSpec } = await import("./render/render-validation");
     const { fixRenderSpecIssues } = await import("./render/render-spec-fix.server");
-    const spec = await buildRenderSpec(context.supabase, data.projectId, { quality: data.quality });
+    const spec = await buildRenderSpec(supabaseAdmin, data.projectId, { quality: data.quality });
     const validation = validateRenderSpec(spec);
     const result = await fixRenderSpecIssues(
-      context.supabase,
+      supabaseAdmin,
       data.projectId,
       validation,
       spec.canvas.duration_seconds,

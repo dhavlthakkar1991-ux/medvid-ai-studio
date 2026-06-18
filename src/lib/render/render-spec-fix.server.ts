@@ -8,8 +8,9 @@
  *
  * Fix policy:
  *   missing_asset_url       → backfill assets.url from assets.preview_url
- *                              or thumbnail_url. If still empty, delete the
- *                              asset row and remove its references.
+ *                              or thumbnail_url. If still empty, reject the
+ *                              asset row and unlink candidates/references so
+ *                              the composer cannot pick it again.
  *   missing_graphic_payload → delete the compiled_graphic row.
  *   unused_asset            → delete the unused asset / compiled_graphic.
  *   orphan_item             → delete the offending timeline_item & manifest row.
@@ -21,13 +22,26 @@
 import type { RenderValidationReport } from "./render-validation";
 
 type Sb = any;
+type ParsedRef = { kind: "asset" | "graphic" | "url" | "item"; id: string };
 
-function parseRef(ref?: string | null): { kind: "asset" | "graphic" | "url" | "item"; id: string } | null {
+function parseRef(ref?: string | null): ParsedRef | null {
   if (!ref) return null;
   if (ref.startsWith("asset:")) return { kind: "asset", id: ref.slice(6) };
   if (ref.startsWith("graphic:")) return { kind: "graphic", id: ref.slice(8) };
   if (ref.startsWith("url:")) return { kind: "url", id: ref.slice(4) };
   return { kind: "item", id: ref };
+}
+
+async function rejectUnusableAssets(sb: Sb, projectId: string, ids: string[]) {
+  if (ids.length === 0) return;
+  await sb.from("asset_candidates")
+    .update({ status: "rejected", linked_asset_id: null, review_note: "RenderSpec fix: asset has no renderable URL" })
+    .eq("project_id", projectId)
+    .in("linked_asset_id", ids);
+  await sb.from("project_assets").delete().eq("project_id", projectId).in("asset_id", ids);
+  await sb.from("render_manifest").update({ asset_id: null, asset_url: null, status: "pending", asset_source: "unresolved_asset" }).eq("project_id", projectId).in("asset_id", ids);
+  await sb.from("timeline_items").update({ asset_id: null, status: "missing_asset" }).eq("project_id", projectId).in("asset_id", ids);
+  await sb.from("assets").update({ status: "rejected", review_note: "RenderSpec fix: asset has no renderable URL" }).eq("project_id", projectId).in("id", ids);
 }
 
 export async function fixRenderSpecIssues(
@@ -38,10 +52,21 @@ export async function fixRenderSpecIssues(
 ): Promise<{ fixes: string[]; remaining: number }> {
   const fixes: string[] = [];
 
-  const assetIdsToDelete = new Set<string>();
+  const assetIdsToReject = new Set<string>();
   const graphicIdsToDelete = new Set<string>();
   const itemIdsToDelete = new Set<string>();
   const itemsToClamp: { id: string; end: number }[] = [];
+
+  const assetIdsUsedByItems = new Set<string>();
+  const graphicIdsUsedByItems = new Set<string>();
+  const { buildRenderSpec } = await import("./render-spec-builder.server");
+  const currentSpec = await buildRenderSpec(sb, projectId, { quality: "full" });
+  for (const item of currentSpec.items ?? []) {
+    const r = parseRef(item.asset_id);
+    if (!r) continue;
+    if (r.kind === "asset") assetIdsUsedByItems.add(r.id);
+    if (r.kind === "graphic") graphicIdsUsedByItems.add(r.id);
+  }
 
   // Preload assets we may need for backfill.
   const assetIdsReferenced = new Set<string>();
@@ -69,8 +94,8 @@ export async function fixRenderSpecIssues(
           await sb.from("assets").update({ url: backfill }).eq("id", r.id);
           fixes.push(`Backfilled URL for ${a.asset_type ?? "asset"} ${r.id.slice(0, 8)}`);
         } else {
-          assetIdsToDelete.add(r.id);
-          fixes.push(`Removed unresolved ${a?.asset_type ?? "asset"} ${r.id.slice(0, 8)}`);
+          assetIdsToReject.add(r.id);
+          fixes.push(`Rejected unresolved ${a?.asset_type ?? "asset"} ${r.id.slice(0, 8)}`);
         }
         break;
       }
@@ -82,11 +107,15 @@ export async function fixRenderSpecIssues(
       }
       case "unused_asset": {
         if (r?.kind === "graphic") {
-          graphicIdsToDelete.add(r.id);
-          fixes.push(`Removed unused graphic ${r.id.slice(0, 8)}`);
+          if (!graphicIdsUsedByItems.has(r.id)) {
+            graphicIdsToDelete.add(r.id);
+            fixes.push(`Removed unused graphic ${r.id.slice(0, 8)}`);
+          }
         } else if (r?.kind === "asset") {
-          assetIdsToDelete.add(r.id);
-          fixes.push(`Removed unused asset ${r.id.slice(0, 8)}`);
+          if (!assetIdsUsedByItems.has(r.id)) {
+            assetIdsToReject.add(r.id);
+            fixes.push(`Rejected unused asset ${r.id.slice(0, 8)}`);
+          }
         }
         break;
       }
@@ -110,12 +139,10 @@ export async function fixRenderSpecIssues(
     }
   }
 
-  // Apply asset deletions: cascade via manifest + timeline first.
-  if (assetIdsToDelete.size > 0) {
-    const ids = Array.from(assetIdsToDelete);
-    await sb.from("render_manifest").delete().eq("project_id", projectId).in("asset_id", ids);
-    await sb.from("timeline_items").delete().eq("project_id", projectId).in("asset_id", ids);
-    await sb.from("assets").delete().eq("project_id", projectId).in("id", ids);
+  // Apply asset rejections: unlink first so the timeline composer cannot pick
+  // the same non-renderable approved asset on the manifest rebuild.
+  if (assetIdsToReject.size > 0) {
+    await rejectUnusableAssets(sb, projectId, Array.from(assetIdsToReject));
   }
   if (graphicIdsToDelete.size > 0) {
     const ids = Array.from(graphicIdsToDelete);
@@ -138,7 +165,6 @@ export async function fixRenderSpecIssues(
   const { buildRenderManifestForProject } = await import("./timeline-builder.server");
   try { await buildRenderManifestForProject(sb, projectId); } catch (e) { console.warn("rebuild after fix failed", e); }
 
-  const { buildRenderSpec } = await import("./render-spec-builder.server");
   const { validateRenderSpec } = await import("./render-validation");
   const spec = await buildRenderSpec(sb, projectId, { quality: "full" });
   const after = validateRenderSpec(spec);
