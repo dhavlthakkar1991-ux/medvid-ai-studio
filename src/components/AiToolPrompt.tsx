@@ -21,12 +21,15 @@ type Props = {
     | "shorts"
     | "editorial_decisions";
   label?: string;
+  /** Override the title/description noun shown in the dialog. Defaults to the task name. */
+  headerLabel?: string;
   disabled?: boolean;
   /** Query keys to invalidate after a successful modification. */
   invalidateKeys?: ReadonlyArray<ReadonlyArray<unknown>>;
 };
 
-export function AiToolPrompt({ projectId, task, label = "AI Prompt", disabled, invalidateKeys }: Props) {
+export function AiToolPrompt({ projectId, task, label = "AI Prompt", headerLabel, disabled, invalidateKeys }: Props) {
+  const noun = headerLabel ?? task;
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const qc = useQueryClient();
@@ -34,7 +37,7 @@ export function AiToolPrompt({ projectId, task, label = "AI Prompt", disabled, i
   const mut = useMutation({
     mutationFn: (prompt: string) => modifyFn({ data: { projectId, task, prompt } }),
     onSuccess: (res: any) => {
-      toast.success(`AI modified ${task} → v${res?.version ?? "?"}`);
+      toast.success(`AI modified ${noun} → v${res?.version ?? "?"}`);
       qc.invalidateQueries({ queryKey: ["project", projectId] });
       qc.invalidateQueries({ queryKey: ["versions", projectId] });
       qc.invalidateQueries({ queryKey: ["readiness", projectId] });
@@ -56,7 +59,7 @@ export function AiToolPrompt({ projectId, task, label = "AI Prompt", disabled, i
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Modify {task} with AI</DialogTitle>
+          <DialogTitle>Modify {noun} with AI</DialogTitle>
           <DialogDescription>
             Describe what you want changed. The AI will edit the current output and propagate downstream stages.
           </DialogDescription>
