@@ -597,9 +597,12 @@ function ProjectView() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-base">{TASK_LABELS[t]} {v && <Badge variant="outline" className="ml-2">v{v.version}</Badge>}</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => regen.mutate(t)} disabled={regen.isPending || !transcript}>
-                    <RefreshCw className="h-3 w-3 mr-1" />Regenerate
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <AiToolPrompt projectId={id} task={t as any} disabled={!v} />
+                    <Button size="sm" variant="outline" onClick={() => regen.mutate(t)} disabled={regen.isPending || !transcript}>
+                      <RefreshCw className="h-3 w-3 mr-1" />Regenerate
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {!v ? <p className="text-sm text-muted-foreground">Not generated yet.</p> :
