@@ -20,6 +20,7 @@ import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authen
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings.ai'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
+import { Route as ApiPublicRenderCallbackCreatomateRouteImport } from './routes/api/public/render-callback.creatomate'
 import { Route as ApiJobsRunJobIdRouteImport } from './routes/api/jobs/run.$jobId'
 import { Route as ApiPublicJobsRunJobIdRouteImport } from './routes/api/public/jobs/run.$jobId'
 
@@ -81,6 +82,12 @@ const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
   path: '/projects/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicRenderCallbackCreatomateRoute =
+  ApiPublicRenderCallbackCreatomateRouteImport.update({
+    id: '/creatomate',
+    path: '/creatomate',
+    getParentRoute: () => ApiPublicRenderCallbackRoute,
+  } as any)
 const ApiJobsRunJobIdRoute = ApiJobsRunJobIdRouteImport.update({
   id: '/api/jobs/run/$jobId',
   path: '/api/jobs/run/$jobId',
@@ -102,8 +109,9 @@ export interface FileRoutesByFullPath {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
-  '/api/public/render-callback': typeof ApiPublicRenderCallbackRoute
+  '/api/public/render-callback': typeof ApiPublicRenderCallbackRouteWithChildren
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
+  '/api/public/render-callback/creatomate': typeof ApiPublicRenderCallbackCreatomateRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
 export interface FileRoutesByTo {
@@ -116,8 +124,9 @@ export interface FileRoutesByTo {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
-  '/api/public/render-callback': typeof ApiPublicRenderCallbackRoute
+  '/api/public/render-callback': typeof ApiPublicRenderCallbackRouteWithChildren
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
+  '/api/public/render-callback/creatomate': typeof ApiPublicRenderCallbackCreatomateRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
 export interface FileRoutesById {
@@ -132,8 +141,9 @@ export interface FileRoutesById {
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/_authenticated/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
-  '/api/public/render-callback': typeof ApiPublicRenderCallbackRoute
+  '/api/public/render-callback': typeof ApiPublicRenderCallbackRouteWithChildren
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
+  '/api/public/render-callback/creatomate': typeof ApiPublicRenderCallbackCreatomateRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
 export interface FileRouteTypes {
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/settings/templates'
     | '/api/public/render-callback'
     | '/api/jobs/run/$jobId'
+    | '/api/public/render-callback/creatomate'
     | '/api/public/jobs/run/$jobId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/settings/templates'
     | '/api/public/render-callback'
     | '/api/jobs/run/$jobId'
+    | '/api/public/render-callback/creatomate'
     | '/api/public/jobs/run/$jobId'
   id:
     | '__root__'
@@ -179,6 +191,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/templates'
     | '/api/public/render-callback'
     | '/api/jobs/run/$jobId'
+    | '/api/public/render-callback/creatomate'
     | '/api/public/jobs/run/$jobId'
   fileRoutesById: FileRoutesById
 }
@@ -186,7 +199,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicRenderCallbackRoute: typeof ApiPublicRenderCallbackRoute
+  ApiPublicRenderCallbackRoute: typeof ApiPublicRenderCallbackRouteWithChildren
   ApiJobsRunJobIdRoute: typeof ApiJobsRunJobIdRoute
   ApiPublicJobsRunJobIdRoute: typeof ApiPublicJobsRunJobIdRoute
 }
@@ -270,6 +283,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/render-callback/creatomate': {
+      id: '/api/public/render-callback/creatomate'
+      path: '/creatomate'
+      fullPath: '/api/public/render-callback/creatomate'
+      preLoaderRoute: typeof ApiPublicRenderCallbackCreatomateRouteImport
+      parentRoute: typeof ApiPublicRenderCallbackRoute
+    }
     '/api/jobs/run/$jobId': {
       id: '/api/jobs/run/$jobId'
       path: '/api/jobs/run/$jobId'
@@ -312,11 +332,26 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface ApiPublicRenderCallbackRouteChildren {
+  ApiPublicRenderCallbackCreatomateRoute: typeof ApiPublicRenderCallbackCreatomateRoute
+}
+
+const ApiPublicRenderCallbackRouteChildren: ApiPublicRenderCallbackRouteChildren =
+  {
+    ApiPublicRenderCallbackCreatomateRoute:
+      ApiPublicRenderCallbackCreatomateRoute,
+  }
+
+const ApiPublicRenderCallbackRouteWithChildren =
+  ApiPublicRenderCallbackRoute._addFileChildren(
+    ApiPublicRenderCallbackRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicRenderCallbackRoute: ApiPublicRenderCallbackRoute,
+  ApiPublicRenderCallbackRoute: ApiPublicRenderCallbackRouteWithChildren,
   ApiJobsRunJobIdRoute: ApiJobsRunJobIdRoute,
   ApiPublicJobsRunJobIdRoute: ApiPublicJobsRunJobIdRoute,
 }
