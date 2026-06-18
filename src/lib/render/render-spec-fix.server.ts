@@ -56,10 +56,24 @@ export async function fixRenderSpecIssues(
 ): Promise<{ fixes: string[]; remaining: number }> {
   const fixes: string[] = [];
 
-  const assetIdsToDelete = new Set<string>();
+  const assetIdsToReject = new Set<string>();
   const graphicIdsToDelete = new Set<string>();
   const itemIdsToDelete = new Set<string>();
   const itemsToClamp: { id: string; end: number }[] = [];
+  const graphicAssetsUsedByItems = new Set<string>();
+
+  const assetRefsByItemId = new Map<string, ParsedRef>();
+  const assetIdsUsedByItems = new Set<string>();
+  const graphicIdsUsedByItems = new Set<string>();
+  const { buildRenderSpec } = await import("./render-spec-builder.server");
+  const currentSpec = await buildRenderSpec(sb, projectId, { quality: "full" });
+  for (const item of currentSpec.items ?? []) {
+    const r = parseRef(item.asset_id);
+    if (!r) continue;
+    assetRefsByItemId.set(item.id, r);
+    if (r.kind === "asset") assetIdsUsedByItems.add(r.id);
+    if (r.kind === "graphic") graphicIdsUsedByItems.add(r.id);
+  }
 
   // Preload assets we may need for backfill.
   const assetIdsReferenced = new Set<string>();
@@ -87,8 +101,8 @@ export async function fixRenderSpecIssues(
           await sb.from("assets").update({ url: backfill }).eq("id", r.id);
           fixes.push(`Backfilled URL for ${a.asset_type ?? "asset"} ${r.id.slice(0, 8)}`);
         } else {
-          assetIdsToDelete.add(r.id);
-          fixes.push(`Removed unresolved ${a?.asset_type ?? "asset"} ${r.id.slice(0, 8)}`);
+          assetIdsToReject.add(r.id);
+          fixes.push(`Rejected unresolved ${a?.asset_type ?? "asset"} ${r.id.slice(0, 8)}`);
         }
         break;
       }
@@ -100,11 +114,15 @@ export async function fixRenderSpecIssues(
       }
       case "unused_asset": {
         if (r?.kind === "graphic") {
-          graphicIdsToDelete.add(r.id);
-          fixes.push(`Removed unused graphic ${r.id.slice(0, 8)}`);
+          if (!graphicIdsUsedByItems.has(r.id)) {
+            graphicIdsToDelete.add(r.id);
+            fixes.push(`Removed unused graphic ${r.id.slice(0, 8)}`);
+          }
         } else if (r?.kind === "asset") {
-          assetIdsToDelete.add(r.id);
-          fixes.push(`Removed unused asset ${r.id.slice(0, 8)}`);
+          if (!assetIdsUsedByItems.has(r.id)) {
+            assetIdsToReject.add(r.id);
+            fixes.push(`Rejected unused asset ${r.id.slice(0, 8)}`);
+          }
         }
         break;
       }
