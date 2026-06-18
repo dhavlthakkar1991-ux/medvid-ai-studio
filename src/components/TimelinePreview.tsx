@@ -290,6 +290,8 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
 
   const trackById = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
   const assetById = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets]);
+  const compiledGraphics: any[] = (canonicalQ.data as any)?.compiledGraphics ?? [];
+  const compiledById = useMemo(() => new Map<string, any>(compiledGraphics.map((g) => [g.id, g])), [compiledGraphics]);
   const itemIssuesById = useMemo(() => {
     const m = new Map<string, { level: string; code: string; message: string }[]>();
     for (const iss of validation?.issues ?? []) {
@@ -376,7 +378,7 @@ export function TimelinePreview({ projectId }: { projectId: string }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Stage active={active} trackById={trackById} assetById={assetById} onSelect={(it) => setSelectedId(it.id)} />
+          <Stage active={active} trackById={trackById} assetById={assetById} compiledById={compiledById} onSelect={(it) => setSelectedId(it.id)} />
 
           {/* Transport */}
           <div className="flex items-center gap-2">
