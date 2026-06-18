@@ -12,6 +12,7 @@ import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admi
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness, acceptAllPendingCandidates } from "@/lib/assets.functions";
 import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
+import { getProviderJobForRender } from "@/lib/render-providers.functions";
 import { compileProjectGraphics } from "@/lib/graphics/graphics.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -297,6 +298,17 @@ function ProjectView() {
   const renderReadyQ = useQuery({
     queryKey: ["render-ready", id],
     queryFn: () => renderReadyFn({ data: { projectId: id } }),
+  });
+  const providerJobFn = useServerFn(getProviderJobForRender);
+  const latestJobId = (renderStatusQ.data as any)?.latest?.id as string | undefined;
+  const providerJobQ = useQuery({
+    queryKey: ["provider-job", latestJobId],
+    enabled: !!latestJobId,
+    queryFn: () => providerJobFn({ data: { renderJobId: latestJobId! } }),
+    refetchInterval: (q) => {
+      const status = (q.state.data as any)?.providerJob?.status;
+      return status && ["queued","preparing","rendering"].includes(status) ? 2000 : false;
+    },
   });
   const createRenderMut = useMutation({
     mutationFn: (v: { renderType: "preview" | "full" }) =>
@@ -1288,6 +1300,35 @@ function ProjectView() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No render jobs yet. Approve assets, compose timeline, then queue a render.</p>
+              )}
+
+              {/* Provider details (Render Adapter layer) */}
+              {providerJobQ.data?.providerJob && (
+                <div className="rounded-md border border-border p-3 space-y-2 bg-muted/30">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">Provider</span>
+                      <Badge variant="outline">{providerJobQ.data.providerJob.render_providers?.name ?? "—"}</Badge>
+                      <Badge variant="outline" className="capitalize">{providerJobQ.data.providerJob.render_providers?.provider_type ?? "—"}</Badge>
+                    </div>
+                    <Badge variant="outline" className="capitalize">{providerJobQ.data.providerJob.status}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono break-all">
+                    Provider job ID: {providerJobQ.data.providerJob.provider_job_id ?? "—"}
+                  </div>
+                  {Array.isArray(providerJobQ.data.providerJob.logs) && providerJobQ.data.providerJob.logs.length > 0 && (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground">Render logs ({providerJobQ.data.providerJob.logs.length})</summary>
+                      <div className="mt-2 max-h-40 overflow-y-auto space-y-1 font-mono text-[11px]">
+                        {(providerJobQ.data.providerJob.logs as any[]).slice(-20).map((l: any, i: number) => (
+                          <div key={i} className={l.level === "error" ? "text-destructive" : ""}>
+                            <span className="text-muted-foreground">[{new Date(l.at).toLocaleTimeString()}]</span> {l.msg}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
               )}
 
               {/* Outputs */}

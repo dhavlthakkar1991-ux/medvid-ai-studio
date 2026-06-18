@@ -86,48 +86,41 @@ export async function computeRenderReadiness(sb: Sb, projectId: string) {
   };
 }
 
-/** Compute next status/progress for a mock render based on elapsed time. */
-function computeMockState(job: any): { status: string; progress: number; completedAt: string | null; outputDue: boolean } {
-  if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-    return { status: job.status, progress: job.progress_percent ?? 0, completedAt: job.completed_at, outputDue: false };
+/**
+ * Adapter-based tick.
+ *
+ * Previously this file inlined a mock state machine reading from render_jobs.
+ * Now it delegates to the Render Adapter: the provider (mock by default)
+ * computes status from the provider_job row, and we mirror the result back
+ * to render_jobs + render_outputs. No provider logic lives here anymore.
+ */
+async function persistAdapterTick(sb: Sb, job: any) {
+  if (["completed", "failed", "cancelled"].includes(job.status)) return job;
+  const { adapterPoll, adapterDownload } = await import("./render/render-adapter.server");
+  const { status, progress, report } = await adapterPoll(sb, job.id);
+  if (!report) return job;
+  if (status === job.status && progress === (job.progress_percent ?? 0)) return job;
+  const patch: any = { status, progress_percent: progress };
+  if (status === "completed" || status === "failed" || status === "cancelled") {
+    patch.completed_at = new Date().toISOString();
   }
-  const started = job.started_at ? new Date(job.started_at).getTime() : null;
-  if (!started) return { status: "queued", progress: 0, completedAt: null, outputDue: false };
-  const elapsed = Date.now() - started;
-  const plan = job.render_type === "full" ? FULL_MS : PREVIEW_MS;
-  const total = plan.prepare + plan.render;
-  if (elapsed < plan.prepare) {
-    return { status: "preparing", progress: Math.round((elapsed / plan.prepare) * 15), completedAt: null, outputDue: false };
-  }
-  if (elapsed < total) {
-    const renderProgress = (elapsed - plan.prepare) / plan.render;
-    return { status: "rendering", progress: 15 + Math.round(renderProgress * 80), completedAt: null, outputDue: false };
-  }
-  return { status: "completed", progress: 100, completedAt: new Date().toISOString(), outputDue: true };
-}
-
-async function persistMockTick(sb: Sb, job: any) {
-  const next = computeMockState(job);
-  if (next.status === job.status && next.progress === (job.progress_percent ?? 0)) return job;
-  const patch: any = { status: next.status, progress_percent: next.progress };
-  if (next.completedAt) patch.completed_at = next.completedAt;
+  if (report.error) patch.error_message = report.error;
   const { data: updated } = await sb.from("render_jobs").update(patch).eq("id", job.id).select("*").maybeSingle();
-  if (next.outputDue) {
-    // emit a single placeholder output row
+
+  if (status === "completed") {
     const { data: existing } = await sb.from("render_outputs").select("id").eq("render_job_id", job.id).limit(1);
     if (!existing || existing.length === 0) {
+      const dl = await adapterDownload(sb, job.id);
       const isPreview = job.render_type !== "full";
-      const [{ data: project }] = await Promise.all([
-        sb.from("projects").select("duration_seconds").eq("id", job.project_id).maybeSingle(),
-      ]);
+      const { data: project } = await sb.from("projects").select("duration_seconds").eq("id", job.project_id).maybeSingle();
       await sb.from("render_outputs").insert({
         render_job_id: job.id,
         project_id: job.project_id,
         output_type: isPreview ? "preview" : "landscape",
-        file_url: `mock://renders/${job.id}.mp4`,
-        thumbnail_url: null,
-        duration_seconds: Number(project?.duration_seconds) || 0,
-        resolution: isPreview ? "640x360" : "1920x1080",
+        file_url: dl.url ?? report.outputUrl ?? null,
+        thumbnail_url: report.thumbnailUrl ?? null,
+        duration_seconds: dl.durationSeconds ?? (Number(project?.duration_seconds) || 0),
+        resolution: dl.resolution ?? report.resolution ?? (isPreview ? "1280x720" : "1920x1080"),
         file_size: isPreview ? 4_000_000 : 80_000_000,
       });
     }
@@ -158,24 +151,38 @@ export const createRenderJob = createServerFn({ method: "POST" })
     if (existing && existing.length > 0) {
       return { ok: false as const, blockers: ["A render is already in flight for this project."], job: existing[0] };
     }
-    const { data: manifest } = await sb
-      .from("render_manifest").select("id").eq("project_id", data.projectId).limit(1);
     const { data: job, error } = await sb
       .from("render_jobs")
       .insert({
         project_id: data.projectId,
-        status: "queued",
+        status: "preparing",
         render_type: data.renderType,
         progress_percent: 0,
-        manifest_version: manifest && manifest.length > 0 ? 5 : null,
+        manifest_version: 6,
         requested_by: context.userId,
-        started_at: new Date().toISOString(), // mock: start immediately
-        provider: "mock",
+        started_at: new Date().toISOString(),
       })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
-    return { ok: true as const, blockers: [], job };
+    // Hand off to the Render Adapter (Manifest V6 → RenderSpec → Provider).
+    try {
+      const { adapterCreateRender } = await import("./render/render-adapter.server");
+      await adapterCreateRender(sb, {
+        projectId: data.projectId,
+        renderJobId: job.id,
+        renderType: data.renderType,
+      });
+    } catch (e: any) {
+      await sb.from("render_jobs").update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_message: e?.message ?? "Adapter handoff failed",
+      }).eq("id", job.id);
+      return { ok: false as const, blockers: [e?.message ?? "Render adapter failed"], job };
+    }
+    const { data: refreshed } = await sb.from("render_jobs").select("*").eq("id", job.id).maybeSingle();
+    return { ok: true as const, blockers: [], job: refreshed ?? job };
   });
 
 export const getRenderStatus = createServerFn({ method: "POST" })
@@ -192,7 +199,7 @@ export const getRenderStatus = createServerFn({ method: "POST" })
     // Auto-tick the latest in-flight job (mock renderer).
     let latest = list[0] ?? null;
     if (latest && ["queued", "preparing", "rendering"].includes(latest.status)) {
-      latest = await persistMockTick(sb, latest);
+      latest = await persistAdapterTick(sb, latest);
       list[0] = latest;
     }
     return { latest, history: list };
@@ -203,6 +210,10 @@ export const cancelRenderJob = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => CancelInput.parse(i))
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
+    try {
+      const { adapterCancel } = await import("./render/render-adapter.server");
+      await adapterCancel(sb, data.jobId);
+    } catch (e) { console.warn("adapter cancel failed", e); }
     const { data: job, error } = await sb
       .from("render_jobs")
       .update({ status: "cancelled", completed_at: new Date().toISOString(), error_message: "Cancelled by user" })

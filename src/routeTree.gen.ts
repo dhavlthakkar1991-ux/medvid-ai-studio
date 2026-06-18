@@ -13,7 +13,9 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicRenderCallbackRouteImport } from './routes/api/public/render-callback'
 import { Route as AuthenticatedSettingsTemplatesRouteImport } from './routes/_authenticated/settings.templates'
+import { Route as AuthenticatedSettingsRenderProvidersRouteImport } from './routes/_authenticated/settings.render-providers'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings.ai'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
@@ -40,10 +42,21 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicRenderCallbackRoute = ApiPublicRenderCallbackRouteImport.update({
+  id: '/api/public/render-callback',
+  path: '/api/public/render-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSettingsTemplatesRoute =
   AuthenticatedSettingsTemplatesRouteImport.update({
     id: '/settings/templates',
     path: '/settings/templates',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsRenderProvidersRoute =
+  AuthenticatedSettingsRenderProvidersRouteImport.update({
+    id: '/settings/render-providers',
+    path: '/settings/render-providers',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSettingsBrandRoute =
@@ -87,7 +100,9 @@ export interface FileRoutesByFullPath {
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
+  '/api/public/render-callback': typeof ApiPublicRenderCallbackRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
@@ -99,7 +114,9 @@ export interface FileRoutesByTo {
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
+  '/api/public/render-callback': typeof ApiPublicRenderCallbackRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
@@ -113,7 +130,9 @@ export interface FileRoutesById {
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
   '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/_authenticated/settings/render-providers': typeof AuthenticatedSettingsRenderProvidersRoute
   '/_authenticated/settings/templates': typeof AuthenticatedSettingsTemplatesRoute
+  '/api/public/render-callback': typeof ApiPublicRenderCallbackRoute
   '/api/jobs/run/$jobId': typeof ApiJobsRunJobIdRoute
   '/api/public/jobs/run/$jobId': typeof ApiPublicJobsRunJobIdRoute
 }
@@ -127,7 +146,9 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/settings/ai'
     | '/settings/brand'
+    | '/settings/render-providers'
     | '/settings/templates'
+    | '/api/public/render-callback'
     | '/api/jobs/run/$jobId'
     | '/api/public/jobs/run/$jobId'
   fileRoutesByTo: FileRoutesByTo
@@ -139,7 +160,9 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/settings/ai'
     | '/settings/brand'
+    | '/settings/render-providers'
     | '/settings/templates'
+    | '/api/public/render-callback'
     | '/api/jobs/run/$jobId'
     | '/api/public/jobs/run/$jobId'
   id:
@@ -152,7 +175,9 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/new'
     | '/_authenticated/settings/ai'
     | '/_authenticated/settings/brand'
+    | '/_authenticated/settings/render-providers'
     | '/_authenticated/settings/templates'
+    | '/api/public/render-callback'
     | '/api/jobs/run/$jobId'
     | '/api/public/jobs/run/$jobId'
   fileRoutesById: FileRoutesById
@@ -161,6 +186,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicRenderCallbackRoute: typeof ApiPublicRenderCallbackRoute
   ApiJobsRunJobIdRoute: typeof ApiJobsRunJobIdRoute
   ApiPublicJobsRunJobIdRoute: typeof ApiPublicJobsRunJobIdRoute
 }
@@ -195,11 +221,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/render-callback': {
+      id: '/api/public/render-callback'
+      path: '/api/public/render-callback'
+      fullPath: '/api/public/render-callback'
+      preLoaderRoute: typeof ApiPublicRenderCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/settings/templates': {
       id: '/_authenticated/settings/templates'
       path: '/settings/templates'
       fullPath: '/settings/templates'
       preLoaderRoute: typeof AuthenticatedSettingsTemplatesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/render-providers': {
+      id: '/_authenticated/settings/render-providers'
+      path: '/settings/render-providers'
+      fullPath: '/settings/render-providers'
+      preLoaderRoute: typeof AuthenticatedSettingsRenderProvidersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings/brand': {
@@ -253,6 +293,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
   AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
+  AuthenticatedSettingsRenderProvidersRoute: typeof AuthenticatedSettingsRenderProvidersRoute
   AuthenticatedSettingsTemplatesRoute: typeof AuthenticatedSettingsTemplatesRoute
 }
 
@@ -262,6 +303,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsNewRoute: AuthenticatedProjectsNewRoute,
   AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
+  AuthenticatedSettingsRenderProvidersRoute:
+    AuthenticatedSettingsRenderProvidersRoute,
   AuthenticatedSettingsTemplatesRoute: AuthenticatedSettingsTemplatesRoute,
 }
 
@@ -273,19 +316,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicRenderCallbackRoute: ApiPublicRenderCallbackRoute,
   ApiJobsRunJobIdRoute: ApiJobsRunJobIdRoute,
   ApiPublicJobsRunJobIdRoute: ApiPublicJobsRunJobIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
