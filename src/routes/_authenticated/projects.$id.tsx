@@ -1879,6 +1879,34 @@ function ProjectView() {
         </TabsContent>
       </Tabs>
 
+      <Dialog open={ctaFixOpen} onOpenChange={setCtaFixOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add CTA text</DialogTitle>
+            <DialogDescription>
+              This warning needs your call-to-action copy. It will be added to the end of the timeline and the manifest will be rebuilt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Input
+              value={ctaFixText}
+              onChange={(e) => setCtaFixText(e.target.value)}
+              placeholder="e.g. Book a consultation today"
+              maxLength={300}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCtaFixOpen(false)} disabled={addCtaMut.isPending}>Cancel</Button>
+            <Button
+              disabled={addCtaMut.isPending || ctaFixText.trim().length === 0}
+              onClick={() => addCtaMut.mutate()}
+            >
+              {addCtaMut.isPending ? "Adding…" : "Add CTA & Fix"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
         <DialogContent>
           <DialogHeader>
