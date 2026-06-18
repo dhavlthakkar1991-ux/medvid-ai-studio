@@ -195,3 +195,71 @@ function ProviderConfigDialog({ provider, onSaved }: { provider: any; onSaved: (
     </Dialog>
   );
 }
+function ProviderDiagnosticsDialog({ providerId, providerName }: { providerId: string; providerName: string }) {
+  const fn = useServerFn(runProviderDiagnostics);
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [report, setReport] = useState<any>(null);
+
+  async function run() {
+    setRunning(true);
+    try {
+      const r = await fn({ data: { providerId } });
+      setReport(r);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Diagnostics failed");
+    } finally { setRunning(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !report) run(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" title="Test connection">
+          <Activity className="h-3.5 w-3.5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{providerName} — diagnostics</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Validates configuration, secret presence, worker reachability, and the webhook receiver.
+            </p>
+            <Button size="sm" variant="outline" onClick={run} disabled={running}>
+              {running ? "Running…" : "Re-run"}
+            </Button>
+          </div>
+          {report && (
+            <>
+              <div className="flex items-center gap-2 text-sm">
+                <span>Overall:</span>
+                <Badge variant={report.overall === "ok" ? "outline" : report.overall === "warn" ? "secondary" : "destructive"}
+                  className="capitalize">
+                  {report.overall}
+                </Badge>
+              </div>
+              <div className="rounded-md border border-border divide-y divide-border">
+                {(report.checks as any[]).map((c, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2 text-xs">
+                    <Badge
+                      variant={c.status === "ok" ? "outline" : c.status === "warn" ? "secondary" : "destructive"}
+                      className="uppercase shrink-0"
+                    >
+                      {c.status}
+                    </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-muted-foreground break-all">{c.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
