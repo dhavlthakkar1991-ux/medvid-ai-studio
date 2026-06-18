@@ -1659,6 +1659,158 @@ export type Database = {
           },
         ]
       }
+      timeline_items: {
+        Row: {
+          asset_id: string | null
+          asset_type: string
+          created_at: string
+          duration: number
+          edit_action_id: string | null
+          end_time: number
+          id: string
+          layout: string | null
+          metadata: Json
+          project_id: string
+          scene_id: string | null
+          source_task: string | null
+          start_time: number
+          status: string
+          title: string | null
+          track_id: string
+          transition_in: string
+          transition_out: string
+          updated_at: string
+          z_index: number
+        }
+        Insert: {
+          asset_id?: string | null
+          asset_type?: string
+          created_at?: string
+          duration?: number
+          edit_action_id?: string | null
+          end_time?: number
+          id?: string
+          layout?: string | null
+          metadata?: Json
+          project_id: string
+          scene_id?: string | null
+          source_task?: string | null
+          start_time?: number
+          status?: string
+          title?: string | null
+          track_id: string
+          transition_in?: string
+          transition_out?: string
+          updated_at?: string
+          z_index?: number
+        }
+        Update: {
+          asset_id?: string | null
+          asset_type?: string
+          created_at?: string
+          duration?: number
+          edit_action_id?: string | null
+          end_time?: number
+          id?: string
+          layout?: string | null
+          metadata?: Json
+          project_id?: string
+          scene_id?: string | null
+          source_task?: string | null
+          start_time?: number
+          status?: string
+          title?: string | null
+          track_id?: string
+          transition_in?: string
+          transition_out?: string
+          updated_at?: string
+          z_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timeline_items_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_items_edit_action_id_fkey"
+            columns: ["edit_action_id"]
+            isOneToOne: false
+            referencedRelation: "edit_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_items_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_items_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "timeline_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timeline_tracks: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          kind: string
+          locked: boolean
+          muted: boolean
+          name: string
+          project_id: string
+          track_index: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          kind: string
+          locked?: boolean
+          muted?: boolean
+          name: string
+          project_id: string
+          track_index: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          locked?: boolean
+          muted?: boolean
+          name?: string
+          project_id?: string
+          track_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timeline_tracks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transcript_segments: {
         Row: {
           created_at: string

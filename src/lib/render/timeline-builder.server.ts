@@ -8,6 +8,67 @@ export async function buildRenderManifestForProject(
   supabase: SupabaseLike,
   projectId: string,
 ) {
+  // Manifest V5: timeline_items become the authoritative source. If a timeline
+  // exists, derive every manifest row directly from it. Fall back to the legacy
+  // editorial-driven build (V3/V4) when no timeline has been composed yet.
+  try {
+    const { composeTimelineForProject } = await import("../timeline/timeline-composer.server");
+    await composeTimelineForProject(supabase, projectId);
+  } catch (e) {
+    console.warn("timeline compose before manifest failed", e);
+  }
+  const { data: tItems } = await supabase
+    .from("timeline_items").select("*, timeline_tracks!inner(kind, track_index, name)")
+    .eq("project_id", projectId)
+    .order("start_time", { ascending: true });
+  if (Array.isArray(tItems) && tItems.length > 0) {
+    const { data: project } = await supabase.from("projects").select("duration_seconds").eq("id", projectId).maybeSingle();
+    const { data: assets } = await supabase.from("assets").select("id, url").eq("project_id", projectId);
+    const assetUrlById = new Map<string, string | null>(((assets ?? []) as any[]).map((a) => [a.id, a.url ?? null]));
+    const rows = (tItems as any[]).map((it, i) => ({
+      project_id: projectId,
+      render_order: i,
+      scene_id: it.scene_id ?? null,
+      storyboard_item_id: null,
+      asset_id: it.asset_id ?? null,
+      edit_action_id: it.edit_action_id ?? null,
+      layout_id: null,
+      transition_in_id: null,
+      transition_out_id: null,
+      layer: it.timeline_tracks?.track_index ?? null,
+      action_type: it.asset_type ?? null,
+      priority: it.z_index ?? 5,
+      transition: it.transition_in ?? "cut",
+      timeline_start: Number(it.start_time) || 0,
+      timeline_end: Number(it.end_time) || 0,
+      asset_type: it.asset_type || "",
+      asset_source: it.asset_id ? "approved_asset" : "timeline_pending",
+      asset_query: it.title ?? "",
+      asset_url: it.asset_id ? (assetUrlById.get(it.asset_id) ?? null) : null,
+      caption_style: "Full",
+      status: it.status === "approved" || it.status === "locked" ? "approved" : it.status,
+      layout_name: it.layout ?? null,
+      doctor_visibility: null,
+      doctor_size: null,
+      attention_focus: null,
+      rationale: typeof it.metadata === "object" && it.metadata ? (it.metadata as any).reason ?? null : null,
+    }));
+    await supabase.from("render_manifest").delete().eq("project_id", projectId);
+    if (rows.length > 0) await supabase.from("render_manifest").insert(rows);
+    const duration = Number(project?.duration_seconds) || rows.reduce((m, r) => Math.max(m, r.timeline_end), 0);
+    let coveredEnd = -1, coveredStart = -1, covered = 0;
+    const intervals = rows
+      .map((r) => [r.timeline_start, r.timeline_end] as [number, number])
+      .filter(([s, e]) => e > s)
+      .sort((a, b) => a[0] - b[0]);
+    for (const [s, e] of intervals) {
+      if (s > coveredEnd) { if (coveredEnd > coveredStart) covered += coveredEnd - coveredStart; coveredStart = s; coveredEnd = e; }
+      else coveredEnd = Math.max(coveredEnd, e);
+    }
+    if (coveredEnd > coveredStart) covered += coveredEnd - coveredStart;
+    return { count: rows.length, editorialCoverage: duration > 0 ? covered / duration : 0, editorialActionCount: rows.length, source: "timeline" };
+  }
+
   const [{ data: scenes }, { data: storyboard }, { data: broll }, { data: infographics }, { data: instructions }, { data: editActions }, { data: layoutDecisions }, { data: project }, { data: approvedAssets }, { data: candidates }] = await Promise.all([
     supabase.from("scenes").select("*").eq("project_id", projectId).order("scene_number", { ascending: true }),
     supabase.from("storyboard_items").select("*").eq("project_id", projectId).order("item_index", { ascending: true }),

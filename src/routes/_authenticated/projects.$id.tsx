@@ -10,6 +10,7 @@ import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRen
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
+import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +117,8 @@ function ProjectView() {
   const reviewListFn = useServerFn(listAssetReview);
   const reviewActFn = useServerFn(reviewAssetCandidate);
   const readinessFn = useServerFn(getProjectReadiness);
+  const timelineFn = useServerFn(getProjectTimeline);
+  const recomposeFn = useServerFn(recomposeTimeline);
   const qc = useQueryClient();
   const launchedJobs = useRef(new Set<string>());
   const [resetStage, setResetStage] = useState<ResetStage>("complete");
@@ -171,9 +174,25 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["asset-review", id] });
       qc.invalidateQueries({ queryKey: ["readiness", id] });
       qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Review failed"),
   });
+  const composerQ = useQuery({
+    queryKey: ["timeline-composer", id],
+    queryFn: () => timelineFn({ data: { projectId: id } }),
+  });
+  const recomposeMut = useMutation({
+    mutationFn: () => recomposeFn({ data: { projectId: id } }),
+    onSuccess: () => {
+      toast.success("Timeline recomposed");
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
+  });
+  const [composerZoom, setComposerZoom] = useState(8); // pixels per second
 
   const latestJobForLaunch = q.data?.latestJob;
 
@@ -364,6 +383,7 @@ function ProjectView() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="review">Review Assets</TabsTrigger>
           <TabsTrigger value="readiness">Readiness</TabsTrigger>
+          <TabsTrigger value="composer">Timeline Composer</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
           <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
@@ -842,6 +862,140 @@ function ProjectView() {
                   <div className="text-xs text-muted-foreground">
                     {readinessQ.data.approvedAssets} of {readinessQ.data.totalCandidates} asset candidates approved.
                   </div>
+                  {readinessQ.data.blockers && readinessQ.data.blockers.length > 0 ? (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
+                      <div className="font-semibold text-destructive mb-1">BLOCKED · {readinessQ.data.blockers.length} reason{readinessQ.data.blockers.length === 1 ? "" : "s"}</div>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {readinessQ.data.blockers.map((b: string, i: number) => <li key={i}>{b}</li>)}
+                      </ul>
+                    </div>
+                  ) : readinessQ.data.readyForRender ? (
+                    <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs font-semibold text-emerald-600">
+                      ✓ READY TO RENDER
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="composer">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">
+                Timeline Composer {composerQ.data && (
+                  <Badge variant="outline" className="ml-2">
+                    {composerQ.data.items.length} items · {composerQ.data.tracks.length} tracks
+                  </Badge>
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setComposerZoom((z) => Math.max(2, z - 2))}>−</Button>
+                <span className="text-xs text-muted-foreground tabular-nums w-14 text-center">{composerZoom} px/s</span>
+                <Button size="sm" variant="outline" onClick={() => setComposerZoom((z) => Math.min(40, z + 2))}>+</Button>
+                <Button size="sm" onClick={() => recomposeMut.mutate()} disabled={recomposeMut.isPending}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" />Recompose
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!composerQ.data ? (
+                <p className="text-sm text-muted-foreground">Loading timeline…</p>
+              ) : composerQ.data.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No timeline items yet. Run Editorial Decisions, then click Recompose.</p>
+              ) : (
+                <div className="space-y-3">
+                  {/* Validation summary */}
+                  <div className="flex items-center gap-2 text-xs">
+                    {composerQ.data.validation.valid ? (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600">✓ Valid</Badge>
+                    ) : (
+                      <Badge variant="destructive">{composerQ.data.validation.errorCount} error{composerQ.data.validation.errorCount === 1 ? "" : "s"}</Badge>
+                    )}
+                    {composerQ.data.validation.warningCount > 0 && (
+                      <Badge variant="secondary">{composerQ.data.validation.warningCount} warning{composerQ.data.validation.warningCount === 1 ? "" : "s"}</Badge>
+                    )}
+                    <span className="text-muted-foreground">Duration: {composerQ.data.duration.toFixed(1)}s</span>
+                  </div>
+
+                  {/* Timeline grid */}
+                  {(() => {
+                    const duration = Math.max(composerQ.data.duration, ...composerQ.data.items.map((i: any) => Number(i.end_time)));
+                    const totalWidth = Math.max(600, Math.ceil(duration) * composerZoom);
+                    const ticks: number[] = [];
+                    const tickEvery = composerZoom < 6 ? 30 : composerZoom < 14 ? 10 : 5;
+                    for (let t = 0; t <= duration; t += tickEvery) ticks.push(t);
+                    const itemsByTrack: Record<string, any[]> = {};
+                    for (const it of composerQ.data.items) (itemsByTrack[it.track_id] ??= []).push(it);
+                    return (
+                      <div className="border border-border rounded-md overflow-auto max-h-[60vh]">
+                        {/* Ruler */}
+                        <div className="flex border-b border-border bg-muted/40 sticky top-0 z-10">
+                          <div className="w-32 shrink-0 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground border-r border-border">Track</div>
+                          <div className="relative" style={{ width: totalWidth, height: 24 }}>
+                            {ticks.map((t) => (
+                              <div key={t} className="absolute top-0 bottom-0 border-l border-border/60" style={{ left: t * composerZoom }}>
+                                <span className="absolute top-0.5 left-1 text-[10px] text-muted-foreground tabular-nums">{t}s</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Tracks */}
+                        {composerQ.data.tracks.map((tr: any) => {
+                          const its = itemsByTrack[tr.id] ?? [];
+                          return (
+                            <div key={tr.id} className="flex border-b border-border last:border-b-0 hover:bg-muted/20">
+                              <div className="w-32 shrink-0 px-2 py-2 border-r border-border flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tr.color }} />
+                                <span className="text-xs truncate" title={tr.name}>{tr.name}</span>
+                              </div>
+                              <div className="relative" style={{ width: totalWidth, height: 36 }}>
+                                {ticks.map((t) => (
+                                  <div key={t} className="absolute top-0 bottom-0 border-l border-border/30" style={{ left: t * composerZoom }} />
+                                ))}
+                                {its.map((it: any) => {
+                                  const left = Number(it.start_time) * composerZoom;
+                                  const width = Math.max(2, (Number(it.end_time) - Number(it.start_time)) * composerZoom);
+                                  const missing = it.status === "missing_asset";
+                                  return (
+                                    <div
+                                      key={it.id}
+                                      className="absolute top-1 bottom-1 rounded px-1.5 text-[10px] font-medium text-white truncate cursor-default border"
+                                      style={{
+                                        left, width,
+                                        background: missing ? "transparent" : tr.color,
+                                        borderColor: tr.color,
+                                        color: missing ? tr.color : "white",
+                                      }}
+                                      title={`${it.asset_type} ${Number(it.start_time).toFixed(1)}-${Number(it.end_time).toFixed(1)}s · ${it.status}${it.title ? `\n${it.title}` : ""}`}
+                                    >
+                                      {it.title || it.asset_type}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Issues list */}
+                  {composerQ.data.validation.issues.length > 0 && (
+                    <div className="border border-border rounded-md p-2 max-h-48 overflow-auto">
+                      <div className="text-xs font-semibold mb-1">Validation issues</div>
+                      <ul className="space-y-1 text-[11px]">
+                        {composerQ.data.validation.issues.map((iss: any, i: number) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <Badge variant={iss.level === "error" ? "destructive" : "secondary"} className="text-[9px] uppercase">{iss.level}</Badge>
+                            <span>{iss.message}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
