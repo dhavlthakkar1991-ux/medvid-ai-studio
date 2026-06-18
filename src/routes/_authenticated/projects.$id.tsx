@@ -67,7 +67,9 @@ function recoverySource(t: { fallback_used?: boolean }): "AI" | "Recovery" {
 }
 
 function isActionableTimelineIssue(issue: any): boolean {
-  return !(issue?.code === "empty_track" && issue?.track_kind !== "cta");
+  const message = String(issue?.message ?? "").toLowerCase();
+  const isEmptyOptionalTrack = (issue?.code === "empty_track" || message.includes("track has no items")) && issue?.track_kind !== "cta";
+  return !isEmptyOptionalTrack;
 }
 
 function whyFallback(t: { attempts?: any[] }): string[] {
