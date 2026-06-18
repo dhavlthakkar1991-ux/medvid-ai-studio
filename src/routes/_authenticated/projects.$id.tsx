@@ -1459,6 +1459,8 @@ function ProjectView() {
               <CardTitle className="text-base">
                 Editorial Decisions {canonQ.data && <Badge variant="outline" className="ml-2">{canonQ.data.editActions.length} actions</Badge>}
               </CardTitle>
+              <div className="flex items-center gap-2">
+              <AiToolPrompt projectId={id} task="editorial_decisions" invalidateKeys={[["project-canonical", id]]} />
               <Button
                 size="sm"
                 variant="outline"
@@ -1477,6 +1479,7 @@ function ProjectView() {
               >
                 <RefreshCw className="h-3 w-3 mr-1" />Regenerate Editorial Decisions
               </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {!canonQ.data || canonQ.data.editActions.length === 0 ? (
