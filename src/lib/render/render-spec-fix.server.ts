@@ -32,10 +32,6 @@ function parseRef(ref?: string | null): ParsedRef | null {
   return { kind: "item", id: ref };
 }
 
-function refLabel(r: ParsedRef | null) {
-  return r?.id ? r.id.slice(0, 8) : "unknown";
-}
-
 async function rejectUnusableAssets(sb: Sb, projectId: string, ids: string[]) {
   if (ids.length === 0) return;
   await sb.from("asset_candidates")
@@ -60,9 +56,7 @@ export async function fixRenderSpecIssues(
   const graphicIdsToDelete = new Set<string>();
   const itemIdsToDelete = new Set<string>();
   const itemsToClamp: { id: string; end: number }[] = [];
-  const graphicAssetsUsedByItems = new Set<string>();
 
-  const assetRefsByItemId = new Map<string, ParsedRef>();
   const assetIdsUsedByItems = new Set<string>();
   const graphicIdsUsedByItems = new Set<string>();
   const { buildRenderSpec } = await import("./render-spec-builder.server");
@@ -70,7 +64,6 @@ export async function fixRenderSpecIssues(
   for (const item of currentSpec.items ?? []) {
     const r = parseRef(item.asset_id);
     if (!r) continue;
-    assetRefsByItemId.set(item.id, r);
     if (r.kind === "asset") assetIdsUsedByItems.add(r.id);
     if (r.kind === "graphic") graphicIdsUsedByItems.add(r.id);
   }
@@ -146,12 +139,10 @@ export async function fixRenderSpecIssues(
     }
   }
 
-  // Apply asset deletions: cascade via manifest + timeline first.
-  if (assetIdsToDelete.size > 0) {
-    const ids = Array.from(assetIdsToDelete);
-    await sb.from("render_manifest").delete().eq("project_id", projectId).in("asset_id", ids);
-    await sb.from("timeline_items").delete().eq("project_id", projectId).in("asset_id", ids);
-    await sb.from("assets").delete().eq("project_id", projectId).in("id", ids);
+  // Apply asset rejections: unlink first so the timeline composer cannot pick
+  // the same non-renderable approved asset on the manifest rebuild.
+  if (assetIdsToReject.size > 0) {
+    await rejectUnusableAssets(sb, projectId, Array.from(assetIdsToReject));
   }
   if (graphicIdsToDelete.size > 0) {
     const ids = Array.from(graphicIdsToDelete);
@@ -174,7 +165,6 @@ export async function fixRenderSpecIssues(
   const { buildRenderManifestForProject } = await import("./timeline-builder.server");
   try { await buildRenderManifestForProject(sb, projectId); } catch (e) { console.warn("rebuild after fix failed", e); }
 
-  const { buildRenderSpec } = await import("./render-spec-builder.server");
   const { validateRenderSpec } = await import("./render-validation");
   const spec = await buildRenderSpec(sb, projectId, { quality: "full" });
   const after = validateRenderSpec(spec);
