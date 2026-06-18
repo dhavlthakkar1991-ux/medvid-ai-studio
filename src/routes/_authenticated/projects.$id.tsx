@@ -11,6 +11,7 @@ import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
 import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
+import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -193,6 +194,54 @@ function ProjectView() {
     onError: (e: any) => toast.error(e?.message ?? "Recompose failed"),
   });
   const [composerZoom, setComposerZoom] = useState(8); // pixels per second
+
+  // ---------- Render Queue ----------
+  const renderCreateFn = useServerFn(createRenderJob);
+  const renderStatusFn = useServerFn(getRenderStatus);
+  const renderCancelFn = useServerFn(cancelRenderJob);
+  const renderOutputsFn = useServerFn(listRenderOutputs);
+  const renderReadyFn = useServerFn(validateRenderReadiness);
+  const renderStatusQ = useQuery({
+    queryKey: ["render-status", id],
+    queryFn: () => renderStatusFn({ data: { projectId: id } }),
+    refetchInterval: (q) => {
+      const d = q.state.data as any;
+      const s = d?.latest?.status;
+      return s && ["queued", "preparing", "rendering"].includes(s) ? 1500 : false;
+    },
+  });
+  const renderOutputsQ = useQuery({
+    queryKey: ["render-outputs", id],
+    queryFn: () => renderOutputsFn({ data: { projectId: id } }),
+  });
+  const renderReadyQ = useQuery({
+    queryKey: ["render-ready", id],
+    queryFn: () => renderReadyFn({ data: { projectId: id } }),
+  });
+  const createRenderMut = useMutation({
+    mutationFn: (v: { renderType: "preview" | "full" }) =>
+      renderCreateFn({ data: { projectId: id, renderType: v.renderType } }),
+    onSuccess: (res: any) => {
+      if (!res?.ok) toast.error((res?.blockers ?? ["Unable to queue render"]).join(" · "));
+      else toast.success("Render queued");
+      qc.invalidateQueries({ queryKey: ["render-status", id] });
+      qc.invalidateQueries({ queryKey: ["render-outputs", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed to queue render"),
+  });
+  const cancelRenderMut = useMutation({
+    mutationFn: (jobId: string) => renderCancelFn({ data: { jobId } }),
+    onSuccess: () => {
+      toast.success("Render cancelled");
+      qc.invalidateQueries({ queryKey: ["render-status", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Cancel failed"),
+  });
+  // When a render flips to completed, refresh outputs.
+  useEffect(() => {
+    const s = (renderStatusQ.data as any)?.latest?.status;
+    if (s === "completed") qc.invalidateQueries({ queryKey: ["render-outputs", id] });
+  }, [renderStatusQ.data, qc, id]);
 
   const latestJobForLaunch = q.data?.latestJob;
 
@@ -383,6 +432,7 @@ function ProjectView() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="review">Review Assets</TabsTrigger>
           <TabsTrigger value="readiness">Readiness</TabsTrigger>
+          <TabsTrigger value="render">Render</TabsTrigger>
           <TabsTrigger value="composer">Timeline Composer</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
