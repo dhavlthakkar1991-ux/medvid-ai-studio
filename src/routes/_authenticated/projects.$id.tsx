@@ -66,6 +66,10 @@ function recoverySource(t: { fallback_used?: boolean }): "AI" | "Recovery" {
   return t.fallback_used ? "Recovery" : "AI";
 }
 
+function isActionableTimelineIssue(issue: any): boolean {
+  return !(issue?.code === "empty_track" && issue?.track_kind !== "cta");
+}
+
 function whyFallback(t: { attempts?: any[] }): string[] {
   const lines: string[] = [];
   const atts = Array.isArray(t.attempts) ? t.attempts : [];
