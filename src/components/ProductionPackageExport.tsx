@@ -341,6 +341,24 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
           </Button>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wrench className="h-4 w-4" /> Render debug package
+          </CardTitle>
+          <CardDescription>
+            Slim ZIP containing RenderSpec + Manifest V6 + timeline + assets + compiled graphics + captions —
+            everything an external FFmpeg / Node / Docker render worker needs to reproduce the render.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" disabled={busy !== null} onClick={downloadRenderDebugPackage}>
+            <Download className="h-4 w-4 mr-2" />
+            {busy === "debug" ? "Building debug package…" : "Download render debug package"}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
