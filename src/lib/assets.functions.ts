@@ -219,6 +219,14 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const approvedCand = (ac.data ?? []).filter((r: any) => r.status === "approved" || r.status === "locked" || r.status === "replaced").length;
     const assetsScore = totalCand === 0 ? 0 : Math.min(1, approvedCand / Math.max(1, totalCand));
 
+    // Layout gate: explicit layout_decisions rows OR layouts baked into the
+    // render manifest / timeline (these are produced downstream from layout
+    // planning, so their presence implies layout is satisfied).
+    let layoutScore = (ld.count ?? 0) > 0 ? 1 : 0;
+    if (layoutScore === 0 && ((rm.count ?? 0) > 0 || (ti.count ?? 0) > 0)) {
+      layoutScore = 1;
+    }
+
     // Timeline validity gate
     let timelineScore = 0;
     let timelineBlockers: string[] = [];
@@ -236,7 +244,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       { key: "scene_plan", label: "Scene Plan", weight: 0.12, score: (sp.count ?? 0) > 0 ? 1 : 0 },
       { key: "storyboard", label: "Storyboard", weight: 0.12, score: (sb_.count ?? 0) > 0 ? 1 : 0 },
       { key: "editorial", label: "Editorial", weight: 0.12, score: (ed.count ?? 0) > 0 ? 1 : 0 },
-      { key: "layout", label: "Layout", weight: 0.08, score: (ld.count ?? 0) > 0 ? 1 : 0 },
+      { key: "layout", label: "Layout", weight: 0.08, score: layoutScore },
       { key: "assets", label: "Assets approved", weight: 0.18, score: assetsScore },
       { key: "timeline", label: "Timeline valid", weight: 0.18, score: timelineScore },
       { key: "manifest", label: "Render Manifest", weight: 0.12, score: (rm.count ?? 0) > 0 ? 1 : 0 },
