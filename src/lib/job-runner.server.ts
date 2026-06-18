@@ -231,7 +231,11 @@ export async function runAnalysisJob(jobId: string) {
         } catch {}
       }
       await setState("analyzing", 20 + Math.round(((doneCount + 1) / ALL_TASKS.length) * 70));
-      return { body: `task:${task}`, status: 200 };
+      if (doneCount + 1 < ALL_TASKS.length) {
+        return { body: `task:${task}`, status: 200 };
+      }
+      // Last task is done; finalize in the same invocation so the pipeline
+      // cannot sit at 90% waiting for one more external retry/nudge.
     }
 
     // ---- STEP 3: finalize -----------------------------------------------
