@@ -10,6 +10,7 @@ import { getCanonicalProject, rebuildRenderManifest, validateTimeline, exportRen
 import { getPipelineHealth } from "@/lib/qa.functions";
 import { resetProject, deleteProject, type ResetStage } from "@/lib/project-admin.functions";
 import { listAssetReview, reviewAssetCandidate, getProjectReadiness } from "@/lib/assets.functions";
+import { getProjectTimeline, recomposeTimeline } from "@/lib/timeline.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -364,6 +365,7 @@ function ProjectView() {
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="review">Review Assets</TabsTrigger>
           <TabsTrigger value="readiness">Readiness</TabsTrigger>
+          <TabsTrigger value="composer">Timeline Composer</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="editorial">Editorial</TabsTrigger>
           <TabsTrigger value="layout">Layout Decisions</TabsTrigger>
