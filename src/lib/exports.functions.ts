@@ -94,7 +94,7 @@ export const getProductionPackage = createServerFn({ method: "POST" })
     if (proj.error) throw new Error(proj.error.message);
 
     const latest: Record<string, any> = {};
-    for (const v of vers.data ?? []) if (!latest[v.task]) latest[v.task] = v.payload;
+    for (const v of vers.data ?? []) if (!latest[v.task]) latest[v.task] = (v as any).analysis_data ?? null;
 
     const project = proj.data;
     const generatedAt = new Date().toISOString();
