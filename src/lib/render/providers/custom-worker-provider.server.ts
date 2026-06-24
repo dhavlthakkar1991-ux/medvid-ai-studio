@@ -1,5 +1,11 @@
 import { createHmac } from "crypto";
-import { ProviderNotConfiguredError, type CreateRenderArgs, type ProviderJobHandle, type ProviderStatusReport, type RenderProvider } from "./types";
+import {
+  ProviderNotConfiguredError,
+  type CreateRenderArgs,
+  type ProviderJobHandle,
+  type ProviderStatusReport,
+  type RenderProvider,
+} from "./types";
 import { specToFfmpegGraph } from "../transformers/ffmpeg-transformer";
 
 /**
@@ -47,14 +53,20 @@ function simulateStatus(providerJobId: string, resolution: string): ProviderStat
   const elapsed = Date.now() - Number(m[1]);
   const total = SIM_TIMING.prepare + SIM_TIMING.render;
   if (elapsed < SIM_TIMING.prepare) {
-    return { status: "preparing", progress: Math.round((elapsed / SIM_TIMING.prepare) * 15), resolution };
+    return {
+      status: "preparing",
+      progress: Math.round((elapsed / SIM_TIMING.prepare) * 15),
+      resolution,
+    };
   }
   if (elapsed < total) {
     const r = (elapsed - SIM_TIMING.prepare) / SIM_TIMING.render;
     return { status: "rendering", progress: 15 + Math.round(r * 80), resolution };
   }
   return {
-    status: "completed", progress: 100, resolution,
+    status: "completed",
+    progress: 100,
+    resolution,
     outputUrl: `custom-worker-sim://renders/${providerJobId}.mp4`,
   };
 }
@@ -63,8 +75,10 @@ async function fetchLastCallback(providerJobId: string): Promise<Record<string, 
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin
-      .from("render_provider_jobs").select("response_payload, status")
-      .eq("provider_job_id", providerJobId).maybeSingle();
+      .from("render_provider_jobs")
+      .select("response_payload, status")
+      .eq("provider_job_id", providerJobId)
+      .maybeSingle();
     if (!data) return null;
     const rp: any = data.response_payload ?? {};
     return { ...(rp.last_callback ?? {}), _stored_status: data.status };
@@ -80,7 +94,9 @@ export const customWorkerProvider: RenderProvider = {
   isConfigured(configuration) {
     const c = getConfig(configuration ?? {});
     if (c.simulate) return true;
-    return Boolean(c.workerUrl) && Boolean(process.env.CUSTOM_WORKER_SECRET);
+    return (
+      Boolean(c.workerUrl) && Boolean(c.callbackUrl) && Boolean(process.env.CUSTOM_WORKER_SECRET)
+    );
   },
 
   async createRender(args: CreateRenderArgs): Promise<ProviderJobHandle> {
@@ -91,18 +107,37 @@ export const customWorkerProvider: RenderProvider = {
     if (cfg.simulate) {
       const providerJobId = `${SIM_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       return {
-        providerJobId, status: "preparing",
+        providerJobId,
+        status: "preparing",
         requestPayload: {
-          provider: "custom_worker", mode: "simulate",
-          render_job_id: args.renderJobId, project_id: args.projectId,
-          render_type: args.renderType, resolution, ffmpeg_graph: graph,
+          provider: "custom_worker",
+          mode: "simulate",
+          render_job_id: args.renderJobId,
+          project_id: args.projectId,
+          render_type: args.renderType,
+          resolution,
+          ffmpeg_graph: graph,
         },
-        responsePayload: { provider_job_id: providerJobId, simulated: true, accepted_at: new Date().toISOString() },
+        responsePayload: {
+          provider_job_id: providerJobId,
+          simulated: true,
+          accepted_at: new Date().toISOString(),
+        },
       };
     }
 
-    if (!cfg.workerUrl) throw new ProviderNotConfiguredError("Custom Worker", "Set worker_url in provider configuration.");
-    if (!process.env.CUSTOM_WORKER_SECRET) throw new ProviderNotConfiguredError("Custom Worker", "CUSTOM_WORKER_SECRET is not set.");
+    if (!cfg.workerUrl)
+      throw new ProviderNotConfiguredError(
+        "Custom Worker",
+        "Set worker_url in provider configuration.",
+      );
+    if (!cfg.callbackUrl)
+      throw new ProviderNotConfiguredError(
+        "Custom Worker",
+        "Set callback_url in provider configuration.",
+      );
+    if (!process.env.CUSTOM_WORKER_SECRET)
+      throw new ProviderNotConfiguredError("Custom Worker", "CUSTOM_WORKER_SECRET is not set.");
 
     const providerJobId = `cw_${args.renderType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const requestPayload = {
@@ -129,15 +164,28 @@ export const customWorkerProvider: RenderProvider = {
       };
       if (cfg.apiToken) headers["Authorization"] = `Bearer ${cfg.apiToken}`;
       const res = await fetch(`${cfg.workerUrl.replace(/\/$/, "")}/render`, {
-        method: "POST", headers, body, signal: controller.signal,
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
       });
       const text = await res.text();
       let parsed: any = {};
-      try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text }; }
-      if (!res.ok) {
-        throw new Error(`Custom worker rejected render (${res.status}): ${typeof parsed === "object" ? JSON.stringify(parsed) : text}`);
+      try {
+        parsed = text ? JSON.parse(text) : {};
+      } catch {
+        parsed = { raw: text };
       }
-      responsePayload = { http_status: res.status, accepted_at: new Date().toISOString(), worker_response: parsed };
+      if (!res.ok) {
+        throw new Error(
+          `Custom worker rejected render (${res.status}): ${typeof parsed === "object" ? JSON.stringify(parsed) : text}`,
+        );
+      }
+      responsePayload = {
+        http_status: res.status,
+        accepted_at: new Date().toISOString(),
+        worker_response: parsed,
+      };
     } finally {
       clearTimeout(timer);
     }
@@ -154,13 +202,18 @@ export const customWorkerProvider: RenderProvider = {
     // Default: trust the webhook-driven state stored in render_provider_jobs.
     const last = await fetchLastCallback(providerJobId);
     if (last) {
-      const status = String(last.status ?? last._stored_status ?? "rendering") as ProviderStatusReport["status"];
+      const status = String(
+        last.status ?? last._stored_status ?? "rendering",
+      ) as ProviderStatusReport["status"];
       return {
-        status, progress: Math.max(0, Math.min(100, Number(last.progress ?? 0))),
-        outputUrl: last.output_url ?? null, thumbnailUrl: last.thumbnail_url ?? null,
+        status,
+        progress: Math.max(0, Math.min(100, Number(last.progress ?? 0))),
+        outputUrl: last.output_url ?? null,
+        thumbnailUrl: last.thumbnail_url ?? null,
         durationSeconds: last.duration_seconds ?? null,
         resolution: last.resolution ?? resolution,
-        error: last.error ?? null, raw: last,
+        error: last.error ?? null,
+        raw: last,
       };
     }
 
@@ -169,7 +222,10 @@ export const customWorkerProvider: RenderProvider = {
       try {
         const headers: Record<string, string> = {};
         if (cfg.apiToken) headers["Authorization"] = `Bearer ${cfg.apiToken}`;
-        const res = await fetch(`${cfg.workerUrl.replace(/\/$/, "")}/status/${encodeURIComponent(providerJobId)}`, { headers });
+        const res = await fetch(
+          `${cfg.workerUrl.replace(/\/$/, "")}/status/${encodeURIComponent(providerJobId)}`,
+          { headers },
+        );
         if (res.ok) {
           const raw = await res.json().catch(() => ({}));
           return {
@@ -178,7 +234,8 @@ export const customWorkerProvider: RenderProvider = {
             outputUrl: raw.output_url ?? null,
             durationSeconds: raw.duration_seconds ?? null,
             resolution: raw.resolution ?? resolution,
-            error: raw.error ?? null, raw,
+            error: raw.error ?? null,
+            raw,
           };
         }
       } catch (e) {

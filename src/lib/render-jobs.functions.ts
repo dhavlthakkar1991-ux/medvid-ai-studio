@@ -24,8 +24,8 @@ const CreateInput = z.object({
 });
 const CancelInput = z.object({ jobId: z.string().uuid() });
 
-const PREVIEW_MS = { prepare: 2000, render: 8000 };   // ~10s mock preview
-const FULL_MS    = { prepare: 4000, render: 18000 };  // ~22s mock full
+const PREVIEW_MS = { prepare: 2000, render: 8000 }; // ~10s mock preview
+const FULL_MS = { prepare: 4000, render: 18000 }; // ~22s mock full
 
 type Sb = any;
 
@@ -36,11 +36,19 @@ export async function computeRenderReadiness(sb: Sb, projectId: string) {
   try {
     const { repairProjectDuration } = await import("./render/duration-repair.server");
     await repairProjectDuration(sb, projectId);
-  } catch (e) { console.warn("duration repair failed", e); }
+  } catch (e) {
+    console.warn("duration repair failed", e);
+  }
   const [{ data: project }, manifestRes, timelineRes, candRes] = await Promise.all([
     sb.from("projects").select("id, duration_seconds").eq("id", projectId).maybeSingle(),
-    sb.from("render_manifest").select("id", { count: "exact", head: true }).eq("project_id", projectId),
-    sb.from("timeline_items").select("id", { count: "exact", head: true }).eq("project_id", projectId),
+    sb
+      .from("render_manifest")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId),
+    sb
+      .from("timeline_items")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId),
     sb.from("asset_candidates").select("status").eq("project_id", projectId),
   ]);
   const manifestCount = manifestRes.count ?? 0;
@@ -52,14 +60,34 @@ export async function computeRenderReadiness(sb: Sb, projectId: string) {
 
   let timelineValid = false;
   const timelineIssues: string[] = [];
+  let renderSpecValid = false;
+  const renderSpecIssues: string[] = [];
   if (timelineCount > 0) {
     try {
       const { validateTimelineForProject } = await import("./timeline/timeline-composer.server");
       const v = await validateTimelineForProject(sb, projectId);
       timelineValid = v.valid;
-      timelineIssues.push(...v.issues.filter((i: any) => i.level === "error").map((i: any) => i.message));
+      timelineIssues.push(
+        ...v.issues.filter((i: any) => i.level === "error").map((i: any) => i.message),
+      );
     } catch (e: any) {
       timelineIssues.push(e?.message ?? "timeline validation failed");
+    }
+  }
+  if (manifestCount > 0) {
+    try {
+      const { buildRenderSpec } = await import("./render/render-spec-builder.server");
+      const { validateRenderSpec } = await import("./render/render-validation");
+      const spec = await buildRenderSpec(sb, projectId, { quality: "full" });
+      const validation = validateRenderSpec(spec);
+      renderSpecValid = validation.ok;
+      renderSpecIssues.push(
+        ...validation.issues
+          .filter((i: any) => i.level === "error")
+          .map((i: any) => `${i.code}: ${i.message}`),
+      );
+    } catch (e: any) {
+      renderSpecIssues.push(e?.message ?? "RenderSpec validation failed");
     }
   }
 
@@ -67,9 +95,11 @@ export async function computeRenderReadiness(sb: Sb, projectId: string) {
   if (timelineCount === 0) blockers.push("Timeline not composed");
   else if (!timelineValid) blockers.push("Timeline has critical errors");
   if (manifestCount === 0) blockers.push("Render manifest missing");
+  else if (!renderSpecValid) blockers.push("RenderSpec has critical errors");
   if (duration <= 0) blockers.push("Project duration unknown");
   if (total > 0 && approved === 0) blockers.push("No assets approved");
   blockers.push(...timelineIssues.slice(0, 3));
+  blockers.push(...renderSpecIssues.slice(0, 5));
 
   return {
     ok: blockers.length === 0,
@@ -79,6 +109,8 @@ export async function computeRenderReadiness(sb: Sb, projectId: string) {
       manifestExists: manifestCount > 0,
       durationKnown: duration > 0,
       assetsApproved: total === 0 || approved > 0,
+      renderSpecValid,
+      renderSpecErrors: renderSpecIssues,
       totalCandidates: total,
       approvedCandidates: approved,
       durationSeconds: duration,
@@ -105,14 +137,27 @@ async function persistAdapterTick(sb: Sb, job: any) {
     patch.completed_at = new Date().toISOString();
   }
   if (report.error) patch.error_message = report.error;
-  const { data: updated } = await sb.from("render_jobs").update(patch).eq("id", job.id).select("*").maybeSingle();
+  const { data: updated } = await sb
+    .from("render_jobs")
+    .update(patch)
+    .eq("id", job.id)
+    .select("*")
+    .maybeSingle();
 
   if (status === "completed") {
-    const { data: existing } = await sb.from("render_outputs").select("id").eq("render_job_id", job.id).limit(1);
+    const { data: existing } = await sb
+      .from("render_outputs")
+      .select("id")
+      .eq("render_job_id", job.id)
+      .limit(1);
     if (!existing || existing.length === 0) {
       const dl = await adapterDownload(sb, job.id);
       const isPreview = job.render_type !== "full";
-      const { data: project } = await sb.from("projects").select("duration_seconds").eq("id", job.project_id).maybeSingle();
+      const { data: project } = await sb
+        .from("projects")
+        .select("duration_seconds")
+        .eq("id", job.project_id)
+        .maybeSingle();
       await sb.from("render_outputs").insert({
         render_job_id: job.id,
         project_id: job.project_id,
@@ -144,12 +189,17 @@ export const createRenderJob = createServerFn({ method: "POST" })
     }
     // Refuse to enqueue if another job is already in-flight.
     const { data: existing } = await sb
-      .from("render_jobs").select("id, status")
+      .from("render_jobs")
+      .select("id, status")
       .eq("project_id", data.projectId)
       .in("status", ["queued", "preparing", "rendering"])
       .limit(1);
     if (existing && existing.length > 0) {
-      return { ok: false as const, blockers: ["A render is already in flight for this project."], job: existing[0] };
+      return {
+        ok: false as const,
+        blockers: ["A render is already in flight for this project."],
+        job: existing[0],
+      };
     }
     const { data: job, error } = await sb
       .from("render_jobs")
@@ -174,14 +224,21 @@ export const createRenderJob = createServerFn({ method: "POST" })
         renderType: data.renderType,
       });
     } catch (e: any) {
-      await sb.from("render_jobs").update({
-        status: "failed",
-        completed_at: new Date().toISOString(),
-        error_message: e?.message ?? "Adapter handoff failed",
-      }).eq("id", job.id);
+      await sb
+        .from("render_jobs")
+        .update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error_message: e?.message ?? "Adapter handoff failed",
+        })
+        .eq("id", job.id);
       return { ok: false as const, blockers: [e?.message ?? "Render adapter failed"], job };
     }
-    const { data: refreshed } = await sb.from("render_jobs").select("*").eq("id", job.id).maybeSingle();
+    const { data: refreshed } = await sb
+      .from("render_jobs")
+      .select("*")
+      .eq("id", job.id)
+      .maybeSingle();
     return { ok: true as const, blockers: [], job: refreshed ?? job };
   });
 
@@ -191,7 +248,8 @@ export const getRenderStatus = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
     const { data: jobs } = await sb
-      .from("render_jobs").select("*")
+      .from("render_jobs")
+      .select("*")
       .eq("project_id", data.projectId)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -213,13 +271,20 @@ export const cancelRenderJob = createServerFn({ method: "POST" })
     try {
       const { adapterCancel } = await import("./render/render-adapter.server");
       await adapterCancel(sb, data.jobId);
-    } catch (e) { console.warn("adapter cancel failed", e); }
+    } catch (e) {
+      console.warn("adapter cancel failed", e);
+    }
     const { data: job, error } = await sb
       .from("render_jobs")
-      .update({ status: "cancelled", completed_at: new Date().toISOString(), error_message: "Cancelled by user" })
+      .update({
+        status: "cancelled",
+        completed_at: new Date().toISOString(),
+        error_message: "Cancelled by user",
+      })
       .eq("id", data.jobId)
       .in("status", ["queued", "preparing", "rendering"])
-      .select("*").maybeSingle();
+      .select("*")
+      .maybeSingle();
     if (error) throw new Error(error.message);
     return { ok: true, job };
   });
@@ -229,7 +294,8 @@ export const listRenderOutputs = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => ProjectIdInput.parse(i))
   .handler(async ({ context, data }) => {
     const { data: outputs } = await context.supabase
-      .from("render_outputs").select("*")
+      .from("render_outputs")
+      .select("*")
       .eq("project_id", data.projectId)
       .order("created_at", { ascending: false });
     return { outputs: outputs ?? [] };
@@ -249,12 +315,17 @@ export const getRenderDashboardSummary = createServerFn({ method: "POST" })
       .select("status, started_at, completed_at")
       .in("project_id", ids);
     const rows = (jobs ?? []) as any[];
-    const queued = rows.filter((j) => ["queued", "preparing", "rendering"].includes(j.status)).length;
+    const queued = rows.filter((j) =>
+      ["queued", "preparing", "rendering"].includes(j.status),
+    ).length;
     const completed = rows.filter((j) => j.status === "completed").length;
     const failed = rows.filter((j) => j.status === "failed").length;
     const durations = rows
       .filter((j) => j.status === "completed" && j.started_at && j.completed_at)
       .map((j) => (new Date(j.completed_at).getTime() - new Date(j.started_at).getTime()) / 1000);
-    const avgRenderSeconds = durations.length === 0 ? 0 : Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+    const avgRenderSeconds =
+      durations.length === 0
+        ? 0
+        : Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
     return { queued, completed, failed, avgRenderSeconds };
   });
