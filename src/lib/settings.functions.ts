@@ -10,6 +10,23 @@ const SettingsInput = z.object({
   budget_mode: z.boolean(),
 });
 
+function getDefaultLLMProvider() {
+  if (process.env.GEMINI_API_KEY) return "gemini";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.GROQ_API_KEY) return "groq";
+  if (process.env.OPENROUTER_API_KEY) return "openrouter";
+  if (process.env.LOVABLE_API_KEY) return "lovable";
+  return "gemini";
+}
+
+function getDefaultTranscriptionProvider() {
+  if (process.env.GEMINI_API_KEY) return "gemini";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.GROQ_API_KEY) return "groq";
+  if (process.env.LOVABLE_API_KEY) return "lovable";
+  return "gemini";
+}
+
 export const getAISettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -22,7 +39,11 @@ export const getAISettings = createServerFn({ method: "GET" })
     if (!data) {
       const ins = await context.supabase
         .from("ai_settings")
-        .insert({ user_id: context.userId })
+        .insert({
+          user_id: context.userId,
+          default_llm_provider: getDefaultLLMProvider(),
+          default_transcription_provider: getDefaultTranscriptionProvider(),
+        })
         .select()
         .single();
       if (ins.error) throw new Error(ins.error.message);

@@ -158,7 +158,14 @@ function NewProject() {
       });
       const job = await startFn({ data: { projectId: id } });
       if (job.runnerUrl) void fetch(job.runnerUrl, { method: "POST" }).catch(() => undefined);
-      toast.success("Project created. Analysis started.");
+      if ((job as any).runnerUnavailable) {
+        toast.warning(
+          (job as any).message ??
+            "Project uploaded. Automatic background runner is not configured. Run the pipeline manually when ready.",
+        );
+      } else {
+        toast.success("Project created. Analysis started.");
+      }
       router.navigate({ to: "/projects/$id", params: { id } });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to create project");

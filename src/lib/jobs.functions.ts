@@ -2,6 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+const RUNNER_UNAVAILABLE_MESSAGE =
+  "Project uploaded. Automatic background runner is not configured. Set JOB_RUNNER_SECRET, then run the pipeline manually.";
+
 export const startFullPipeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ projectId: z.string() }).parse(input))
@@ -24,9 +27,22 @@ export const startFullPipeline = createServerFn({ method: "POST" })
       if (project?.status && terminal.has(project.status)) {
         await context.supabase.from("jobs").update({ state: project.status, progress: 100, error: null }).eq("id", active.id);
       } else {
-      const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
-      const token = await createJobRunnerToken(active.id);
-      return { jobId: active.id, runnerUrl: `/api/public/jobs/run/${active.id}?token=${encodeURIComponent(token)}` };
+        const { createJobRunnerToken, isJobRunnerConfigured } = await import("@/lib/job-runner-token.server");
+        if (!isJobRunnerConfigured()) {
+          await context.supabase
+            .from("jobs")
+            .update({ state: "failed", progress: 0, error: RUNNER_UNAVAILABLE_MESSAGE })
+            .eq("id", active.id);
+          await context.supabase.from("projects").update({ status: "uploaded" }).eq("id", data.projectId);
+          return {
+            jobId: active.id,
+            runnerUrl: null,
+            runnerUnavailable: true,
+            message: RUNNER_UNAVAILABLE_MESSAGE,
+          };
+        }
+        const token = await createJobRunnerToken(active.id);
+        return { jobId: active.id, runnerUrl: `/api/public/jobs/run/${active.id}?token=${encodeURIComponent(token)}` };
       }
     }
 
@@ -37,7 +53,20 @@ export const startFullPipeline = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
-    const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+    const { createJobRunnerToken, isJobRunnerConfigured } = await import("@/lib/job-runner-token.server");
+    if (!isJobRunnerConfigured()) {
+      await context.supabase
+        .from("jobs")
+        .update({ state: "failed", progress: 0, error: RUNNER_UNAVAILABLE_MESSAGE })
+        .eq("id", job.id);
+      await context.supabase.from("projects").update({ status: "uploaded" }).eq("id", data.projectId);
+      return {
+        jobId: job.id,
+        runnerUrl: null,
+        runnerUnavailable: true,
+        message: RUNNER_UNAVAILABLE_MESSAGE,
+      };
+    }
     const token = await createJobRunnerToken(job.id);
 
     const runnerUrl = `/api/public/jobs/run/${job.id}?token=${encodeURIComponent(token)}`;
@@ -65,7 +94,19 @@ export const runQueuedJob = createServerFn({ method: "POST" })
     // Otherwise (queued / failed / transcribing / analyzing): always issue a
     // runner URL so the client can advance the next pipeline step.
 
-    const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+    const { createJobRunnerToken, isJobRunnerConfigured } = await import("@/lib/job-runner-token.server");
+    if (!isJobRunnerConfigured()) {
+      await context.supabase
+        .from("jobs")
+        .update({ state: "failed", progress: 0, error: RUNNER_UNAVAILABLE_MESSAGE })
+        .eq("id", job.id);
+      return {
+        ok: false,
+        runnerUrl: null,
+        runnerUnavailable: true,
+        message: RUNNER_UNAVAILABLE_MESSAGE,
+      };
+    }
     const token = await createJobRunnerToken(job.id);
     const runnerUrl = `/api/public/jobs/run/${job.id}?token=${encodeURIComponent(token)}`;
     return { ok: true, runnerUrl };
@@ -174,7 +215,22 @@ export const retryPipeline = createServerFn({ method: "POST" })
       await supabaseAdmin.from("jobs").update({ error: null }).eq("id", jobId);
     }
 
-    const { createJobRunnerToken } = await import("@/lib/job-runner-token.server");
+    const { createJobRunnerToken, isJobRunnerConfigured } = await import("@/lib/job-runner-token.server");
+    if (!isJobRunnerConfigured()) {
+      await supabaseAdmin
+        .from("jobs")
+        .update({ state: "failed", progress: 0, error: RUNNER_UNAVAILABLE_MESSAGE })
+        .eq("id", jobId);
+      return {
+        ok: false,
+        jobId,
+        runnerUrl: null,
+        runnerUnavailable: true,
+        message: RUNNER_UNAVAILABLE_MESSAGE,
+        clearedRunning,
+        clearedFailed,
+      };
+    }
     const token = await createJobRunnerToken(jobId!);
     const runnerUrl = `/api/public/jobs/run/${jobId}?token=${encodeURIComponent(token)}`;
     return { ok: true, jobId, runnerUrl, clearedRunning, clearedFailed };

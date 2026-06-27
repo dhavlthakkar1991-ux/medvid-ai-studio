@@ -63,7 +63,7 @@ export const createProject = createServerFn({ method: "POST" })
         height: data.height ?? null,
         fps: data.fps ?? null,
         file_size: data.file_size ?? null,
-        status: "draft",
+        status: data.video_path ? "uploaded" : "draft",
       })
       .select("id")
       .single();
