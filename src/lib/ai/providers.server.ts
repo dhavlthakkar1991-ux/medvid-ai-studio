@@ -12,6 +12,79 @@ type LLMResult<T> = {
   raw?: { text?: string; parsed?: unknown };
 };
 
+const LLM_ENV_KEYS: Record<Exclude<LLMProviderId, "lovable">, string> = {
+  openai: "OPENAI_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  groq: "GROQ_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+};
+
+const PROVIDER_DEFAULT_MODEL: Record<LLMProviderId, string> = {
+  lovable: "google/gemini-2.5-flash",
+  gemini: "google/gemini-2.5-flash",
+  openai: "openai/gpt-4o-mini",
+  openrouter: "openai/gpt-4o-mini",
+  anthropic: "anthropic/claude-3-5-sonnet-latest",
+  groq: "llama-3.3-70b-versatile",
+  deepseek: "deepseek-chat",
+};
+
+const PROVIDER_PREFIX: Record<LLMProviderId, string | null> = {
+  lovable: null,
+  openrouter: null,
+  gemini: "google/",
+  openai: "openai/",
+  anthropic: "anthropic/",
+  groq: null,
+  deepseek: null,
+};
+
+function getProviderApiKey(provider: Exclude<LLMProviderId, "lovable">, userKeys: Record<string, string>) {
+  return userKeys[provider] || process.env[LLM_ENV_KEYS[provider]] || "";
+}
+
+export function coerceModelForProvider(provider: LLMProviderId, model: string): string {
+  const prefix = PROVIDER_PREFIX[provider];
+  if (!prefix) return model;
+  if (model.startsWith(prefix)) return model;
+  if (model.includes("/")) return PROVIDER_DEFAULT_MODEL[provider];
+  return model;
+}
+
+export function hasProviderApiKey(provider: LLMProviderId, userKeys: Record<string, string> = {}) {
+  if (provider === "lovable") return Boolean(process.env.LOVABLE_API_KEY);
+  return Boolean(getProviderApiKey(provider, userKeys));
+}
+
+export function resolveConfiguredLLMProvider(
+  preferred: LLMProviderId | string | null | undefined,
+  userKeys: Record<string, string> = {},
+): LLMProviderId {
+  const requested = (preferred ?? "gemini") as LLMProviderId;
+  if (requested !== "lovable" && hasProviderApiKey(requested, userKeys)) return requested;
+  for (const provider of ["gemini", "openai", "groq", "openrouter", "anthropic", "deepseek"] as const) {
+    if (hasProviderApiKey(provider, userKeys)) return provider;
+  }
+  if (requested === "lovable" && hasProviderApiKey("lovable", userKeys)) return "lovable";
+  return requested;
+}
+
+export function resolveConfiguredTranscriptionProvider(
+  preferred: TranscriptionProviderId | string | null | undefined,
+  userKeys: Record<string, string> = {},
+): TranscriptionProviderId {
+  const requested = (preferred ?? "gemini") as TranscriptionProviderId;
+  if ((requested === "openai" || requested === "groq") && hasProviderApiKey(requested, userKeys)) return requested;
+  if (requested === "gemini" && hasProviderApiKey("gemini", userKeys)) return "gemini";
+  for (const provider of ["gemini", "openai", "groq"] as const) {
+    if (hasProviderApiKey(provider, userKeys)) return provider;
+  }
+  if (requested === "lovable" && process.env.LOVABLE_API_KEY) return "lovable";
+  return requested;
+}
+
 function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, string>): {
   baseURL: string;
   apiKey?: string;
@@ -29,17 +102,17 @@ function getProviderConfig(provider: LLMProviderId, userKeys: Record<string, str
         name: "lovable",
       };
     case "openai":
-      return { baseURL: "https://api.openai.com/v1", apiKey: userKeys.openai ?? "", headers: {}, name: "openai" };
+      return { baseURL: "https://api.openai.com/v1", apiKey: getProviderApiKey("openai", userKeys), headers: {}, name: "openai" };
     case "gemini":
-      return { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey: userKeys.gemini ?? "", headers: {}, name: "gemini" };
+      return { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey: getProviderApiKey("gemini", userKeys), headers: {}, name: "gemini" };
     case "openrouter":
-      return { baseURL: "https://openrouter.ai/api/v1", apiKey: userKeys.openrouter ?? "", headers: {}, name: "openrouter" };
+      return { baseURL: "https://openrouter.ai/api/v1", apiKey: getProviderApiKey("openrouter", userKeys), headers: {}, name: "openrouter" };
     case "groq":
-      return { baseURL: "https://api.groq.com/openai/v1", apiKey: userKeys.groq ?? "", headers: {}, name: "groq" };
+      return { baseURL: "https://api.groq.com/openai/v1", apiKey: getProviderApiKey("groq", userKeys), headers: {}, name: "groq" };
     case "deepseek":
-      return { baseURL: "https://api.deepseek.com/v1", apiKey: userKeys.deepseek ?? "", headers: {}, name: "deepseek" };
+      return { baseURL: "https://api.deepseek.com/v1", apiKey: getProviderApiKey("deepseek", userKeys), headers: {}, name: "deepseek" };
     case "anthropic":
-      return { baseURL: "https://api.anthropic.com/v1", apiKey: userKeys.anthropic ?? "", headers: {}, name: "anthropic" };
+      return { baseURL: "https://api.anthropic.com/v1", apiKey: getProviderApiKey("anthropic", userKeys), headers: {}, name: "anthropic" };
   }
 }
 
@@ -57,10 +130,10 @@ export async function generateJSON<T>(
 ): Promise<LLMResult<T>> {
   const cfg = getProviderConfig(provider, userKeys);
   if (!cfg.apiKey && provider !== "lovable") {
-    throw new Error(`No API key configured for provider "${provider}". Add it in Settings → AI.`);
+    throw new Error(`No API key configured for provider "${provider}". Add it in Settings -> AI or set ${LLM_ENV_KEYS[provider]} on the server.`);
   }
   if (provider === "lovable" && !cfg.headers["Lovable-API-Key"]) {
-    throw new Error("Lovable AI is not configured. Contact support.");
+    throw new Error("No LLM provider key configured. Add GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY to the server environment, or select a provider in Settings -> AI.");
   }
 
   const gateway = createOpenAICompatible({
@@ -269,8 +342,8 @@ export type TranscriptResult = {
 type WhisperTranscriptionProviderId = Extract<TranscriptionProviderId, "openai" | "groq">;
 
 function getTranscriptionEndpoint(provider: WhisperTranscriptionProviderId, userKeys: Record<string, string>) {
-  if (provider === "openai") return { url: "https://api.openai.com/v1/audio/transcriptions", apiKey: userKeys.openai ?? "", model: "whisper-1" };
-  return { url: "https://api.groq.com/openai/v1/audio/transcriptions", apiKey: userKeys.groq ?? "", model: "whisper-large-v3-turbo" };
+  if (provider === "openai") return { url: "https://api.openai.com/v1/audio/transcriptions", apiKey: getProviderApiKey("openai", userKeys), model: "whisper-1" };
+  return { url: "https://api.groq.com/openai/v1/audio/transcriptions", apiKey: getProviderApiKey("groq", userKeys), model: "whisper-large-v3-turbo" };
 }
 
 function getMediaMimeType(audio: Blob, filename: string) {
@@ -357,7 +430,9 @@ async function transcribeWithGemini(apiKey: string, audio: Blob, filename: strin
 
 async function transcribeWithLovable(audio: Blob, filename: string): Promise<TranscriptResult> {
   const apiKey = process.env.LOVABLE_API_KEY ?? "";
-  if (!apiKey) throw new Error("Lovable AI is not configured. Contact support.");
+  if (!apiKey) {
+    throw new Error("Lovable AI is not configured. Set LOVABLE_API_KEY or switch Settings -> AI to Gemini, OpenAI, or Groq.");
+  }
   const mediaType = getMediaMimeType(audio, filename);
   // The Vercel AI SDK's openai-compatible adapter rejects `video/*` file parts
   // ("file part media type video/mp4 functionality not supported"). Call the
@@ -401,7 +476,7 @@ async function transcribeWithLovable(audio: Blob, filename: string): Promise<Tra
 function formatTranscriptionHttpError(stage: string, status: number, body: string) {
   const compact = body.replace(/\s+/g, " ").trim();
   if (status === 429 && /prepayment credits are depleted|RESOURCE_EXHAUSTED/i.test(compact)) {
-    return `Transcription failed (${stage}): Gemini credits are depleted. Add credits for that provider or switch Settings → AI to Lovable/OpenAI/Groq.`;
+    return `Transcription failed (${stage}): provider credits are depleted. Add credits for that provider or switch Settings -> AI to Gemini, OpenAI, Groq, or a configured Lovable gateway.`;
   }
   if (status === 429) return `Transcription failed (${stage}): provider rate limit or quota reached. Please retry later or switch providers.`;
   return `Transcription failed (${stage}): ${status} ${compact.slice(0, 200)}`;
@@ -418,7 +493,7 @@ export async function transcribeAudio(
     // is too big, transparently fall back to a provider that supports large
     // uploads (Gemini File API → OpenAI/Groq whisper).
     const LOVABLE_INLINE_LIMIT = 25 * 1024 * 1024;
-    if (audio.size <= LOVABLE_INLINE_LIMIT) {
+    if (process.env.LOVABLE_API_KEY && audio.size <= LOVABLE_INLINE_LIMIT) {
       try {
         return await transcribeWithLovable(audio, filename);
       } catch (e: any) {
@@ -428,7 +503,7 @@ export async function transcribeAudio(
     }
     const errors: string[] = [];
     for (const nextProvider of ["gemini", "openai", "groq"] as const) {
-      if (!userKeys[nextProvider]) continue;
+      if (!hasProviderApiKey(nextProvider, userKeys)) continue;
       try {
         return await transcribeAudio(nextProvider, userKeys, audio, filename);
       } catch (e: any) {
@@ -437,10 +512,10 @@ export async function transcribeAudio(
     }
     if (errors.length > 0) throw new Error(errors.join(" | "));
     throw new Error(
-      `Video is ${(audio.size / 1024 / 1024).toFixed(1)}MB — exceeds Lovable AI's 30MB inline limit. Add a Gemini, OpenAI, or Groq key in Settings → AI to transcribe larger files.`,
+      "No transcription provider key configured. Add GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY to the server environment, or add a provider key in Settings -> AI.",
     );
   }
-  if (provider === "gemini") return transcribeWithGemini(userKeys.gemini ?? "", audio, filename);
+  if (provider === "gemini") return transcribeWithGemini(getProviderApiKey("gemini", userKeys), audio, filename);
   if (provider === "assemblyai" || provider === "deepgram") {
     throw new Error(`Transcription provider "${provider}" is not yet implemented in Phase 1.`);
   }

@@ -1,4 +1,4 @@
-import { generateJSON } from "./ai/providers.server";
+import { generateJSON, resolveConfiguredLLMProvider } from "./ai/providers.server";
 import { TaskSchemas, type TaskKey } from "./ai/schemas";
 import { TASK_DEFAULT_MODELS, BUDGET_MODEL, type LLMProviderId } from "./ai/types";
 import { buildContextPrompt } from "./ai/context.server";
@@ -80,11 +80,11 @@ export async function runTaskForProject(
   }
 
   const overrides = (settings?.model_overrides as Record<string, string>) ?? {};
-  const provider = ((settings?.default_llm_provider as LLMProviderId) ?? "lovable");
+  const userKeys = (settings?.provider_keys as Record<string, string>) ?? {};
+  const provider = resolveConfiguredLLMProvider(settings?.default_llm_provider as LLMProviderId | undefined, userKeys);
   const budget = !!settings?.budget_mode;
   const rawModel = budget ? BUDGET_MODEL : (overrides[task] || TASK_DEFAULT_MODELS[task]);
   const model = coerceModelForProvider(provider, rawModel);
-  const userKeys = (settings?.provider_keys as Record<string, string>) ?? {};
 
   const schema = TaskSchemas[task];
   const ctxPrompt = buildContextPrompt(ctx ?? null, tpl);

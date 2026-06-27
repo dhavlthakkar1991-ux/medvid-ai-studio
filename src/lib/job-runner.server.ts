@@ -9,7 +9,7 @@
  */
 export async function runAnalysisJob(jobId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { transcribeAudio } = await import("@/lib/ai/providers.server");
+  const { transcribeAudio, resolveConfiguredTranscriptionProvider } = await import("@/lib/ai/providers.server");
   const { runTaskForProject, ALL_TASKS } = await import("@/lib/analysis-runner.server");
   const { writeTranscriptSegments } = await import("@/lib/analysis/normalize.server");
   const { buildRenderManifestForProject } = await import("@/lib/render/timeline-builder.server");
@@ -78,11 +78,8 @@ export async function runAnalysisJob(jobId: string) {
       const blob = await audioRes.blob();
 
       const keys = (settings?.provider_keys as Record<string, string>) ?? {};
-      const preferredProvider = String(settings?.default_transcription_provider ?? "lovable");
-      const implementedProviders = ["lovable", "openai", "groq", "gemini"];
-      const txProvider = implementedProviders.includes(preferredProvider) && keys[preferredProvider]
-        ? preferredProvider
-        : preferredProvider === "lovable" ? "lovable" : keys.openai ? "openai" : keys.groq ? "groq" : keys.gemini ? "gemini" : "lovable";
+      const preferredProvider = String(settings?.default_transcription_provider ?? "gemini");
+      const txProvider = resolveConfiguredTranscriptionProvider(preferredProvider, keys);
 
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Transcription timed out.")), 120000);

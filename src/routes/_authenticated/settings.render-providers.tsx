@@ -76,7 +76,7 @@ function RenderProvidersPage() {
                   {p.provider_type === "mock"
                     ? "Simulated lifecycle. No external service. Always available for testing."
                     : p.provider_type === "custom_worker"
-                    ? "Send FFmpeg jobs to your own worker. Set worker_url + CUSTOM_WORKER_SECRET, or simulate_worker=true for testing."
+                    ? "Send FFmpeg jobs to your own worker. Set worker_url, callback_url, and CUSTOM_WORKER_SECRET, or simulate_worker=true for testing."
                     : `Stub provider — implement the integration before enabling.`}
                 </p>
               </div>
@@ -149,15 +149,15 @@ function ProviderConfigDialog({ provider, onSaved }: { provider: any; onSaved: (
             <div className="text-xs text-muted-foreground space-y-1">
               <p>Supported configuration keys:</p>
               <ul className="list-disc pl-5 space-y-0.5">
-                <li><code>worker_url</code> — base URL of your render worker. Adapter POSTs to <code>{`{worker_url}/render`}</code>, <code>{`{worker_url}/cancel`}</code>, and optionally <code>{`{worker_url}/status/:id`}</code>.</li>
-                <li><code>callback_url</code> — optional. Full URL the worker calls when finished. Defaults to <code>/api/public/render-callback</code> on this app.</li>
+                <li><code>worker_url</code> — required unless <code>simulate_worker=true</code>. Base URL of your render worker. Use HTTPS outside local development.</li>
+                <li><code>callback_url</code> — required unless <code>simulate_worker=true</code>. Full public URL the worker calls when finished, for example <code>https://&lt;your-domain&gt;/api/public/render-callback</code>.</li>
                 <li><code>timeout_ms</code> — request timeout for the initial dispatch (default 30000).</li>
                 <li><code>api_token</code> — optional bearer token sent to the worker.</li>
                 <li><code>simulate_worker</code> — <code>true</code> to skip the HTTP call and advance the render lifecycle locally for testing.</li>
               </ul>
               <p>
-                HMAC secret <code>CUSTOM_WORKER_SECRET</code> is stored as a Lovable Cloud secret.
-                The worker must sign callbacks using header <code>x-render-signature</code> = HMAC-SHA256(secret, raw_body).
+                HMAC secret <code>CUSTOM_WORKER_SECRET</code> must be identical in Studio and the worker.
+                The worker signs callbacks using header <code>x-render-signature</code> = HMAC-SHA256(secret, raw_body).
               </p>
             </div>
           )}
@@ -174,13 +174,13 @@ function ProviderConfigDialog({ provider, onSaved }: { provider: any; onSaved: (
               </ul>
               <p>
                 API key (<code>CREATOMATE_API_KEY</code>) and webhook secret (<code>CREATOMATE_WEBHOOK_SECRET</code>) are
-                stored as Lovable Cloud secrets, not in this JSON.
+                stored in the server environment, not in this JSON.
               </p>
             </div>
           )}
           {provider.provider_type === "shotstack" && (
             <p className="text-xs text-muted-foreground">
-              API keys for external providers are stored as Lovable Cloud secrets, not in this JSON.
+              API keys for external providers are stored in the server environment, not in this JSON.
             </p>
           )}
           <div className="flex justify-end gap-2">

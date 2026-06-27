@@ -54,7 +54,7 @@ function AISettings() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Providers</CardTitle><CardDescription>Lovable AI is the default; add your own keys for OpenAI/Groq/Gemini/OpenRouter.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Providers</CardTitle><CardDescription>Use Gemini, OpenAI, Groq, or OpenRouter keys for self-hosting. Lovable is optional.</CardDescription></CardHeader>
         <CardContent className="grid sm:grid-cols-2 gap-3">
           <div><Label>Default LLM provider</Label>
             <Select value={s.default_llm_provider} onValueChange={(v) => setS({ ...s, default_llm_provider: v })}>
@@ -79,7 +79,7 @@ function AISettings() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Provider API keys</CardTitle><CardDescription>Stored on your account. Used only when you select that provider.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Provider API keys</CardTitle><CardDescription>Stored on your account. Server environment keys are also supported for local/self-hosted runs.</CardDescription></CardHeader>
         <CardContent className="grid sm:grid-cols-2 gap-3">
           {KEY_FIELDS.map((k) => (
             <div key={k}>
