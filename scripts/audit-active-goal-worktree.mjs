@@ -15,6 +15,7 @@ const coordinationPaths = [
   path.join("scripts", "audit-active-goal-worktree.mjs"),
   path.join("scripts", "audit-active-goal-package.mjs"),
   path.join("scripts", "audit-cleanup-pr-package.mjs"),
+  path.join("scripts", "phase2g-render-quality-verifier.mjs"),
   path.join("docs", "active-medvideo-goal.md"),
   path.join("docs", "active-goal-inventory.md"),
   path.join("docs", "phase-2g-render-quality-acceptance.md"),

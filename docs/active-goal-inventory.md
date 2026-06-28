@@ -76,6 +76,8 @@ These files are part of the active-goal coordination layer:
 - `scripts/audit-active-goal-completion.mjs`
 - `scripts/audit-active-goal-worktree.mjs`
 - `scripts/audit-active-goal-package.mjs`
+- `scripts/audit-cleanup-pr-package.mjs`
+- `scripts/phase2g-render-quality-verifier.mjs`
 - `package.json` scripts:
   - `audit:active-goal`
   - `audit:active-goal-worktree`
@@ -89,6 +91,7 @@ These files are part of the active-goal coordination layer:
   - `verify:goal-suite:full`
   - `verify:phase2fg`
   - `verify:phase2fg-render-latest`
+  - `verify:phase2g-render-quality`
   - `smoke:phase2fg-ui`
   - `smoke:scene-review`
 - `audit:active-goal` verifies the expected active-goal npm scripts are still registered.
@@ -103,6 +106,7 @@ Generated evidence:
 - `data/review-artifacts/active-goal-package-manifest.json`
 - `data/review-artifacts/cleanup-pr-package-audit.json`
 - `data/review-artifacts/24c46f1f-fb5e-4aad-bdb6-ad61a7f2ca99/phase-2fg-g1/*`
+- `data/review-artifacts/24c46f1f-fb5e-4aad-bdb6-ad61a7f2ca99/phase-2g-render-quality/*`
 - `data/review-artifacts/24c46f1f-fb5e-4aad-bdb6-ad61a7f2ca99/browser-smoke/*`
 
 ## Current Open Decision
@@ -122,7 +126,7 @@ This is the active/pending prompt inventory as of the latest audited coordinatio
 | --- | --- | --- | --- | --- | --- |
 | Phase 2F-G/G1 required asset triage and human-in-loop readiness | `current_phase_verified` | `verify:goal-suite:audited` and `audit:active-goal` pass for the Oral Cancer benchmark. | Active-goal readiness, Phase 2F-G workflow, browser smoke, and latest render evidence are green. | Keep in regression while choosing the next product phase. | `npm.cmd run verify:goal-suite:audited`; `npm.cmd run audit:active-goal`. |
 | Production deployment hardening | `pending_next_phase` | Self-hosting audit and local Studio/Worker checks pass; public HTTPS VPS deployment is not covered by the current audit. | Public HTTPS Studio URL, public HTTPS Worker URL, matching `CUSTOM_WORKER_SECRET`, Supabase env, and storage access are available. | Verify public Worker URL, public Studio callback URL, matching secrets, storage access, and remote health/render dispatch. | Run self-hosting audit, active-goal readiness against public provider config, worker `/health` over HTTPS, one Studio-to-Worker dispatch, callback persistence, output HEAD, and ffprobe. |
-| Next render-quality phase | `ready_next_phase` | Latest benchmark MP4 is ffprobe-valid and persisted; `docs/phase-2g-render-quality-acceptance.md` defines the next scene-level visual acceptance target. | Use the Phase 2G acceptance brief before changing renderer or layout behavior. | Build the Phase 2G verifier and produce honest frame/contact-sheet evidence for the target benchmark moments. | Render benchmark MP4, capture frame evidence/contact sheet, verify Studio persistence, ffprobe, output URL, and qualitative pass/fail criteria. |
+| Next render-quality phase | `evidence_generated_needs_review` | Latest benchmark MP4 is ffprobe-valid and persisted; `docs/phase-2g-render-quality-acceptance.md` defines the target; `npm.cmd run verify:phase2g-render-quality` now generates frame/contact-sheet evidence and reports `NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES`. | Use the Phase 2G report before changing renderer or layout behavior. | Review the Phase 2G contact sheet and fix only the concrete failed scenes: 00:20 license/source safety, 00:43 missing leukoplakia/erythroplakia requirement, 01:21 timing/intent mismatch, clinical human-review gates, and low-detail CTA. | Re-run `npm.cmd run verify:phase2g-render-quality`; require technical checks green, all scenes pass or have explicit human-approved clinical review, Studio persistence, ffprobe, and output URL evidence. |
 | Cloud/provider-backed AI asset generation hardening | `pending_next_phase` | Basic local generation/review is merged and verified: Studio PR #6 adds focused Review Assets generation controls, Worker PR #1 adds the `heygen_hyperframes` local HyperFrames provider, and `npm.cmd run verify:generation-provider` proves MP4/PNG output plus `checkStatus`/`downloadResult`. This does not yet prove production cloud HeyGen generation. | Cloud provider credentials, cost/safety boundaries, output hosting, and review-gating rules are explicit. | Verify a cloud/provider-backed generation run from a requirement row without bypassing human review, licensing, or Studio-as-Director constraints. | Generate one cloud-backed asset from a requirement row, store prompt/provider/model/cost/result metadata, show it in Review Assets, approve or reject through human review, then prove Manifest/RenderSpec mapping only after approval. |
 | Cleanup and PR packaging | `pending_next_phase` | Path-only worktree inventory exists, but the repository still contains accumulated dirty changes from many phases. | A specific PR scope is chosen, unrelated dirty files are inventoried but not reverted, and secrets/artifacts are excluded. | Separate coordination changes from product changes before staging, committing, or opening PRs. | Run worktree inventory, diff review, secret scan for staged files, focused tests for the chosen scope, then commit/push/PR only that scope. |
 

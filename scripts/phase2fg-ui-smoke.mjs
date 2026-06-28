@@ -162,8 +162,11 @@ async function main() {
     const dialog = page.getByRole("dialog").filter({ hasText: "Generate asset for this requirement" }).first();
     await dialog.waitFor({ timeout: 15000 });
     const promptValue = await dialog.locator("textarea").first().inputValue();
+    const promptHasGenerationIntent = /Required visual:|Professional medical visual|Create a professional/i.test(promptValue);
+    const promptHasSpecificAsset = /Medical visual asset|Asset type:|presenter_video|clinical_image|infographic|contextual_broll|lower_third|cta_branding/i.test(promptValue);
+    const promptHasLayoutOrFormat = /Visible during|Layout target:|Format:|full_screen|split_screen|pip_left|pip_right/i.test(promptValue);
     addCheck(result, "prompt_modal_opens", await dialog.isVisible());
-    addCheck(result, "prompt_specific_to_requirement", /Required visual:|Asset type:|Visible during/.test(promptValue), {
+    addCheck(result, "prompt_specific_to_requirement", promptHasGenerationIntent && promptHasSpecificAsset && promptHasLayoutOrFormat, {
       prompt_preview: promptValue.slice(0, 500),
     });
     addCheck(result, "dialog_upload_generated_result_present", (await dialog.locator('input[type="file"]').count()) > 0);

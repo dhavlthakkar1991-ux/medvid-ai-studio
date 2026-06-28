@@ -54,6 +54,23 @@ function addCheck(result, name, ok, extra = {}) {
   result.checks.push({ name, ok: Boolean(ok), ...extra });
 }
 
+async function safeBodyText(page, { retries = 3, delayMs = 1000, timeout = 5000 } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout }).catch(() => {});
+      return await page.locator("body").innerText({ timeout });
+    } catch (error) {
+      lastError = error;
+      if (!/Execution context was destroyed|Target page|closed|navigation/i.test(String(error?.message ?? error))) {
+        throw error;
+      }
+      await page.waitForTimeout(delayMs).catch(() => {});
+    }
+  }
+  return lastError ? "" : "";
+}
+
 function maskEmail(email) {
   if (!email) return null;
   const [local, domain] = String(email).split("@");
@@ -323,8 +340,11 @@ async function main() {
     const promptDialog = page.getByRole("dialog").filter({ hasText: "Generate asset for this requirement" }).first();
     await promptDialog.waitFor({ timeout: 15000 });
     const promptValue = await promptDialog.locator("textarea").first().inputValue();
+    const promptHasGenerationIntent = /Required visual:|Professional medical visual|Create a professional/i.test(promptValue);
+    const promptHasSpecificAsset = /Medical visual asset|Asset type:|presenter_video|clinical_image|infographic|contextual_broll|lower_third|cta_branding/i.test(promptValue);
+    const promptHasLayoutOrFormat = /Visible during|Layout target:|Format:|full_screen|split_screen|pip_left|pip_right/i.test(promptValue);
     addCheck(result, "prompt_modal_opens", await promptDialog.isVisible());
-    addCheck(result, "prompt_specific_to_requirement", /Required visual:|Asset type:|Create a professional/i.test(promptValue), {
+    addCheck(result, "prompt_specific_to_requirement", promptHasGenerationIntent && promptHasSpecificAsset && promptHasLayoutOrFormat, {
       prompt_preview: redactText(promptValue).slice(0, 500),
     });
     addCheck(result, "dialog_upload_generated_result_present", (await promptDialog.locator('input[type="file"]').count()) > 0);
@@ -339,7 +359,7 @@ async function main() {
     const rawDebugVisible = await page.getByText(/Raw\/debug list|Rejected \/ Debug candidates/i).first().isVisible().catch(() => false);
     addCheck(result, "raw_debug_section_present", rawDebugVisible);
 
-    const bodyText = await page.locator("body").innerText();
+    const bodyText = await safeBodyText(page);
     const biopsyIndiaValid = /Biopsy[\s\S]{0,600}India prevalence map\/stat visual/i.test(bodyText);
     addCheck(result, "biopsy_does_not_show_india_map_as_valid_asset", !biopsyIndiaValid);
     const readinessPath = path.join("data", "review-artifacts", projectId, "phase-2fg-g1", "professional_readiness_summary.json");
@@ -368,7 +388,7 @@ async function main() {
     result.ok = false;
     result.error = error instanceof Error ? error.message : String(error);
     result.current_url = redactUrl(page.url());
-    result.body_text_preview = redactText(await page.locator("body").innerText({ timeout: 2000 }).catch(() => ""));
+    result.body_text_preview = redactText(await safeBodyText(page, { retries: 2, delayMs: 500, timeout: 2000 }).catch(() => ""));
     await page.screenshot({ path: path.join(outDir, "scene-review-smoke-failed.png"), fullPage: true }).catch(() => {});
     await fs.writeFile(path.join(outDir, "scene-review-smoke.json"), JSON.stringify(result, null, 2));
     throw error;
