@@ -2,7 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 
-const STUDIO_ROOT = process.env.STUDIO_REPO_DIR ?? "C:\\Users\\LENOVO\\Documents\\medvid-ai-studio";
+const STUDIO_ROOT = process.env.STUDIO_REPO_DIR ?? process.cwd();
 const RUNNING_AS_SUITE_PRE_COMPLETION = process.env.GOAL_SUITE_CLEANUP_POST_CHECK === "1";
 const ARTIFACT_ROOT = path.join(STUDIO_ROOT, "data", "review-artifacts");
 const WORKTREE_INVENTORY_PATH =
