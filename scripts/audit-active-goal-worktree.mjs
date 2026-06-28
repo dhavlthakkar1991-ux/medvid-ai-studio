@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const STUDIO_ROOT = process.env.STUDIO_REPO_DIR ?? "C:\\Users\\LENOVO\\Documents\\medvid-ai-studio";
+const STUDIO_ROOT = process.env.STUDIO_REPO_DIR ?? process.cwd();
 const WORKER_ROOT = process.env.WORKER_REPO_DIR ?? "C:\\Users\\LENOVO\\Documents\\medvideo-render-worker";
 const OUT_PATH =
   process.env.ACTIVE_GOAL_WORKTREE_INVENTORY_OUT ??
@@ -17,6 +17,7 @@ const coordinationPaths = [
   path.join("scripts", "audit-cleanup-pr-package.mjs"),
   path.join("docs", "active-medvideo-goal.md"),
   path.join("docs", "active-goal-inventory.md"),
+  path.join("docs", "phase-2g-render-quality-acceptance.md"),
   path.join("data", "review-artifacts", "goal-suite", "goal-suite.json"),
   path.join("data", "review-artifacts", "active-goal-completion-audit.json"),
   path.join("data", "review-artifacts", "active-goal-worktree-inventory.json"),

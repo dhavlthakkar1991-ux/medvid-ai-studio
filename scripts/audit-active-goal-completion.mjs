@@ -614,10 +614,10 @@ const pendingPhaseBacklog = [
   {
     id: "render_quality_next",
     label: "Next render-quality phase",
-    status: "pending_next_phase",
-    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; further visual polish beyond Phase 2F-G/G1 is outside the current audit.",
-    entry_criteria: "A concrete visual acceptance target is defined for the next benchmark, with before/after evidence points and non-goals.",
-    next_action: "Define the next visual acceptance target before editing renderer or layout behavior.",
+    status: "ready_next_phase",
+    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the next scene-level visual acceptance target.",
+    entry_criteria: "Use the Phase 2G acceptance brief before changing renderer or layout behavior.",
+    next_action: "Build the Phase 2G verifier and produce honest frame/contact-sheet evidence for the target benchmark moments.",
     verification: "Render benchmark MP4, capture frame evidence/contact sheet, verify Studio persistence, ffprobe, output URL, and qualitative pass/fail criteria.",
   },
   {
