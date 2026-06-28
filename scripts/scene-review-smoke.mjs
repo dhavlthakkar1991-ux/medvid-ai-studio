@@ -230,8 +230,7 @@ async function main() {
   try {
     if (authMode === "admin_magiclink") {
       const direct = await signInWithAdminMagicLink(projectId, email);
-      await page.goto(`${baseUrl.replace(/\/$/, "")}/auth`, { waitUntil: "domcontentloaded" });
-      await page.evaluate(
+      await page.addInitScript(
         ({ storageKey, session }) => {
           window.localStorage.setItem(storageKey, JSON.stringify(session));
         },
@@ -257,7 +256,7 @@ async function main() {
       addCheck(result, "email_password_login_submitted", true, { url: redactUrl(page.url()) });
       if (/\/auth/.test(page.url())) {
         const direct = await signInDirectly(email, password);
-        await page.evaluate(
+        await page.addInitScript(
           ({ storageKey, session }) => {
             window.localStorage.setItem(storageKey, JSON.stringify(session));
           },

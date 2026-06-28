@@ -394,10 +394,18 @@ const renderSpecResult = await maybeBuildRenderSpec(sb, PROJECT_ID).catch((error
   reason: error instanceof Error ? error.message : String(error),
 }));
 const specItemsByManifest = new Map();
+const specItemsByTimeline = new Map();
+const specItemsByAsset = new Map();
 if (renderSpecResult.spec?.items) {
   for (const item of renderSpecResult.spec.items) {
     const manifestId = item.source_render_manifest_id ?? item.meta?.source_render_manifest_id ?? item.id;
     if (manifestId) specItemsByManifest.set(String(manifestId), item);
+    const timelineId = item.source_timeline_item_id ?? item.meta?.source_timeline_item_id;
+    if (timelineId) specItemsByTimeline.set(String(timelineId), item);
+    if (item.asset_id) {
+      const key = `${item.asset_id}:${Number(item.start_time ?? item.start ?? 0).toFixed(2)}:${Number(item.end_time ?? item.end ?? 0).toFixed(2)}`;
+      specItemsByAsset.set(key, item);
+    }
   }
 }
 const specAssetsById = new Map();
@@ -405,6 +413,33 @@ if (renderSpecResult.spec?.assets) {
   for (const asset of renderSpecResult.spec.assets) {
     if (asset?.id) specAssetsById.set(String(asset.id), asset);
   }
+}
+
+function expectedSpecAssetId(row) {
+  if (row?.asset_type === "presenter_video") return "source:presenter";
+  if (row?.asset_id) return `asset:${row.asset_id}`;
+  if (row?.compiled_graphic_id) return `graphic:${row.compiled_graphic_id}`;
+  if (row?.asset_url) return `url:${row.id}`;
+  return null;
+}
+
+function specItemForRequirement(row, timelineItem, start, end) {
+  const byManifest = specItemsByManifest.get(String(row.id));
+  if (byManifest) return byManifest;
+  const timelineId = timelineItem?.id ?? row.timeline_item_id ?? row.metadata?.source_timeline_item_id;
+  if (timelineId && specItemsByTimeline.has(String(timelineId))) return specItemsByTimeline.get(String(timelineId));
+  const assetId = expectedSpecAssetId(row);
+  if (assetId) {
+    const exact = specItemsByAsset.get(`${assetId}:${Number(start).toFixed(2)}:${Number(end).toFixed(2)}`);
+    if (exact) return exact;
+    return (renderSpecResult.spec?.items ?? []).find((item) => {
+      if (item.asset_id !== assetId) return false;
+      const itemStart = Number(item.start_time ?? item.start ?? 0);
+      const itemEnd = Number(item.end_time ?? item.end ?? itemStart);
+      return Math.abs(itemStart - start) < 0.15 && Math.abs(itemEnd - end) < 0.15;
+    }) ?? null;
+  }
+  return null;
 }
 
 const canonical = [];
@@ -443,7 +478,7 @@ for (const row of manifest) {
   const visibleConceptMismatch = Boolean(visibleAssetConcept && concept.key !== visibleAssetConcept.key && isSpecificConcept(visibleAssetConcept.key));
   const conceptMismatch = Boolean(assetConcept && concept.key !== assetConcept.key && (intentOverlap < 0.28 || visibleConceptMismatch));
   const presenterResolved = requiredType === "presenter_video" && Boolean(projectRes.data.video_path) && Boolean(renderSpecResult.spec?.assets?.some((candidate) => candidate.id === "source:presenter" && candidate.source_url));
-  const specItem = specItemsByManifest.get(String(row.id)) ?? null;
+  const specItem = specItemForRequirement(row, tItem, start, end);
   const specAsset = specItem?.asset_id ? specAssetsById.get(String(specItem.asset_id)) : null;
   const inlineGraphicResolved = Boolean(
     row.compiled_graphic_id &&

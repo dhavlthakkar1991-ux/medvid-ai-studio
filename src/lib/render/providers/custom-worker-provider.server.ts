@@ -10,7 +10,7 @@ import { specToFfmpegGraph } from "../transformers/ffmpeg-transformer";
  *
  * Configuration keys (stored on render_providers.configuration):
  *   - worker_url            string  (required unless simulate_worker)
- *   - callback_url          string  optional; full URL the worker posts back to
+ *   - callback_url          string  required unless simulate_worker; full URL the worker posts back to
  *   - timeout_ms            number  default 30000
  *   - simulate_worker       boolean default false — skip the HTTP POST and
  *                                   advance the job via timestamp (like mock)
@@ -80,7 +80,7 @@ export const customWorkerProvider: RenderProvider = {
   isConfigured(configuration) {
     const c = getConfig(configuration ?? {});
     if (c.simulate) return true;
-    return Boolean(c.workerUrl) && Boolean(process.env.CUSTOM_WORKER_SECRET);
+    return Boolean(c.workerUrl) && Boolean(c.callbackUrl) && Boolean(process.env.CUSTOM_WORKER_SECRET);
   },
 
   async createRender(args: CreateRenderArgs): Promise<ProviderJobHandle> {
@@ -102,6 +102,7 @@ export const customWorkerProvider: RenderProvider = {
     }
 
     if (!cfg.workerUrl) throw new ProviderNotConfiguredError("Custom Worker", "Set worker_url in provider configuration.");
+    if (!cfg.callbackUrl) throw new ProviderNotConfiguredError("Custom Worker", "Set callback_url in provider configuration.");
     if (!process.env.CUSTOM_WORKER_SECRET) throw new ProviderNotConfiguredError("Custom Worker", "CUSTOM_WORKER_SECRET is not set.");
 
     const providerJobId = `cw_${args.renderType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

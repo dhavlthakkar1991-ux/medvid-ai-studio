@@ -38,11 +38,56 @@ export const setDefaultRenderProvider = createServerFn({ method: "POST" })
   });
 
 const ConfigInput = z.object({ providerId: z.string().uuid(), configuration: z.record(z.unknown()) });
+
+function isLocalDevelopmentUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function assertHttpsOutsideLocalDevelopment(field: string, value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return;
+  const raw = value.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(`${field} must be a valid URL.`);
+  }
+  if (parsed.protocol !== "https:" && !isLocalDevelopmentUrl(raw)) {
+    throw new Error(`${field} must use HTTPS outside local development.`);
+  }
+}
+
+function validateRenderProviderConfiguration(providerType: string, configuration: Record<string, unknown>) {
+  if (providerType !== "custom_worker") return;
+  const simulate = Boolean(configuration.simulate_worker);
+  const workerUrl = configuration.worker_url ?? configuration.webhook_url;
+  const callbackUrl = configuration.callback_url;
+  if (!simulate) {
+    if (!workerUrl) throw new Error("worker_url is required unless simulate_worker=true.");
+    if (!callbackUrl) throw new Error("callback_url is required unless simulate_worker=true.");
+  }
+  assertHttpsOutsideLocalDevelopment("worker_url", workerUrl);
+  assertHttpsOutsideLocalDevelopment("callback_url", callbackUrl);
+}
+
 export const updateRenderProviderConfiguration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => ConfigInput.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: provider, error: providerError } = await supabaseAdmin
+      .from("render_providers")
+      .select("provider_type")
+      .eq("id", data.providerId)
+      .maybeSingle();
+    if (providerError) throw new Error(providerError.message);
+    if (!provider) throw new Error("Render provider not found.");
+    validateRenderProviderConfiguration(provider.provider_type, data.configuration);
     const { error } = await supabaseAdmin
       .from("render_providers").update({ configuration: data.configuration as any }).eq("id", data.providerId);
     if (error) throw new Error(error.message);
