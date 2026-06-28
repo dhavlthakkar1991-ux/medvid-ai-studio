@@ -60,15 +60,33 @@ export interface RenderAsset {
     text?: string;
     style?: Record<string, unknown>;
   };
+  meta?: Record<string, unknown>;
 }
 
 export type RenderLayout =
   | "full_screen"
+  | "full_screen_broll"
+  | "full_screen_cta"
+  | "full_screen_doctor"
   | "pip_left"
   | "pip_right"
   | "split_screen"
   | "doctor_with_infographic"
-  | "overlay";
+  | "doctor_with_clinical_image"
+  | "doctor_with_broll"
+  | "doctor_with_callout"
+  | "doctor_with_lower_third"
+  | "lower_third"
+  | "show_lower_third"
+  | "show_text_overlay"
+  | "show_callout"
+  | "show_cta"
+  | "kinetic_typography"
+  | "highlight_keyword"
+  | "top_bottom"
+  | "picture_in_picture"
+  | "overlay"
+  | (string & {});
 
 export type RenderTransition = "cut" | "fade" | "dissolve" | "slide";
 
@@ -79,6 +97,66 @@ export interface RenderItem {
   start_time: number;        // seconds, absolute on the master timeline
   end_time: number;          // seconds, absolute on the master timeline
   layout: RenderLayout;
+  layout_name?: string | null;
+  layout_type?: string | null;
+  action_type?: string | null;
+  original_action_type?: string | null;
+  item_type?: string | null;
+  item_kind?: string | null;
+  source_timeline_item_id?: string | null;
+  source_render_manifest_id?: string | null;
+  source_asset_id?: string | null;
+  track_kind?: string | null;
+  track_type?: string | null;
+  asset_kind?: string | null;
+  asset_type?: string | null;
+  x?: number | string | null;
+  y?: number | string | null;
+  width?: number | string | null;
+  height?: number | string | null;
+  anchor?: string | null;
+  position?: string | null;
+  margin?: number | string | null;
+  padding?: number | string | null;
+  safe_area?: unknown;
+  doctor_position?: string | null;
+  asset_position?: string | null;
+  text_position?: string | null;
+  overlay_position?: string | null;
+  scale?: number | string | null;
+  fit?: string | null;
+  object_fit?: string | null;
+  aspect_mode?: string | null;
+  crop?: unknown;
+  opacity?: number | string | null;
+  z_index?: number | null;
+  track_index?: number | null;
+  priority?: number | null;
+  duration?: number | null;
+  source_start?: number | null;
+  source_end?: number | null;
+  trim_start?: number | null;
+  trim_end?: number | null;
+  transition?: string | null;
+  transition_type?: string | null;
+  transition_duration?: number | null;
+  transition_in_type?: string | null;
+  transition_out_type?: string | null;
+  fade_in?: number | boolean | null;
+  fade_out?: number | boolean | null;
+  text?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  body?: string | null;
+  font_size?: number | string | null;
+  font_weight?: number | string | null;
+  alignment?: string | null;
+  text_align?: string | null;
+  background?: string | null;
+  background_opacity?: number | string | null;
+  color?: string | null;
+  style?: unknown;
+  lower_third_variant?: string | null;
   transition_in: RenderTransition;
   transition_out: RenderTransition;
   // optional sub-rectangle on the canvas (0..1 normalized); transformers may ignore

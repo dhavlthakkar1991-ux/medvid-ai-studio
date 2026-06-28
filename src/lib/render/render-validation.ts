@@ -12,6 +12,7 @@
  * No DB access — operates on a built RenderSpec only.
  */
 import type { RenderItem, RenderSpec } from "./render-spec";
+import { isSourceAllowedForTaxonomy } from "../assets/medical-asset-taxonomy.server";
 
 export interface RenderValidationIssue {
   level: "error" | "warning" | "info";
@@ -60,6 +61,27 @@ export function validateRenderSpec(spec: RenderSpec): RenderValidationReport {
     if (!inlineOk && !a.source_url) {
       missingUrl++;
       issues.push({ level: "error", code: "missing_asset_url", message: `Asset ${a.id} (${a.kind}) has no source_url`, ref: a.id });
+    }
+    const meta = a.meta ?? {};
+    const classification = String(meta.render_classification ?? "");
+    const routingStatus = String(meta.routing_status ?? "");
+    if (classification === "PLACEHOLDER_PLAN" || routingStatus === "needs_manual_upload" || routingStatus === "needs_curated_asset") {
+      issues.push({
+        level: "error",
+        code: "non_renderable_asset_taxonomy",
+        message: `Asset ${a.id} is ${classification || routingStatus}; ${String(meta.routing_reason ?? "manual/curated asset required")}`,
+        ref: a.id,
+      });
+    }
+    const taxonomy = meta.medical_asset_taxonomy;
+    const sourceClass = meta.medical_source_class;
+    if (taxonomy && sourceClass && !isSourceAllowedForTaxonomy(taxonomy as any, sourceClass as any)) {
+      issues.push({
+        level: "error",
+        code: "wrong_taxonomy_source",
+        message: `Asset ${a.id} uses ${String(sourceClass)} for ${String(taxonomy)}`,
+        ref: a.id,
+      });
     }
   }
 
@@ -157,6 +179,7 @@ export function buildAssetManifest(spec: RenderSpec) {
       intrinsic_width: a.intrinsic_width ?? null,
       intrinsic_height: a.intrinsic_height ?? null,
       inline: a.inline ?? null,
+      meta: a.meta ?? null,
     })),
   };
 }

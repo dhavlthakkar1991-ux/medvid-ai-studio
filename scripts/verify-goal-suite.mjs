@@ -489,7 +489,12 @@ async function runStep(step) {
       cwd: step.cwd ?? process.cwd(),
       shell: true,
       windowsHide: true,
-      env: { ...process.env, ...(step.env ?? {}) },
+      env: {
+        ...process.env,
+        STUDIO_REPO_DIR: process.env.STUDIO_REPO_DIR ?? process.cwd(),
+        WORKER_REPO_DIR,
+        ...(step.env ?? {}),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
@@ -687,6 +692,9 @@ if (RUN_COMPLETION_AUDIT && report.ready) {
     name: "cleanup_pr_package_audit",
     command: `${npmCommand} run audit:cleanup-pr-package`,
     timeoutMs: 60_000,
+    env: {
+      GOAL_SUITE_CLEANUP_POST_CHECK: "1",
+    },
   });
   report.post_checks.push(cleanupPackageResult);
   report.ready = report.ready && cleanupPackageResult.status === "passed";

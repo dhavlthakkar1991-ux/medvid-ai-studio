@@ -59,7 +59,7 @@ export const runProviderDiagnostics = createServerFn({ method: "POST" })
       checks.push({
         name: `Secret: ${name}`,
         status: present ? "ok" : (row.provider_type === "custom_worker" && cfg.simulate_worker ? "warn" : "fail"),
-        detail: present ? "Set" : "Not set in Lovable Cloud secrets",
+        detail: present ? "Set" : "Not set in the server environment",
       });
     }
 
