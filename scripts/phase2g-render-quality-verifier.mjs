@@ -257,6 +257,9 @@ function matchRequirement(target, requirements) {
     .map((row) => ({ row, distance: nearestDistance({ time_range: row.time_range }, target.seconds) }))
     .sort((a, b) => a.distance - b.distance)[0];
   if (nearestConcept && nearestConcept.distance <= 3) return { row: nearestConcept.row, match_kind: "nearby_concept", distance_seconds: nearestConcept.distance };
+  if (nearestConcept && nearestConcept.distance <= 10) {
+    return { row: nearestConcept.row, match_kind: "concept_timing_mismatch", distance_seconds: nearestConcept.distance };
+  }
 
   const activeAny = requirements.find((row) => activeAt({ time_range: row.time_range }, target.seconds, 0.5));
   if (activeAny) return { row: activeAny, match_kind: "time_only_wrong_concept" };
@@ -326,7 +329,10 @@ function scoreScene({ target, requirementMatch, overlayMatch, asset, frame, down
   if (!frame.non_blank) failureReasons.push("Frame extraction succeeded but frame appears blank or low-variance.");
   if (lowDetailFrame) failureReasons.push("Frame has very low visual detail/file size for a final quality target; review for placeholder-like or underdesigned output.");
   if (!conceptMatches) failureReasons.push(`No matching canonical requirement for expected concept(s): ${target.concept_keys.join(", ")}.`);
-  if (conceptMatches && !timeAligned) failureReasons.push("Matching requirement is not aligned to the target timestamp.");
+  if (conceptMatches && !timeAligned) {
+    const distance = Number.isFinite(requirementMatch.distance_seconds) ? ` nearest matching requirement is ${Number(requirementMatch.distance_seconds).toFixed(1)}s away.` : "";
+    failureReasons.push(`Matching requirement is not aligned to the target timestamp.${distance}`);
+  }
   if (!overlayPresent) failureReasons.push("No active or nearby overlay found in Worker normalized render plan.");
   if (!sourceUrlPresent) failureReasons.push("No renderable source URL is visible for the target scene asset.");
   if (skipped) failureReasons.push(`Worker skipped the downloaded asset: ${downloadedAsset?.reason ?? "unknown reason"}.`);
