@@ -82,6 +82,7 @@ The active-goal coordination layer now has a browser-inclusive audited suite and
 - Required asset triage: `data/review-artifacts/24c46f1f-fb5e-4aad-bdb6-ad61a7f2ca99/phase-2fg-g1/asset_requirement_triage_report.json`, `canonical_asset_requirements.json`, `asset_todo_list.json`, and `asset_todo_list.md` are the canonical deduped human-workflow artifacts. They currently contain 15 actionable requirements.
 - Human-in-the-loop controls: `human_loop_completion_report.json` records required-first ordering and expected row controls: Search providers, Generate with AI, Show prompt, Copy prompt, Upload / Replace, Paste URL, Use existing approved asset, Fix timing, and Preview at timestamp.
 - Prompt workflow: `asset_generation_prompts.json`, `external_generation_prompts.md`, and `single_asset_generation_audit.json` contain one prompt/audit entry per actionable requirement; these are for external or individual AI asset generation, not automatic approval.
+- Basic in-app AI generation is now merged and verified. Studio PR #6 lets Review Assets request focused generated alternatives while preserving human review, and Worker PR #1 verifies the local `heygen_hyperframes` provider can produce MP4/PNG outputs with `checkStatus`/`downloadResult`. Production cloud/provider-backed HeyGen generation remains a separate hardening target.
 - Mismatch and timing gates: `approved_asset_mismatch_report.json` is empty, `asset_timeline_fit_report.json` covers all 15 requirements, and `professional_readiness_summary.json` reports `professional_ready=true`, 0 mismatches, 0 timing problems, and valid RenderSpec.
 - Browser proof: `data/review-artifacts/24c46f1f-fb5e-4aad-bdb6-ad61a7f2ca99/browser-smoke/scene-review-smoke.json` verifies the live project UI with owner auth injection, 17 scene groups, 15 asset to-do cards, required row controls, prompt modal/copy, upload input, raw/debug access, professional readiness honesty, and biopsy-vs-India mismatch protection.
 - Render proof: `benchmark_render_latest_verified.json` verifies the latest completed benchmark render without dispatching a duplicate job. It confirms Studio persisted completed status/progress/output, worker output HEAD `200 video/mp4`, local MP4 size 20,047,227 bytes, ffprobe H.264 1280x720 video, AAC stereo audio, and expected worker debug files.
@@ -98,7 +99,7 @@ The active-goal coordination layer now has a browser-inclusive audited suite and
   `STUDIO_SMOKE_PROJECT_ID=... STUDIO_SMOKE_AUTH_MODE=admin_magiclink npm run smoke:scene-review`, or email/password env values when available.
 - Keep `npm.cmd run verify:self-hosting` in the regression loop when changing auth, provider resolution, render provider settings, or local-runner configuration.
 - Continue broader local pipeline verification on a real uploaded video when needed. Normal local-runner execution and deliberate keyless-provider behavior are verified.
-- Decide and verify the next product phase after Phase 2F-G/G1, likely moving from required-asset human workflow readiness into the next render-quality or asset-generation acceptance target.
+- Decide and verify the next product phase after Phase 2F-G/G1. Basic local AI generation/review is accepted; remaining choices are production deployment hardening, the next render-quality acceptance target, or cloud/provider-backed AI generation hardening.
 
 ### P2
 
@@ -107,6 +108,8 @@ The active-goal coordination layer now has a browser-inclusive audited suite and
 
 ## Recent Progress
 
+- Merged Studio PR #6 for the focused Review Assets AI generation workflow and Worker PR #1 for the local `heygen_hyperframes` AssetGenerationProvider path.
+- Re-ran post-merge verification: `npm.cmd run verify:goal-suite:audited`, `npm.cmd run audit:active-goal`, and Worker `npm.cmd run verify:generation-provider` passed.
 - Added the scene-centric Review Assets workspace.
 - Added scene-level multi-asset approval and layout repair metadata flow.
 - Collapsed raw/debug candidate lists by default.
