@@ -335,6 +335,33 @@ function plainObject(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
 }
 
+function assetSourceTypeFromProvider(provider: unknown, fallback: "manual" | "generated" | "upload" | "pexels" | "pixabay" | "library" = "manual") {
+  const source = String(provider ?? "").toLowerCase();
+  if (source.includes("upload")) return "upload";
+  if (source.includes("pexels")) return "pexels";
+  if (source.includes("pixabay")) return "pixabay";
+  if (source.includes("library")) return "library";
+  if (
+    source.includes("generated") ||
+    source.includes("heygen") ||
+    source.includes("hyperframes") ||
+    source.includes("ai")
+  ) return "generated";
+  return fallback;
+}
+
+function assetSourceForReviewCandidate(candidate: any, fallback = "review") {
+  const data = plainObject(candidate?.candidate_data);
+  const metadata = plainObject(data.metadata);
+  return firstString(
+    data.generation_provider,
+    metadata.generation_provider,
+    candidate?.provider,
+    data.provider,
+    fallback,
+  ) ?? fallback;
+}
+
 function compactReviewCandidateData(value: unknown): Record<string, any> {
   const data = plainObject(value);
   const intent = plainObject(data.intent);
@@ -362,6 +389,12 @@ function compactReviewCandidateData(value: unknown): Record<string, any> {
     source_domain: data.source_domain ?? null,
     provider: data.provider ?? null,
     source_type: data.source_type ?? null,
+    generation_prompt: data.generation_prompt ?? metadata.generation_prompt ?? null,
+    generation_provider: data.generation_provider ?? metadata.generation_provider ?? data.provider ?? null,
+    generation_model: data.generation_model ?? metadata.generation_model ?? null,
+    generation_cost: data.generation_cost ?? metadata.generation_cost ?? null,
+    generation_time_ms: data.generation_time_ms ?? metadata.generation_time_ms ?? null,
+    result_url: data.result_url ?? metadata.result_url ?? null,
     medical_source_class: data.medical_source_class ?? null,
     medical_asset_taxonomy: data.medical_asset_taxonomy ?? data.taxonomy ?? null,
     taxonomy: data.taxonomy ?? data.medical_asset_taxonomy ?? null,
@@ -379,6 +412,12 @@ function compactReviewCandidateData(value: unknown): Record<string, any> {
       license,
       medical_source_class: metadata.medical_source_class ?? null,
       classification: metadata.classification ?? null,
+      generation_prompt: metadata.generation_prompt ?? data.generation_prompt ?? null,
+      generation_provider: metadata.generation_provider ?? data.generation_provider ?? data.provider ?? null,
+      generation_model: metadata.generation_model ?? data.generation_model ?? null,
+      generation_cost: metadata.generation_cost ?? data.generation_cost ?? null,
+      generation_time_ms: metadata.generation_time_ms ?? data.generation_time_ms ?? null,
+      result_url: metadata.result_url ?? data.result_url ?? null,
     },
     media: {
       url: media.url ?? null,
@@ -542,6 +581,12 @@ function candidateRenderSourceClass(candidate: any, fallback: string) {
 }
 
 const ProjectIdInput = z.object({ projectId: z.string() });
+const WorkerFulfillmentInput = z.object({
+  projectId: z.string(),
+  candidateId: z.string().optional(),
+  promptOverride: z.string().optional(),
+  forceGeneration: z.boolean().optional(),
+});
 
 async function signWorkerBody(body: string) {
   const secret = process.env.CUSTOM_WORKER_SECRET ?? "";
@@ -639,7 +684,7 @@ async function safeProjectRows(sb: any, table: string, projectId: string, order?
 
 export const fulfillProjectAssetsWithWorker = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ProjectIdInput.parse(i))
+  .inputValidator((i: unknown) => WorkerFulfillmentInput.parse(i))
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
     const userId = context.userId;
@@ -727,11 +772,19 @@ export const fulfillProjectAssetsWithWorker = createServerFn({ method: "POST" })
       existing_assets: assets,
       existing_candidates: assetCandidates,
       ai_config: selectAiConfigForWorker(),
+      fulfillment_focus: data.candidateId
+        ? {
+            candidate_id: data.candidateId,
+            prompt_override: data.promptOverride ?? null,
+            force_generation: data.forceGeneration ?? true,
+          }
+        : null,
       provider_config: {
         pexels_configured: Boolean(process.env.PEXELS_API_KEY),
         pexels_api_key: process.env.PEXELS_API_KEY ?? null,
         pixabay_configured: Boolean(process.env.PIXABAY_API_KEY),
         pixabay_api_key: process.env.PIXABAY_API_KEY ?? null,
+        heygen_hyperframes_enabled: process.env.HEYGEN_HYPERFRAMES_DISABLED !== "true",
       },
     };
     const body = JSON.stringify(packagePayload);
@@ -2258,20 +2311,17 @@ async function persistFulfilledAsset(sb: any, args: {
     end_time: manifestMatch?.timeline_end ?? null,
   };
   const normalizedAssetType = normalizeReviewAssetType(args.candidate.asset_type, `${args.title ?? ""} ${args.description ?? ""}`);
+  const providerSourceType =
+    args.provider === "manual_upload"
+      ? "upload"
+      : args.provider === "manual_url"
+        ? "manual"
+        : assetSourceTypeFromProvider(args.provider, args.provider === "internal" ? "generated" : "manual");
   const { data: asset, error: assetErr } = await sb.from("assets").insert({
     project_id: args.candidate.project_id,
     scene_id: args.candidate.scene_id,
     asset_type: dbCompatibleAssetType(args.candidate.asset_type, `${args.title ?? ""} ${args.description ?? ""}`),
-    source_type:
-      args.provider === "manual_upload"
-        ? "upload"
-        : args.provider === "manual_url"
-          ? "manual"
-        : args.provider === "internal"
-          ? "generated"
-          : args.provider === "pixabay"
-            ? "pixabay"
-            : "pexels",
+    source_type: providerSourceType,
     source: args.provider,
     status: "approved",
     title: args.title,
@@ -2543,6 +2593,8 @@ export async function reviewAssetCandidateWithClient(
       const media = candidateMediaFields(cand);
       const assetStatus = approvedStatusForCandidate(cand);
       const normalizedAssetType = normalizeReviewAssetType(cand.asset_type, `${cand.title ?? ""} ${cand.description ?? ""}`);
+      const reviewSource = assetSourceForReviewCandidate(cand, "review");
+      const reviewSourceType = assetSourceTypeFromProvider(reviewSource, "manual");
       // Create or reuse an asset for this candidate
       const { data: assetRow, error: aErr } = await sb
         .from("assets")
@@ -2550,14 +2602,14 @@ export async function reviewAssetCandidateWithClient(
           project_id: cand.project_id,
           scene_id: cand.scene_id,
           asset_type: dbCompatibleAssetType(cand.asset_type, `${cand.title ?? ""} ${cand.description ?? ""}`),
-          source_type: "manual",
-          source: "review",
+          source_type: reviewSourceType,
+          source: reviewSource,
           status: assetStatus,
           title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
           description: cand.description ?? null,
           url: media.url,
-          thumbnail_url: media.thumbnail_url,
-          preview_url: media.preview_url,
+          thumbnail_url: media.thumbnail_url ?? media.preview_url ?? media.url,
+          preview_url: media.preview_url ?? media.url,
           duration_seconds: media.duration_seconds,
           width: media.width,
           height: media.height,
@@ -2573,6 +2625,8 @@ export async function reviewAssetCandidateWithClient(
             layout_role: normalizedAssetType,
             routing_status: hasUsableMediaUrl(cand) ? routing.status : (routing.taxonomy === "CLINICAL_IMAGE" ? "needs_curated_asset" : routing.status),
             routing_reason: routing.reason,
+            approval_source: reviewSource,
+            approval_source_type: reviewSourceType,
             quality_grade: taxonomyQuality.grade,
             quality_score: taxonomyQuality.score,
             quality_reason: taxonomyQuality.reason,
@@ -3178,20 +3232,22 @@ export const acceptAllPendingCandidates = createServerFn({ method: "POST" })
         continue;
       }
       const normalizedAssetType = normalizeReviewAssetType(cand.asset_type, `${cand.title ?? ""} ${cand.description ?? ""}`);
+      const reviewSource = assetSourceForReviewCandidate(cand, "bulk-accept");
+      const reviewSourceType = assetSourceTypeFromProvider(reviewSource, "manual");
       const { data: assetRow, error: aErr } = await sb
         .from("assets")
         .insert({
           project_id: cand.project_id,
           scene_id: cand.scene_id,
           asset_type: dbCompatibleAssetType(cand.asset_type, `${cand.title ?? ""} ${cand.description ?? ""}`),
-          source_type: "manual",
-          source: "bulk-accept",
+          source_type: reviewSourceType,
+          source: reviewSource,
           status: "approved",
           title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
           description: cand.description ?? null,
           url: media.url,
-          thumbnail_url: media.thumbnail_url,
-          preview_url: media.preview_url,
+          thumbnail_url: media.thumbnail_url ?? media.preview_url ?? media.url,
+          preview_url: media.preview_url ?? media.url,
           duration_seconds: media.duration_seconds,
           width: media.width,
           height: media.height,
@@ -3203,6 +3259,8 @@ export const acceptAllPendingCandidates = createServerFn({ method: "POST" })
             normalized_asset_type: normalizedAssetType,
             original_asset_type: cand.asset_type ?? null,
             layout_role: normalizedAssetType,
+            approval_source: reviewSource,
+            approval_source_type: reviewSourceType,
             ...media.metadata,
           },
           reviewed_by: userId,
@@ -3229,6 +3287,31 @@ export const acceptAllPendingCandidates = createServerFn({ method: "POST" })
           reviewed_by: userId,
           reviewed_at: now,
           linked_asset_id: assetRow.id,
+          thumbnail_url: media.thumbnail_url ?? media.preview_url ?? media.url ?? cand.thumbnail_url,
+          candidate_data: {
+            ...appendReviewAudit(cand, {
+              action: "bulk_accept",
+              by: userId,
+              at: now,
+              previous_status: cand.status,
+              note: "Bulk-accepted renderable candidate.",
+            }),
+            render_ready: true,
+            fulfilled_asset_id: assetRow.id,
+            approved_by: userId,
+            approved_at: now,
+            approval_reason: "Bulk-accepted renderable candidate.",
+            approval_source: reviewSource,
+            approval_source_type: reviewSourceType,
+            url: media.url,
+            source_url: media.url,
+            media_url: media.url,
+            preview_url: media.preview_url,
+            thumbnail_url: media.thumbnail_url ?? media.preview_url ?? media.url,
+            duration_seconds: media.duration_seconds,
+            width: media.width,
+            height: media.height,
+          },
         })
         .eq("id", cand.id);
       approvedPairs.push({ candidate: cand, assetId: assetRow.id, sourceUrl: media.url });
@@ -3274,20 +3357,22 @@ export async function approveHighConfidenceCandidatesWithClient(sb: any, userId:
       const sourceClass = candidateRenderSourceClass(cand, "manual_url");
       const taxonomyQuality = qualityForTaxonomy(routing.taxonomy, sourceClass as any);
       const normalizedAssetType = normalizeReviewAssetType(cand.asset_type, `${cand.title ?? ""} ${cand.description ?? ""}`);
+      const reviewSource = assetSourceForReviewCandidate(cand, "bulk-high-confidence");
+      const reviewSourceType = assetSourceTypeFromProvider(reviewSource, "manual");
       const { data: assetRow, error: aErr } = await sb
         .from("assets")
         .insert({
           project_id: cand.project_id,
           scene_id: cand.scene_id,
           asset_type: dbCompatibleAssetType(cand.asset_type, `${cand.title ?? ""} ${cand.description ?? ""}`),
-          source_type: "manual",
-          source: "bulk-high-confidence",
+          source_type: reviewSourceType,
+          source: reviewSource,
           status: "approved",
           title: cand.title ?? cand.search_query?.slice(0, 80) ?? "Approved asset",
           description: cand.description ?? null,
           url: media.url,
-          thumbnail_url: media.thumbnail_url,
-          preview_url: media.preview_url,
+          thumbnail_url: media.thumbnail_url ?? media.preview_url ?? media.url,
+          preview_url: media.preview_url ?? media.url,
           duration_seconds: media.duration_seconds,
           width: media.width,
           height: media.height,
@@ -3308,6 +3393,8 @@ export async function approveHighConfidenceCandidatesWithClient(sb: any, userId:
             quality_reason: taxonomyQuality.reason,
             confidence_tier: tier.tier,
             confidence_reason: tier.reason,
+            approval_source: reviewSource,
+            approval_source_type: reviewSourceType,
             ...media.metadata,
           },
           reviewed_by: userId,
@@ -3353,6 +3440,8 @@ export async function approveHighConfidenceCandidatesWithClient(sb: any, userId:
         duration_seconds: media.duration_seconds,
         width: media.width,
         height: media.height,
+        approval_source: reviewSource,
+        approval_source_type: reviewSourceType,
       };
       await sb
         .from("asset_candidates")

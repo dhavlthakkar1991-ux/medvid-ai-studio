@@ -339,6 +339,11 @@ const missingPackageScripts = Object.entries(expectedPackageScripts)
   }));
 const suiteStaleFiles = staleFilesSince(goalSuite?.finished_at);
 const worktreeInventoryCoordinationPaths = activeWorktreeInventory?.studio?.coordination_path_status ?? [];
+const missingCurrentCoordinationPaths = Array.isArray(worktreeInventoryCoordinationPaths)
+  ? worktreeInventoryCoordinationPaths
+      .filter((row) => !exists(row.file))
+      .map((row) => row.file)
+  : null;
 const coordinationPackagingPlan = activeWorktreeInventory?.studio?.coordination_packaging_plan ?? null;
 const coordinationPackagingCandidates = coordinationPackagingPlan?.stage_candidates ?? [];
 const secretSensitiveCoordinationPaths = coordinationPackagingPlan?.secret_sensitive_coordination_paths ?? [];
@@ -434,14 +439,13 @@ const checks = [
     checked_files: suiteFreshnessFiles,
     files_newer_than_suite: suiteStaleFiles,
   }),
-  check("active_goal_worktree_inventory_valid", activeWorktreeInventory?.studio?.git_status_ok === true && activeWorktreeInventory?.worker?.git_status_ok === true && Array.isArray(worktreeInventoryCoordinationPaths) && worktreeInventoryCoordinationPaths.length >= suiteFreshnessFiles.length && worktreeInventoryCoordinationPaths.every((row) => row.exists === true), {
+  check("active_goal_worktree_inventory_valid", activeWorktreeInventory?.studio?.git_status_ok === true && activeWorktreeInventory?.worker?.git_status_ok === true && Array.isArray(worktreeInventoryCoordinationPaths) && worktreeInventoryCoordinationPaths.length >= suiteFreshnessFiles.length && Array.isArray(missingCurrentCoordinationPaths) && missingCurrentCoordinationPaths.length === 0, {
     file: files.activeWorktreeInventory,
     studio_git_status_ok: activeWorktreeInventory?.studio?.git_status_ok ?? null,
     worker_git_status_ok: activeWorktreeInventory?.worker?.git_status_ok ?? null,
     coordination_path_count: Array.isArray(worktreeInventoryCoordinationPaths) ? worktreeInventoryCoordinationPaths.length : null,
-    missing_coordination_paths: Array.isArray(worktreeInventoryCoordinationPaths)
-      ? worktreeInventoryCoordinationPaths.filter((row) => row.exists !== true).map((row) => row.file)
-      : null,
+    missing_coordination_paths: missingCurrentCoordinationPaths,
+    note: "Generated evidence paths may be created after the worktree inventory snapshot; this check verifies current filesystem existence at audit time.",
   }),
   check("active_goal_coordination_packaging_scope_safe", coordinationPackagingPlan?.stage_explicit_paths_only === true && Array.isArray(coordinationPackagingCandidates) && coordinationPackagingCandidates.length >= suiteFreshnessFiles.length && Array.isArray(secretSensitiveCoordinationPaths) && secretSensitiveCoordinationPaths.length === 0, {
     file: files.activeWorktreeInventory,
