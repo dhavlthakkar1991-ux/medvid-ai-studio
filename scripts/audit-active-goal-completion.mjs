@@ -617,9 +617,9 @@ const pendingPhaseBacklog = [
     id: "render_quality_next",
     label: "Next render-quality phase",
     status: "evidence_generated_needs_review",
-    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the target; npm.cmd run verify:phase2g-render-quality generates frame/contact-sheet evidence and currently reports NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES. The 01:21 oral-exam requirement classification is repaired.",
+    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the target; npm.cmd run verify:phase2g-render-quality generates frame/contact-sheet evidence and currently reports NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES. The 01:21 oral-exam classification is repaired, and 00:43 now reports a warning-patches timing mismatch instead of a missing leukoplakia/erythroplakia requirement.",
     entry_criteria: "Use the Phase 2G report before changing renderer or layout behavior.",
-    next_action: "Review the Phase 2G contact sheet and fix only the remaining concrete failed scenes: 00:20 license/source safety, 00:43 missing leukoplakia/erythroplakia requirement, clinical human-review gates, 01:21 Pexels/source-safety review, and low-detail CTA.",
+    next_action: "Review the Phase 2G contact sheet and fix only the remaining concrete failed scenes: 00:20 license/source safety, 00:43 warning-patches timing mismatch, clinical human-review gates, 01:21 Pexels/source-safety review, and low-detail CTA.",
     verification: "Re-run npm.cmd run verify:phase2g-render-quality; require technical checks green, all scenes pass or have explicit human-approved clinical review, Studio persistence, ffprobe, and output URL evidence.",
   },
   {

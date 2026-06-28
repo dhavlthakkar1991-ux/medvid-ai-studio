@@ -52,7 +52,7 @@ function textForRow(row) {
 
 function conceptForText(text) {
   if (/biopsy|punch biopsy|tissue sample|pathology|specimen/.test(text)) return "biopsy_workflow";
-  if (/leukoplakia|erythroplakia|white patch|red patch/.test(text)) return "leukoplakia_erythroplakia";
+  if (/leukoplakia|erythroplakia|white patches?|red patches?/.test(text)) return "leukoplakia_erythroplakia";
   if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(text)) return "oral_ulcer";
   if (/lymph|neck lump|neck node|cervical node|swelling/.test(text)) return "cervical_lymph_node";
   if (/oral exam|examination|screening|mouth opening|consult specialist/.test(text)) return "oral_examination";

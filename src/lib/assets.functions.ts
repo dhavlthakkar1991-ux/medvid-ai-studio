@@ -1073,7 +1073,7 @@ export const listAssetReview = createServerFn({ method: "POST" })
 
     function visualConceptForText(text: string) {
       if (/biopsy|punch biopsy|tissue sample|pathology|specimen/.test(text)) return { key: "biopsy_workflow", label: "Oral punch biopsy / biopsy workflow visual" };
-      if (/leukoplakia|erythroplakia|white patch|red patch/.test(text)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
+      if (/leukoplakia|erythroplakia|white patches?|red patches?/.test(text)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
       if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(text)) return { key: "oral_ulcer", label: "Oral ulcer clinical image or high-quality medical illustration" };
       if (/lymph|neck lump|neck node|cervical node|swelling/.test(text)) return { key: "cervical_lymph_node", label: "Cervical lymph node anatomy diagram" };
       if (/early detection|detected at an early stage|treatment[^.]{0,40}effective|outcomes[^.]{0,40}better|comparison infographic/.test(text)) return { key: "early_detection", label: "Early detection patient education visual" };
@@ -1091,6 +1091,14 @@ export const listAssetReview = createServerFn({ method: "POST" })
         .slice(0, 5)
         .join("_");
       return { key: words || "medical_visual", label: "Medical visual asset" };
+    }
+
+    function refineConceptWithNarration(concept: { key: string; label: string }, narration: string) {
+      const narrationConcept = visualConceptForText(narration);
+      if (concept.key === "oral_examination" && narrationConcept.key === "leukoplakia_erythroplakia") {
+        return narrationConcept;
+      }
+      return concept;
     }
 
     function candidateIntentText(c: any) {
@@ -1139,6 +1147,17 @@ export const listAssetReview = createServerFn({ method: "POST" })
         candidateData.search_query,
         candidateData.title,
         candidateData.description,
+      );
+    }
+
+    function isCompatibleWarningSignsTextOverlay(asset: any, conceptKey: string, requiredType: string) {
+      if (conceptKey !== "leukoplakia_erythroplakia" || requiredType !== "text_overlay") return false;
+      const metadata = plainObject(asset?.metadata);
+      const signature = textSignature(assetVisibleIntentText(asset), metadata.source_domain, metadata.license_status, metadata.usage_recommendation);
+      return (
+        String(asset?.asset_type ?? "").toLowerCase() === "text_overlay" &&
+        /warning signs?|checklist|white patches?|red patches?/.test(signature) &&
+        /studio owned|studio curated|safe to use/.test(signature)
       );
     }
 
@@ -1741,7 +1760,7 @@ export const listAssetReview = createServerFn({ method: "POST" })
         .join(" ")
         .slice(0, 360);
       const rowTextValue = manifestIntentText(row, scene, action, storyboard);
-      const concept = visualConceptForText(rowTextValue);
+      const concept = refineConceptWithNarration(visualConceptForText(rowTextValue), narration);
       const requiredAssetType = normalizeReviewAssetType(row.asset_type, rowTextValue);
       const requiredOrOptional = concept.key === "contextual_broll" || concept.key === "doctor_lower_third" ? "optional" : "required";
       const asset = row.asset_id ? assetById.get(String(row.asset_id)) ?? null : null;
@@ -1757,8 +1776,9 @@ export const listAssetReview = createServerFn({ method: "POST" })
         : { blocks: true, reason: "No approved asset is mapped." };
       const assetConcept = asset ? visualConceptForText(assetIntentText(asset)) : null;
       const visibleAssetConcept = asset ? visualConceptForText(assetVisibleIntentText(asset)) : null;
-      const visibleConceptMismatch = Boolean(visibleAssetConcept && concept.key !== visibleAssetConcept.key && isSpecificConcept(visibleAssetConcept.key));
-      const conceptMismatch = Boolean(assetConcept && concept.key !== assetConcept.key && (wordOverlapScore(rowTextValue, assetIntentText(asset)) < 0.28 || visibleConceptMismatch));
+      const compatibleWarningSignsTextOverlay = asset ? isCompatibleWarningSignsTextOverlay(asset, concept.key, requiredAssetType) : false;
+      const visibleConceptMismatch = Boolean(visibleAssetConcept && concept.key !== visibleAssetConcept.key && isSpecificConcept(visibleAssetConcept.key) && !compatibleWarningSignsTextOverlay);
+      const conceptMismatch = Boolean(assetConcept && concept.key !== assetConcept.key && !compatibleWarningSignsTextOverlay && (wordOverlapScore(rowTextValue, assetIntentText(asset)) < 0.28 || visibleConceptMismatch));
       const approvedStatus = asset ? ["approved", "locked", "render_ready"].includes(String(asset.status)) : false;
       const presenterResolved = requiredAssetType === "presenter_video" && Boolean(project?.video_path);
       const validApproved = Boolean(
@@ -3779,7 +3799,7 @@ export async function exportAssetReviewArtifactsForProject(sb: any, projectId: s
     const conceptForExport = (row: any) => {
       const text = `${row.title ?? ""} ${row.search_query ?? ""} ${row.reason ?? ""} ${row.scene?.title ?? ""}`.toLowerCase();
       if (/biopsy|tissue sample|pathology|specimen/.test(text)) return { key: "biopsy_workflow", label: "Oral punch biopsy / biopsy workflow visual" };
-      if (/leukoplakia|erythroplakia|white patch|red patch/.test(text)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
+      if (/leukoplakia|erythroplakia|white patches?|red patches?/.test(text)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
       if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(text)) return { key: "oral_ulcer", label: "Oral ulcer clinical image or high-quality medical illustration" };
       if (/lymph|neck lump|neck node|cervical node|swelling/.test(text)) return { key: "cervical_lymph_node", label: "Cervical lymph node anatomy diagram" };
       if (/early detection|detected at an early stage|treatment[^.]{0,40}effective|outcomes[^.]{0,40}better|comparison infographic/.test(text)) return { key: "early_detection", label: "Early detection patient education visual" };

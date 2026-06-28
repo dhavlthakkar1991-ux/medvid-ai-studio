@@ -148,7 +148,7 @@ function textSignature(...values) {
 function visualConceptForText(text) {
   const t = String(text ?? "").toLowerCase();
   if (/biopsy|punch biopsy|tissue sample|pathology|specimen/.test(t)) return { key: "biopsy_workflow", label: "Biopsy / tissue sample workflow visual" };
-  if (/leukoplakia|erythroplakia|white patch|red patch/.test(t)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
+  if (/leukoplakia|erythroplakia|white patches?|red patches?/.test(t)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
   if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(t)) return { key: "oral_ulcer", label: "Non-healing oral ulcer clinical visual" };
   if (/lymph|neck lump|neck node|cervical node|swelling/.test(t)) return { key: "cervical_lymph_node", label: "Cervical lymph node anatomy visual" };
   if (/early detection|detected at an early stage|treatment[^.]{0,40}effective|outcomes[^.]{0,40}better|comparison infographic/.test(t)) return { key: "early_detection", label: "Early detection patient-education visual" };
@@ -161,6 +161,17 @@ function visualConceptForText(text) {
   if (/broll|b-roll|clinic|consultation|hospital|patient/.test(t)) return { key: "contextual_broll", label: "Contextual medical B-roll" };
   const words = Array.from(normalizedWords(t)).slice(0, 5).join("_");
   return { key: words || "medical_visual", label: "Medical visual asset" };
+}
+
+function refineConceptWithNarration(concept, narration) {
+  const narrationConcept = visualConceptForText(narration);
+  if (
+    concept?.key === "oral_examination" &&
+    narrationConcept.key === "leukoplakia_erythroplakia"
+  ) {
+    return narrationConcept;
+  }
+  return concept;
 }
 
 function normalizedAssetType(value, text = "") {
@@ -267,6 +278,17 @@ function assetVisibleText(asset) {
     candidateData.search_query,
     candidateData.title,
     candidateData.description,
+  );
+}
+
+function isCompatibleWarningSignsTextOverlay(asset, conceptKey, requiredType) {
+  if (conceptKey !== "leukoplakia_erythroplakia" || requiredType !== "text_overlay") return false;
+  const meta = plainObject(asset?.metadata);
+  const signature = textSignature(assetVisibleText(asset), meta.source_domain, meta.license_status, meta.usage_recommendation);
+  return (
+    String(asset?.asset_type ?? "").toLowerCase() === "text_overlay" &&
+    /warning signs?|checklist|white patches?|red patches?/.test(signature) &&
+    /studio owned|studio curated|safe to use/.test(signature)
   );
 }
 
@@ -461,8 +483,9 @@ for (const row of manifest) {
     .filter(Boolean)
     .join(" ")
     .slice(0, 360);
-  const concept = visualConceptForText(rowText(row, scene, action, story));
-  const requiredType = normalizedAssetType(row.asset_type, rowText(row, scene, action, story));
+  const intentText = rowText(row, scene, action, story);
+  const concept = refineConceptWithNarration(visualConceptForText(intentText), narration);
+  const requiredType = normalizedAssetType(row.asset_type, intentText);
   const requiredOrOptional = concept.key === "contextual_broll" || concept.key === "doctor_lower_third" ? "optional" : "required";
   const asset = row.asset_id ? assetById.get(String(row.asset_id)) : null;
   const assetConcept = asset ? visualConceptForText(assetText(asset)) : null;
@@ -470,13 +493,14 @@ for (const row of manifest) {
   const sourceUrl = await sourceUrlForAsset(asset, sb);
   const sourceUrlProbe = await probeMediaUrl(sourceUrl);
   const explicitAsset = Boolean(asset && row.asset_id && String(row.asset_id) === String(asset.id));
-  const intentOverlap = asset ? wordOverlapScore(rowText(row, scene, action, story), assetText(asset)) : 0;
+  const intentOverlap = asset ? wordOverlapScore(intentText, assetText(asset)) : 0;
   const approvedStatus = asset ? ["approved", "locked", "render_ready"].includes(String(asset.status)) : false;
   const hasUrl = Boolean(sourceUrl);
   const hasUsableUrl = hasUrl && sourceUrlProbe.ok;
   const professionalRisk = assetProfessionalRisk(asset, requiredType, hasUsableUrl, asset?.metadata?.medical_asset_taxonomy ?? asset?.metadata?.taxonomy);
-  const visibleConceptMismatch = Boolean(visibleAssetConcept && concept.key !== visibleAssetConcept.key && isSpecificConcept(visibleAssetConcept.key));
-  const conceptMismatch = Boolean(assetConcept && concept.key !== assetConcept.key && (intentOverlap < 0.28 || visibleConceptMismatch));
+  const compatibleWarningSignsTextOverlay = asset ? isCompatibleWarningSignsTextOverlay(asset, concept.key, requiredType) : false;
+  const visibleConceptMismatch = Boolean(visibleAssetConcept && concept.key !== visibleAssetConcept.key && isSpecificConcept(visibleAssetConcept.key) && !compatibleWarningSignsTextOverlay);
+  const conceptMismatch = Boolean(assetConcept && concept.key !== assetConcept.key && !compatibleWarningSignsTextOverlay && (intentOverlap < 0.28 || visibleConceptMismatch));
   const presenterResolved = requiredType === "presenter_video" && Boolean(projectRes.data.video_path) && Boolean(renderSpecResult.spec?.assets?.some((candidate) => candidate.id === "source:presenter" && candidate.source_url));
   const specItem = specItemForRequirement(row, tItem, start, end);
   const specAsset = specItem?.asset_id ? specAssetsById.get(String(specItem.asset_id)) : null;
@@ -578,7 +602,7 @@ for (const row of manifest) {
       .filter((candidate) => {
         const cText = textSignature(candidate.title, candidate.search_query, candidate.description, candidate.asset_type, candidate.candidate_data?.intent?.expected_visual);
         const sameScene = !candidate.scene_id || !row.scene_id || String(candidate.scene_id) === String(row.scene_id);
-        return sameScene && (visualConceptForText(cText).key === concept.key || wordOverlapScore(cText, rowText(row, scene, action, story)) >= 0.35);
+        return sameScene && (visualConceptForText(cText).key === concept.key || wordOverlapScore(cText, intentText) >= 0.35);
       })
       .map((candidate) => candidate.id)
       .slice(0, 25),
