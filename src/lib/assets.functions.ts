@@ -1076,13 +1076,13 @@ export const listAssetReview = createServerFn({ method: "POST" })
       if (/leukoplakia|erythroplakia|white patch|red patch/.test(text)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
       if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(text)) return { key: "oral_ulcer", label: "Oral ulcer clinical image or high-quality medical illustration" };
       if (/lymph|neck lump|neck node|cervical node|swelling/.test(text)) return { key: "cervical_lymph_node", label: "Cervical lymph node anatomy diagram" };
-      if (/oral exam|examination|screening|mouth opening|consult specialist/.test(text)) return { key: "oral_examination", label: "Oral examination visual" };
       if (/early detection|detected at an early stage|treatment[^.]{0,40}effective|outcomes[^.]{0,40}better|comparison infographic/.test(text)) return { key: "early_detection", label: "Early detection patient education visual" };
+      if (/oral exam|examination|examining|screening|mouth opening|consult specialist|consultation/.test(text)) return { key: "oral_examination", label: "Oral examination visual" };
       if (/india|prevalence|common cancers|map/.test(text)) return { key: "india_prevalence", label: "India prevalence map/stat visual" };
       if (/tobacco|gutkha|mawa|smoking|chewing tobacco/.test(text)) return { key: "tobacco_gutkha_risk", label: "Tobacco / gutkha risk visual" };
       if (/alcohol|risk factor/.test(text)) return { key: "risk_factor_infographic", label: "Risk factor infographic" };
       if (/share|family|friends|cta|early diagnosis|save lives|contact/.test(text)) return { key: "cta_branding", label: "CTA branding/contact polish" };
-      if (/doctor|lower third|surgical oncologist/.test(text)) return { key: "doctor_lower_third", label: "Doctor lower-third / intro graphic" };
+      if (/lower third|surgical oncologist|doctor intro|credentials/.test(text)) return { key: "doctor_lower_third", label: "Doctor lower-third / intro graphic" };
       if (/broll|clinic|consultation|hospital|patient/.test(text)) return { key: "contextual_broll", label: "Optional contextual b-roll" };
       const words = text
         .replace(/[^a-z0-9]+/g, " ")
@@ -3782,8 +3782,8 @@ export async function exportAssetReviewArtifactsForProject(sb: any, projectId: s
       if (/leukoplakia|erythroplakia|white patch|red patch/.test(text)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
       if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(text)) return { key: "oral_ulcer", label: "Oral ulcer clinical image or high-quality medical illustration" };
       if (/lymph|neck lump|neck node|cervical node|swelling/.test(text)) return { key: "cervical_lymph_node", label: "Cervical lymph node anatomy diagram" };
-      if (/oral exam|examination|screening|mouth opening/.test(text)) return { key: "oral_examination", label: "Oral examination visual" };
       if (/early detection|detected at an early stage|treatment[^.]{0,40}effective|outcomes[^.]{0,40}better|comparison infographic/.test(text)) return { key: "early_detection", label: "Early detection patient education visual" };
+      if (/oral exam|examination|examining|screening|mouth opening|consult specialist|consultation/.test(text)) return { key: "oral_examination", label: "Oral examination visual" };
       if (/india|prevalence|common cancers|map/.test(text)) return { key: "india_prevalence", label: "India prevalence map/stat visual" };
       if (/tobacco|gutkha|mawa|smoking|chewing tobacco/.test(text)) return { key: "tobacco_gutkha_risk", label: "Tobacco / gutkha risk visual" };
       if (/share|family|friends|cta|early diagnosis|save lives|contact/.test(text)) return { key: "cta_branding", label: "CTA branding/contact polish" };
