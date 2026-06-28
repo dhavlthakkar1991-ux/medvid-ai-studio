@@ -151,13 +151,13 @@ function visualConceptForText(text) {
   if (/leukoplakia|erythroplakia|white patch|red patch/.test(t)) return { key: "leukoplakia_erythroplakia", label: "Leukoplakia / erythroplakia comparison visual" };
   if (/ulcer|non healing|non-healing|mouth sore|oral lesion/.test(t)) return { key: "oral_ulcer", label: "Non-healing oral ulcer clinical visual" };
   if (/lymph|neck lump|neck node|cervical node|swelling/.test(t)) return { key: "cervical_lymph_node", label: "Cervical lymph node anatomy visual" };
-  if (/oral exam|examination|screening|mouth opening|consult specialist/.test(t)) return { key: "oral_examination", label: "Oral examination / specialist consultation visual" };
   if (/early detection|detected at an early stage|treatment[^.]{0,40}effective|outcomes[^.]{0,40}better|comparison infographic/.test(t)) return { key: "early_detection", label: "Early detection patient-education visual" };
+  if (/oral exam|examination|examining|screening|mouth opening|consult specialist|consultation/.test(t)) return { key: "oral_examination", label: "Oral examination / specialist consultation visual" };
   if (/india|prevalence|common cancers|map/.test(t)) return { key: "india_prevalence", label: "India prevalence map/stat visual" };
   if (/tobacco|gutkha|mawa|smoking|chewing tobacco/.test(t)) return { key: "tobacco_gutkha_risk", label: "Tobacco / gutkha risk visual" };
   if (/alcohol|risk factor/.test(t)) return { key: "risk_factor_infographic", label: "Risk factor infographic" };
   if (/share|family|friends|cta|early diagnosis|save lives|contact/.test(t)) return { key: "cta_branding", label: "CTA branding/contact polish" };
-  if (/doctor|lower third|surgical oncologist/.test(t)) return { key: "doctor_lower_third", label: "Doctor lower-third / intro graphic" };
+  if (/lower third|surgical oncologist|doctor intro|credentials/.test(t)) return { key: "doctor_lower_third", label: "Doctor lower-third / intro graphic" };
   if (/broll|b-roll|clinic|consultation|hospital|patient/.test(t)) return { key: "contextual_broll", label: "Contextual medical B-roll" };
   const words = Array.from(normalizedWords(t)).slice(0, 5).join("_");
   return { key: words || "medical_visual", label: "Medical visual asset" };
