@@ -560,7 +560,7 @@ const checks = [
     mentions_suite_started_service_cleanup_ok: activeDocText.includes("goal_suite_started_services_cleaned_up"),
     mentions_suite_started_service_ports_released: activeDocText.includes("goal_suite_started_service_ports_released"),
   }, "informational"),
-  check("active_goal_inventory_has_handoff_guardrails", activeInventoryText.includes("npm.cmd run verify:goal-suite:audited") && activeInventoryText.includes("current_phase_verified") && activeInventoryText.includes("handoff_summary") && activeInventoryText.includes("coordination_packaging_plan") && activeInventoryText.includes("active-goal-package-manifest.json") && activeInventoryText.includes("cleanup-pr-package-audit.json") && activeInventoryText.includes("audit:cleanup-pr-package") && activeInventoryText.includes("stage_command_preview") && activeInventoryText.includes("dependency_closure") && activeInventoryText.includes("package-lock.json") && activeInventoryText.includes("stage explicit") && activeInventoryText.includes("Pending Phase Backlog") && activeInventoryText.includes("Entry criteria") && activeInventoryText.includes("Verification expectation") && activeInventoryText.includes("AI asset generation and review workflow") && activeInventoryText.includes("Do not mark the broad active goal complete") && activeInventoryText.includes("worktree_inventory_matches_latest_suite_window") && activeInventoryText.includes("active_goal_json_inputs_parseable") && activeInventoryText.includes("active_goal_temp_artifacts_absent") && activeInventoryText.includes("Suite-started service cleanup records an `ok` field") && activeInventoryText.includes("goal_suite_started_service_ports_released") && missingExpectedScriptsFromInventory.length === 0, {
+  check("active_goal_inventory_has_handoff_guardrails", activeInventoryText.includes("npm.cmd run verify:goal-suite:audited") && activeInventoryText.includes("current_phase_verified") && activeInventoryText.includes("handoff_summary") && activeInventoryText.includes("coordination_packaging_plan") && activeInventoryText.includes("active-goal-package-manifest.json") && activeInventoryText.includes("cleanup-pr-package-audit.json") && activeInventoryText.includes("audit:cleanup-pr-package") && activeInventoryText.includes("stage_command_preview") && activeInventoryText.includes("dependency_closure") && activeInventoryText.includes("package-lock.json") && activeInventoryText.includes("stage explicit") && activeInventoryText.includes("Pending Phase Backlog") && activeInventoryText.includes("Entry criteria") && activeInventoryText.includes("Verification expectation") && activeInventoryText.includes("Cloud/provider-backed AI asset generation hardening") && activeInventoryText.includes("Do not mark the broad active goal complete") && activeInventoryText.includes("worktree_inventory_matches_latest_suite_window") && activeInventoryText.includes("active_goal_json_inputs_parseable") && activeInventoryText.includes("active_goal_temp_artifacts_absent") && activeInventoryText.includes("Suite-started service cleanup records an `ok` field") && activeInventoryText.includes("goal_suite_started_service_ports_released") && missingExpectedScriptsFromInventory.length === 0, {
     file: files.activeInventory,
     mentions_audited_suite: activeInventoryText.includes("npm.cmd run verify:goal-suite:audited"),
     mentions_current_phase_status: activeInventoryText.includes("current_phase_verified"),
@@ -576,7 +576,7 @@ const checks = [
     mentions_pending_phase_backlog: activeInventoryText.includes("Pending Phase Backlog"),
     mentions_entry_criteria: activeInventoryText.includes("Entry criteria"),
     mentions_verification_expectation: activeInventoryText.includes("Verification expectation"),
-    mentions_ai_asset_generation_backlog: activeInventoryText.includes("AI asset generation and review workflow"),
+    mentions_ai_asset_generation_backlog: activeInventoryText.includes("Cloud/provider-backed AI asset generation hardening"),
     mentions_non_completion_guardrail: activeInventoryText.includes("Do not mark the broad active goal complete"),
     mentions_worktree_suite_window_check: activeInventoryText.includes("worktree_inventory_matches_latest_suite_window"),
     mentions_json_parseability_check: activeInventoryText.includes("active_goal_json_inputs_parseable"),
@@ -621,13 +621,13 @@ const pendingPhaseBacklog = [
     verification: "Render benchmark MP4, capture frame evidence/contact sheet, verify Studio persistence, ffprobe, output URL, and qualitative pass/fail criteria.",
   },
   {
-    id: "ai_asset_generation_review",
-    label: "AI asset generation and review workflow",
+    id: "ai_asset_generation_cloud_hardening",
+    label: "Cloud/provider-backed AI asset generation hardening",
     status: "pending_next_phase",
-    evidence: "Current phase verifies per-requirement prompts and upload/replace controls; automatic HeyGen/AI asset generation is not implemented or verified by this audit.",
-    entry_criteria: "Provider credentials and cost/safety boundaries are explicit, and generated assets remain review-gated rather than auto-approved.",
-    next_action: "Design and verify provider-backed generation without bypassing human review, licensing, or Studio-as-Director constraints.",
-    verification: "Generate one asset from a requirement row, store prompt/provider/model/cost/result metadata, show it in Review Assets, approve or reject through human review, then prove Manifest/RenderSpec mapping only after approval.",
+    evidence: "Basic local generation/review is merged and verified: Studio PR #6 adds focused Review Assets generation controls, Worker PR #1 adds the heygen_hyperframes local HyperFrames provider, and npm.cmd run verify:generation-provider proves MP4/PNG output plus checkStatus/downloadResult. This does not yet prove production cloud HeyGen generation.",
+    entry_criteria: "Cloud provider credentials, cost/safety boundaries, output hosting, and review-gating rules are explicit.",
+    next_action: "Verify a cloud/provider-backed generation run from a requirement row without bypassing human review, licensing, or Studio-as-Director constraints.",
+    verification: "Generate one cloud-backed asset from a requirement row, store prompt/provider/model/cost/result metadata, show it in Review Assets, approve or reject through human review, then prove Manifest/RenderSpec mapping only after approval.",
   },
   {
     id: "cleanup_pr_packaging",
@@ -725,7 +725,7 @@ const handoffSummary = {
     latest_render: files.latestRender,
     browser_smoke: files.browserSmoke,
   },
-  next_decision: "Choose the next verified product phase: production deployment hardening, next render-quality phase, AI asset generation/review workflow, or cleanup/PR packaging of the verified coordination layer.",
+  next_decision: "Choose the next verified product phase: production deployment hardening, next render-quality phase, cloud/provider-backed AI generation hardening, or cleanup/PR packaging of the verified coordination layer.",
   caution: "Do not mark the broad active goal complete from current-phase evidence alone; the Studio and Worker worktrees still contain accumulated phase work and unrelated dirty files.",
 };
 const report = {
