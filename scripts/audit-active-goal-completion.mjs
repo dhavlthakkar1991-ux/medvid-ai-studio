@@ -81,6 +81,7 @@ const expectedPackageScripts = {
   "verify:goal-suite:full": "GOAL_SUITE_INCLUDE_BUILD",
   "verify:phase2fg": "node scripts/phase2fg-verify-workflow.mjs",
   "verify:phase2fg-render-latest": "PHASE2FG_VERIFY_LATEST_ONLY",
+  "verify:phase2g-render-quality": "node scripts/phase2g-render-quality-verifier.mjs",
   "smoke:phase2fg-ui": "node scripts/phase2fg-ui-smoke.mjs",
   "smoke:scene-review": "node scripts/scene-review-smoke.mjs",
 };
@@ -93,6 +94,7 @@ const suiteFreshnessFiles = [
   path.join("scripts", "audit-active-goal-worktree.mjs"),
   path.join("scripts", "audit-active-goal-package.mjs"),
   path.join("scripts", "audit-cleanup-pr-package.mjs"),
+  path.join("scripts", "phase2g-render-quality-verifier.mjs"),
   path.join("docs", "active-medvideo-goal.md"),
   path.join("docs", "active-goal-inventory.md"),
 ];
@@ -614,11 +616,11 @@ const pendingPhaseBacklog = [
   {
     id: "render_quality_next",
     label: "Next render-quality phase",
-    status: "ready_next_phase",
-    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the next scene-level visual acceptance target.",
-    entry_criteria: "Use the Phase 2G acceptance brief before changing renderer or layout behavior.",
-    next_action: "Build the Phase 2G verifier and produce honest frame/contact-sheet evidence for the target benchmark moments.",
-    verification: "Render benchmark MP4, capture frame evidence/contact sheet, verify Studio persistence, ffprobe, output URL, and qualitative pass/fail criteria.",
+    status: "evidence_generated_needs_review",
+    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the target; npm.cmd run verify:phase2g-render-quality generates frame/contact-sheet evidence and currently reports NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES.",
+    entry_criteria: "Use the Phase 2G report before changing renderer or layout behavior.",
+    next_action: "Review the Phase 2G contact sheet and fix only the concrete failed scenes: 00:20 license/source safety, 00:43 missing leukoplakia/erythroplakia requirement, 01:21 timing/intent mismatch, clinical human-review gates, and low-detail CTA.",
+    verification: "Re-run npm.cmd run verify:phase2g-render-quality; require technical checks green, all scenes pass or have explicit human-approved clinical review, Studio persistence, ffprobe, and output URL evidence.",
   },
   {
     id: "ai_asset_generation_cloud_hardening",
