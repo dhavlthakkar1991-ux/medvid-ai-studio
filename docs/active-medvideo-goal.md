@@ -115,7 +115,7 @@ The active-goal coordination layer now has a browser-inclusive audited suite and
 - Added the Phase 2G render-quality acceptance brief so the next visual-quality pass has explicit scene targets, thresholds, required artifacts, and non-goals before renderer changes begin.
 - Added `npm.cmd run verify:phase2g-render-quality`, which extracts benchmark frames, creates a contact sheet, checks Studio persistence and Worker debug artifacts, and reports honest scene-level pass/fail without pretending to certify clinical accuracy from pixels.
 - Repaired Phase 2G concept classification so the 82-89s specialist-consultation b-roll is treated as `oral_examination` rather than a doctor lower-third, while early-detection cards keep their `early_detection` classification.
-- Repaired Phase 2G warning-patches classification so plural `white patches` / `red patches` are recognized as `leukoplakia_erythroplakia`; the remaining 00:43 issue is now a measured 5.0s timing mismatch, not a missing requirement.
+- Repaired Phase 2G warning-patches classification so plural `white patches` / `red patches` are recognized as `leukoplakia_erythroplakia`; warning-patches are now evaluated at 00:48 because the approved transcript starts that narration at 47.684s.
 - Added the scene-centric Review Assets workspace.
 - Added scene-level multi-asset approval and layout repair metadata flow.
 - Collapsed raw/debug candidate lists by default.

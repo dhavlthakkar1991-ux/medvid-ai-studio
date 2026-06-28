@@ -39,9 +39,9 @@ const TARGET_SCENES = [
     requires_human_clinical_review: true,
   },
   {
-    code: "0043",
-    label: "00:43",
-    seconds: 43,
+    code: "0048",
+    label: "00:48",
+    seconds: 48,
     concept_keys: ["leukoplakia_erythroplakia"],
     required_intent: "Leukoplakia / erythroplakia / warning patches",
     expected_visual_behavior: "Accurate white/red patch or warning-sign visual if Studio-approved content exists; otherwise clear non-fabricated educational text, not invented pathology.",

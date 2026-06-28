@@ -44,7 +44,7 @@ Phase 2G must evaluate these benchmark moments:
 | `00:05` | India oral-cancer prevalence / awareness | A polished India-specific visual, map, or stat card using only approved wording; no invented numbers. |
 | `00:20` | Tobacco / gutkha risk | Contextual tobacco/gutkha visual or b-roll that is relevant to the Indian oral-cancer risk context; no generic unrelated lifestyle stock. |
 | `00:36` | Non-healing oral ulcer | Clinically appropriate oral ulcer visual, review-gated and not cartoonish. |
-| `00:43` | Leukoplakia / erythroplakia / warning patches | Accurate white/red patch or warning-sign visual if Studio-approved content exists; otherwise clear non-fabricated educational text, not invented pathology. |
+| `00:48` | Leukoplakia / erythroplakia / warning patches | Accurate white/red patch or warning-sign visual if Studio-approved content exists; otherwise clear non-fabricated educational text, not invented pathology. |
 | `00:59` | Neck node warning sign | Cervical lymph node visual that clearly communicates neck lump risk without misleading anatomy. |
 | `01:21` | Oral exam / biopsy workflow | Professional workflow diagram or consultation/exam visual that matches the narration and approved labels. |
 | `01:39` | CTA / awareness close | Clean branded CTA or awareness card, readable and not visually generic. |
@@ -90,7 +90,7 @@ Required artifacts:
 - `frame_grabs/0005.png`
 - `frame_grabs/0020.png`
 - `frame_grabs/0036.png`
-- `frame_grabs/0043.png`
+- `frame_grabs/0048.png`
 - `frame_grabs/0059.png`
 - `frame_grabs/0121.png`
 - `frame_grabs/0139.png`
