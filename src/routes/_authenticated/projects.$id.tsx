@@ -289,6 +289,7 @@ function ProjectView() {
   const [showRawAssetDebug, setShowRawAssetDebug] = useState(false);
   const [uploadingCandidateId, setUploadingCandidateId] = useState<string | null>(null);
   const [assetPromptTodo, setAssetPromptTodo] = useState<any | null>(null);
+  const [assetPromptDraft, setAssetPromptDraft] = useState("");
   const [manualUrlCandidate, setManualUrlCandidate] = useState<any | null>(null);
   const [manualUrlDraft, setManualUrlDraft] = useState({
     source_url: "",
@@ -302,6 +303,19 @@ function ProjectView() {
     provenance_notes: "",
   });
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!assetPromptTodo) {
+      setAssetPromptDraft("");
+      return;
+    }
+    setAssetPromptDraft(
+      assetPromptTodo.external_generation_prompt ??
+      assetPromptTodo.prompt_for_ai_generation ??
+      assetPromptTodo.prompt ??
+      "",
+    );
+  }, [assetPromptTodo]);
 
   const q = useQuery({
     queryKey: ["project", id],
@@ -424,6 +438,28 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["render-readiness", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "AI worker asset fulfillment failed"),
+  });
+  const generateAssetWithWorkerMut = useMutation({
+    mutationFn: (v: { candidateId: string; promptOverride?: string; forceGeneration?: boolean }) =>
+      fulfillProjectAssetsWithWorkerFn({
+        data: {
+          projectId: id,
+          candidateId: v.candidateId,
+          promptOverride: v.promptOverride,
+          forceGeneration: v.forceGeneration ?? true,
+        },
+      }),
+    onSuccess: (res: any) => {
+      toast.success(`Generated ${res?.inserted ?? 0} review candidate(s)`, {
+        description: `${res?.needsReview ?? 0} need review, ${res?.autoApproved ?? 0} auto-approved`,
+      });
+      qc.invalidateQueries({ queryKey: ["asset-review", id] });
+      qc.invalidateQueries({ queryKey: ["readiness", id] });
+      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
+      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
+      qc.invalidateQueries({ queryKey: ["render-readiness", id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "AI asset generation failed"),
   });
   const fulfillAssetMut = useMutation({
     mutationFn: (candidateId: string) => fulfillAssetFn({ data: { candidateId } }),
@@ -1710,9 +1746,13 @@ function ProjectView() {
                                       </div>
                                       <div className="text-muted-foreground line-clamp-2">{req.prompt ?? req.failure_reason ?? "No prompt mapped"}</div>
                                       <div className="flex flex-wrap gap-1">
-                                        <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
-                                          onClick={() => req.primary_candidate_id && searchAssetMut.mutate({ candidateId: req.primary_candidate_id, provider: "internal" })}>
-                                          Generate with AI
+                                        <Button size="sm" variant="outline" disabled={generateAssetWithWorkerMut.isPending}
+                                          onClick={() => req.primary_candidate_id && generateAssetWithWorkerMut.mutate({
+                                            candidateId: req.primary_candidate_id,
+                                            promptOverride: req.external_generation_prompt ?? req.prompt,
+                                            forceGeneration: true,
+                                          })}>
+                                          {generateAssetWithWorkerMut.isPending ? "Generating..." : "Generate with AI"}
                                         </Button>
                                         <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
                                           onClick={() => req.primary_candidate_id && searchAssetMut.mutate({ candidateId: req.primary_candidate_id, provider: "any" })}>
@@ -1834,6 +1874,82 @@ function ProjectView() {
                                                 <Badge variant={c.auto_pick_safe ? "default" : "secondary"} className="text-[10px]">score {c.overall_asset_score ?? 0}</Badge>
                                                 <Badge variant="outline" className="text-[10px]">{c.license_status ?? "unknown license"}</Badge>
                                               </div>
+                                              {(() => {
+                                                const data = c.candidate_data ?? {};
+                                                const meta = data.metadata ?? {};
+                                                const generationPrompt = data.generation_prompt ?? meta.generation_prompt;
+                                                const generationProvider = data.generation_provider ?? meta.generation_provider ?? c.provider;
+                                                const downloadUrl = c.source_url ?? c.preview_url ?? c.thumbnail_url;
+                                                if (!generationPrompt && !String(generationProvider ?? "").includes("hyperframes")) return null;
+                                                return (
+                                                  <div className="rounded border border-border bg-background/80 p-2 space-y-1">
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                      <Badge variant="default" className="text-[10px]">Generated Asset</Badge>
+                                                      <Badge variant="outline" className="text-[10px]">{generationProvider ?? "ai"}</Badge>
+                                                    </div>
+                                                    {generationPrompt && (
+                                                      <div className="text-muted-foreground line-clamp-3" title={generationPrompt}>
+                                                        Prompt: {generationPrompt}
+                                                      </div>
+                                                    )}
+                                                    <div className="flex flex-wrap gap-1">
+                                                      <Button size="sm" variant="outline" disabled={generateAssetWithWorkerMut.isPending}
+                                                        onClick={(event) => {
+                                                          event.preventDefault();
+                                                          generateAssetWithWorkerMut.mutate({ candidateId: c.id, promptOverride: generationPrompt, forceGeneration: true });
+                                                        }}>
+                                                        Regenerate
+                                                      </Button>
+                                                      <Button size="sm" variant="outline"
+                                                        onClick={(event) => {
+                                                          event.preventDefault();
+                                                          setAssetPromptTodo({
+                                                            ...c,
+                                                            visual_intent: c.title ?? c.search_query ?? "Generated asset",
+                                                            prompt_for_ai_generation: generationPrompt ?? c.search_query ?? c.title ?? "",
+                                                            external_generation_prompt: generationPrompt ?? c.search_query ?? c.title ?? "",
+                                                            negative_prompt: data.negative_prompt ?? meta.negative_prompt,
+                                                            start_time: c.start_time ?? data.start_time ?? meta.start_time,
+                                                            end_time: c.end_time ?? data.end_time ?? meta.end_time,
+                                                            required_asset_type: c.normalized_asset_type ?? c.asset_type,
+                                                            layout_name: data.layout_name ?? meta.layout_name,
+                                                            narration_excerpt: data.narration_excerpt ?? meta.narration_excerpt,
+                                                            primary_candidate_id: c.id,
+                                                          });
+                                                        }}>
+                                                        Edit Prompt
+                                                      </Button>
+                                                      <Button size="sm" variant="outline" disabled={generateAssetWithWorkerMut.isPending}
+                                                        onClick={(event) => {
+                                                          event.preventDefault();
+                                                          generateAssetWithWorkerMut.mutate({
+                                                            candidateId: c.id,
+                                                            promptOverride: `${generationPrompt ?? c.search_query ?? c.title ?? "medical visual"} Create a distinct alternative composition.`,
+                                                            forceGeneration: true,
+                                                          });
+                                                        }}>
+                                                        Generate Alternative
+                                                      </Button>
+                                                      {downloadUrl && (
+                                                        <a className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent"
+                                                          href={downloadUrl}
+                                                          target="_blank"
+                                                          rel="noreferrer"
+                                                          onClick={(event) => event.stopPropagation()}>
+                                                          Download
+                                                        </a>
+                                                      )}
+                                                      <Button size="sm" variant="default" disabled={reviewMut.isPending}
+                                                        onClick={(event) => {
+                                                          event.preventDefault();
+                                                          reviewMut.mutate({ candidateId: c.id, action: "accept", note: "Approved generated asset from Review Assets." });
+                                                        }}>
+                                                        Approve
+                                                      </Button>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })()}
                                             </label>
                                           ))}
                                         </div>
@@ -1910,12 +2026,17 @@ function ProjectView() {
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-2">
-                                <Button size="sm" variant="outline" disabled={(scene.missingRequirements ?? []).length === 0}
+                                <Button size="sm" variant="outline" disabled={(scene.missingRequirements ?? []).length === 0 || generateAssetWithWorkerMut.isPending}
                                   onClick={() => {
-                                    const first = (scene.missingRequirements ?? [])[0]?.primary_candidate_id;
-                                    if (first) searchAssetMut.mutate({ candidateId: first, provider: "internal" });
+                                    const firstReq = (scene.missingRequirements ?? [])[0];
+                                    const first = firstReq?.primary_candidate_id;
+                                    if (first) generateAssetWithWorkerMut.mutate({
+                                      candidateId: first,
+                                      promptOverride: firstReq?.external_generation_prompt ?? firstReq?.prompt,
+                                      forceGeneration: true,
+                                    });
                                   }}>
-                                  Generate missing for scene
+                                  {generateAssetWithWorkerMut.isPending ? "Generating..." : "Generate missing for scene"}
                                 </Button>
                                 <Button size="sm" variant="default" disabled={selectedCount === 0 || approveSceneMut.isPending}
                                   onClick={() => approveSceneMut.mutate({ projectId: id, sceneId: scene.sceneId, sceneIndex: scene.sceneIndex, candidateIds: selected })}>
@@ -3198,7 +3319,10 @@ function ProjectView() {
       </Dialog>
 
       <Dialog open={Boolean(assetPromptTodo)} onOpenChange={(open) => {
-        if (!open) setAssetPromptTodo(null);
+        if (!open) {
+          setAssetPromptTodo(null);
+          setAssetPromptDraft("");
+        }
       }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -3238,8 +3362,15 @@ function ProjectView() {
                 </div>
               </div>
               <div>
-                <div className="text-xs font-semibold mb-1">Prompt</div>
-                <Textarea readOnly className="min-h-32 text-xs" value={assetPromptTodo.prompt_for_ai_generation ?? ""} />
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="text-xs font-semibold">Prompt</div>
+                  <div className="text-[11px] text-muted-foreground">Editable before generation</div>
+                </div>
+                <Textarea
+                  className="min-h-32 text-xs"
+                  value={assetPromptDraft}
+                  onChange={(event) => setAssetPromptDraft(event.currentTarget.value)}
+                />
               </div>
               <div>
                 <div className="text-xs font-semibold mb-1">Negative prompt</div>
@@ -3256,11 +3387,24 @@ function ProjectView() {
               variant="outline"
               disabled={!assetPromptTodo}
               onClick={async () => {
-                await navigator.clipboard.writeText(assetPromptTodo?.external_generation_prompt ?? assetPromptTodo?.prompt_for_ai_generation ?? "");
+                await navigator.clipboard.writeText(assetPromptDraft);
                 toast.success("Generation prompt copied");
               }}
             >
               Copy prompt
+            </Button>
+            <Button
+              disabled={!assetPromptTodo?.primary_candidate_id || !assetPromptDraft.trim() || generateAssetWithWorkerMut.isPending}
+              onClick={() => {
+                if (!assetPromptTodo?.primary_candidate_id) return;
+                generateAssetWithWorkerMut.mutate({
+                  candidateId: assetPromptTodo.primary_candidate_id,
+                  promptOverride: assetPromptDraft.trim(),
+                  forceGeneration: true,
+                });
+              }}
+            >
+              {generateAssetWithWorkerMut.isPending ? "Generating..." : "Generate with Edited Prompt"}
             </Button>
             <Button
               variant="outline"
