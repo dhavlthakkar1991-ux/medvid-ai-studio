@@ -6,6 +6,8 @@ import path from "node:path";
 const PROJECT_ID = process.env.PHASE2FG_PROJECT_ID ?? "24c46f1f-fb5e-4aad-bdb6-ad61a7f2ca99";
 const ARTIFACT_ROOT = path.join("data", "review-artifacts");
 const PHASE_DIR = path.join(ARTIFACT_ROOT, PROJECT_ID, "phase-2fg-g1");
+const PHASE2G_QUALITY_DIR = path.join(ARTIFACT_ROOT, PROJECT_ID, "phase-2g-render-quality");
+const PHASE2G_CLINICAL_REVIEW_DIR = path.join(PHASE2G_QUALITY_DIR, "clinical_human_review");
 const OUT_PATH =
   process.env.ACTIVE_GOAL_COMPLETION_AUDIT_OUT ??
   path.join(ARTIFACT_ROOT, "active-goal-completion-audit.json");
@@ -16,6 +18,7 @@ const expectedGoalSuiteSteps = [
   "self_hosting_audit",
   "phase2fg_workflow",
   "latest_render_evidence",
+  "phase2g_clinical_review_packet",
   "worker_typecheck",
   "worker_build",
   "studio_typecheck",
@@ -82,6 +85,7 @@ const expectedPackageScripts = {
   "verify:phase2fg": "node scripts/phase2fg-verify-workflow.mjs",
   "verify:phase2fg-render-latest": "PHASE2FG_VERIFY_LATEST_ONLY",
   "verify:phase2g-render-quality": "node scripts/phase2g-render-quality-verifier.mjs",
+  "review:phase2g-clinical": "node scripts/phase2g-clinical-review-packet.mjs",
   "smoke:phase2fg-ui": "node scripts/phase2fg-ui-smoke.mjs",
   "smoke:scene-review": "node scripts/scene-review-smoke.mjs",
 };
@@ -95,6 +99,7 @@ const suiteFreshnessFiles = [
   path.join("scripts", "audit-active-goal-package.mjs"),
   path.join("scripts", "audit-cleanup-pr-package.mjs"),
   path.join("scripts", "phase2g-render-quality-verifier.mjs"),
+  path.join("scripts", "phase2g-clinical-review-packet.mjs"),
   path.join("docs", "active-medvideo-goal.md"),
   path.join("docs", "active-goal-inventory.md"),
 ];
@@ -265,6 +270,11 @@ const files = {
   generationAudit: path.join(PHASE_DIR, "single_asset_generation_audit.json"),
   humanLoop: path.join(PHASE_DIR, "human_loop_completion_report.json"),
   latestRender: path.join(PHASE_DIR, "benchmark_render_latest_verified.json"),
+  phase2gRenderQuality: path.join(PHASE2G_QUALITY_DIR, "render_quality_report.json"),
+  phase2gClinicalPacket: path.join(PHASE2G_CLINICAL_REVIEW_DIR, "clinical_human_review_packet.json"),
+  phase2gClinicalPacketMd: path.join(PHASE2G_CLINICAL_REVIEW_DIR, "clinical_human_review_packet.md"),
+  phase2gMedicalSafetyReview: path.join(PHASE2G_CLINICAL_REVIEW_DIR, "medical_safety_review.md"),
+  phase2gHumanReviewPrompt: path.join(PHASE2G_CLINICAL_REVIEW_DIR, "human_review_prompt.md"),
 };
 
 const jsonReads = {
@@ -284,6 +294,8 @@ const jsonReads = {
   generationAudit: readJson(files.generationAudit),
   humanLoop: readJson(files.humanLoop),
   latestRender: readJson(files.latestRender),
+  phase2gRenderQuality: readJson(files.phase2gRenderQuality),
+  phase2gClinicalPacket: readJson(files.phase2gClinicalPacket),
 };
 
 const goalSuite = jsonReads.goalSuite.value;
@@ -302,6 +314,8 @@ const generationPrompts = jsonReads.generationPrompts.value;
 const generationAudit = jsonReads.generationAudit.value;
 const humanLoop = jsonReads.humanLoop.value;
 const latestRender = jsonReads.latestRender.value;
+const phase2gRenderQuality = jsonReads.phase2gRenderQuality.value;
+const phase2gClinicalPacket = jsonReads.phase2gClinicalPacket.value;
 
 const jsonReadFailures = Object.entries(jsonReads)
   .filter(([, result]) => result.ok !== true)
@@ -394,6 +408,25 @@ const suiteStartedServiceListenerProbes = {
 const suiteStartedServiceListenersAbsent =
   RUNNING_AS_SUITE_POST_CHECK ||
   Object.values(suiteStartedServiceListenerProbes).every((probe) => probe.required !== true || probe.listening === false);
+const phase2gScenes = Array.isArray(phase2gRenderQuality?.scenes) ? phase2gRenderQuality.scenes : [];
+const phase2gClinicalReviewScenes = phase2gScenes.filter((scene) => scene.human_review_required === true);
+const phase2gClinicalPacketScenes = Array.isArray(phase2gClinicalPacket?.scenes) ? phase2gClinicalPacket.scenes : [];
+const phase2gClinicalReviewTimes = phase2gClinicalReviewScenes.map((scene) => scene.time).sort();
+const phase2gClinicalPacketTimes = phase2gClinicalPacketScenes.map((scene) => scene.time).sort();
+const expectedPhase2gClinicalTimes = ["00:36", "00:48", "00:59", "01:21"];
+const missingPhase2gClinicalPacketTimes = expectedPhase2gClinicalTimes.filter((time) => !phase2gClinicalPacketTimes.includes(time));
+const phase2gClinicalPacketFiles = [
+  files.phase2gClinicalPacket,
+  files.phase2gClinicalPacketMd,
+  files.phase2gMedicalSafetyReview,
+  files.phase2gHumanReviewPrompt,
+];
+const missingPhase2gClinicalPacketFiles = phase2gClinicalPacketFiles.filter((file) => !exists(file));
+const missingPhase2gClinicalFrameFiles = phase2gClinicalPacketScenes.flatMap((scene) =>
+  (Array.isArray(scene.frames) ? scene.frames : [])
+    .map((frame) => frame.path)
+    .filter((file) => !exists(file)),
+);
 
 const checks = [
   check("active_goal_json_inputs_parseable", jsonReadFailures.length === 0, {
@@ -546,6 +579,21 @@ const checks = [
     output_head: latestRender?.output_head ?? null,
     ffprobe: latestRender?.ffprobe ?? null,
   }),
+  check("phase2g_clinical_review_packet_complete", phase2gRenderQuality?.technical_checks_pass === true && phase2gRenderQuality?.overall_verdict === "NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES" && phase2gClinicalReviewScenes.length === expectedPhase2gClinicalTimes.length && missingPhase2gClinicalPacketFiles.length === 0 && phase2gClinicalPacket?.gate_status === "PASS_TECHNICAL_CHECKS_REQUIRES_HUMAN_CLINICAL_REVIEW" && phase2gClinicalPacket?.publication_status === "DO_NOT_PUBLISH_UNTIL_HUMAN_MEDICAL_DESIGN_APPROVAL" && phase2gClinicalPacketScenes.length === expectedPhase2gClinicalTimes.length && missingPhase2gClinicalPacketTimes.length === 0 && missingPhase2gClinicalFrameFiles.length === 0, {
+    quality_report: files.phase2gRenderQuality,
+    clinical_packet: files.phase2gClinicalPacket,
+    clinical_packet_files: phase2gClinicalPacketFiles,
+    missing_clinical_packet_files: missingPhase2gClinicalPacketFiles,
+    expected_scene_times: expectedPhase2gClinicalTimes,
+    quality_report_human_review_times: phase2gClinicalReviewTimes,
+    packet_scene_times: phase2gClinicalPacketTimes,
+    missing_packet_scene_times: missingPhase2gClinicalPacketTimes,
+    missing_frame_files: missingPhase2gClinicalFrameFiles,
+    technical_checks_pass: phase2gRenderQuality?.technical_checks_pass ?? null,
+    overall_verdict: phase2gRenderQuality?.overall_verdict ?? null,
+    gate_status: phase2gClinicalPacket?.gate_status ?? null,
+    publication_status: phase2gClinicalPacket?.publication_status ?? null,
+  }),
   check("active_goal_doc_has_evidence_index", activeDocText.includes("## Evidence Index") && activeDocText.includes("## Latest Coordination Checkpoint - 2026-06-27") && activeDocText.includes("active-goal-completion-audit.json") && activeDocText.includes("handoff_summary") && activeDocText.includes("active-goal-worktree-inventory.json") && activeDocText.includes("active-goal-package-manifest.json") && activeDocText.includes("cleanup-pr-package-audit.json") && activeDocText.includes("audit:cleanup-pr-package") && activeDocText.includes("stage_command_preview") && activeDocText.includes("dependency_closure") && activeDocText.includes("package-lock.json") && activeDocText.includes("worktree_inventory_matches_latest_suite_window") && activeDocText.includes("active_goal_package_manifest_secret_scan_clean") && activeDocText.includes("active_goal_json_inputs_parseable") && activeDocText.includes("active_goal_temp_artifacts_absent") && activeDocText.includes("goal_suite_started_services_cleaned_up") && activeDocText.includes("goal_suite_started_service_ports_released"), {
     file: files.activeDoc,
     has_evidence_index: activeDocText.includes("## Evidence Index"),
@@ -662,6 +710,7 @@ const handoffGuardrailNames = [
   "mismatch_and_timing_gates_clean",
   "scene_review_browser_smoke_passed",
   "latest_render_evidence_valid",
+  "phase2g_clinical_review_packet_complete",
 ];
 const handoffSummary = {
   generated_at: generatedAt,
@@ -729,6 +778,8 @@ const handoffSummary = {
     active_readiness: files.activeReadiness,
     phase2fg_directory: PHASE_DIR,
     latest_render: files.latestRender,
+    phase2g_render_quality: files.phase2gRenderQuality,
+    phase2g_clinical_review_packet: files.phase2gClinicalPacket,
     browser_smoke: files.browserSmoke,
   },
   next_decision: "Choose the next verified product phase: production deployment hardening, next render-quality phase, cloud/provider-backed AI generation hardening, or cleanup/PR packaging of the verified coordination layer.",
