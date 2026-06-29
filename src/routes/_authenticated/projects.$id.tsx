@@ -17,9 +17,6 @@ import {
   approveHighConfidenceCandidates,
   rejectLowConfidenceCandidates,
   exportAssetReviewArtifacts,
-  fulfillAssetCandidate,
-  searchAssetCandidate,
-  approveAssetSearchResult,
   createAssetUploadUrl,
   approveUploadedAsset,
   approveManualAssetUrl,
@@ -280,9 +277,6 @@ function ProjectView() {
   const approveHighConfidenceFn = useServerFn(approveHighConfidenceCandidates);
   const rejectLowConfidenceFn = useServerFn(rejectLowConfidenceCandidates);
   const exportAssetReviewArtifactsFn = useServerFn(exportAssetReviewArtifacts);
-  const fulfillAssetFn = useServerFn(fulfillAssetCandidate);
-  const searchAssetFn = useServerFn(searchAssetCandidate);
-  const approveSearchResultFn = useServerFn(approveAssetSearchResult);
   const createAssetUploadUrlFn = useServerFn(createAssetUploadUrl);
   const approveUploadedAssetFn = useServerFn(approveUploadedAsset);
   const approveManualAssetUrlFn = useServerFn(approveManualAssetUrl);
@@ -304,7 +298,6 @@ function ProjectView() {
   const [ctaFixOpen, setCtaFixOpen] = useState(false);
   const [ctaFixText, setCtaFixText] = useState("Subscribe for more medical updates");
   const [reviewFilter, setReviewFilter] = useState("Needs Review");
-  const [assetSearches, setAssetSearches] = useState<Record<string, any>>({});
   const [sceneSelections, setSceneSelections] = useState<Record<string, string[]>>({});
   const [showRawAssetDebug, setShowRawAssetDebug] = useState(false);
   const [uploadingCandidateId, setUploadingCandidateId] = useState<string | null>(null);
@@ -445,29 +438,6 @@ function ProjectView() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Artifact export failed"),
   });
-  const fulfillAssetMut = useMutation({
-    mutationFn: (candidateId: string) => fulfillAssetFn({ data: { candidateId } }),
-    onSuccess: (res: any) => {
-      if (res?.ok) toast.success(`Asset fulfilled via ${res.provider}`);
-      else toast.warning(res?.reason ?? "Needs asset provider key");
-      qc.invalidateQueries({ queryKey: ["asset-review", id] });
-      qc.invalidateQueries({ queryKey: ["readiness", id] });
-      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
-      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
-      qc.invalidateQueries({ queryKey: ["render-readiness", id] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Asset fulfillment failed"),
-  });
-  const searchAssetMut = useMutation({
-    mutationFn: (v: { candidateId: string; provider: "any" | "pexels" | "pixabay" | "unsplash" | "internal" }) =>
-      searchAssetFn({ data: v }),
-    onSuccess: (res: any, vars) => {
-      setAssetSearches((prev) => ({ ...prev, [vars.candidateId]: res }));
-      if (res?.results?.length) toast.success(`Found ${res.results.length} asset result(s)`);
-      else toast.warning(res?.reason ?? res?.status?.message ?? "No asset results found");
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Asset search failed"),
-  });
   const approveSceneMut = useMutation({
     mutationFn: (v: { projectId: string; sceneId?: string | null; sceneIndex?: number | null; candidateIds: string[]; repairLayout?: boolean }) =>
       approveSceneAssetCandidatesFn({ data: v }),
@@ -499,19 +469,6 @@ function ProjectView() {
       qc.invalidateQueries({ queryKey: ["render-readiness", id] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Scene manifest repair failed"),
-  });
-  const approveSearchMut = useMutation({
-    mutationFn: (v: { candidateId: string; result: any }) => approveSearchResultFn({ data: v }),
-    onSuccess: () => {
-      toast.success("Selected asset approved");
-      setAssetSearches({});
-      qc.invalidateQueries({ queryKey: ["asset-review", id] });
-      qc.invalidateQueries({ queryKey: ["readiness", id] });
-      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
-      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
-      qc.invalidateQueries({ queryKey: ["render-readiness", id] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Approve result failed"),
   });
   const approveManualUrlMut = useMutation({
     mutationFn: (v: {
@@ -1650,13 +1607,6 @@ function ProjectView() {
                   <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 text-xs text-sky-800">
                     Primary asset creation uses the Codex asset-pack flow: export prompts, generate PNG/WebP/JPG/MP4 assets with Codex ImageGen or HyperFrames, then upload or paste the completed result for approval.
                   </div>
-                  <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex flex-wrap items-center gap-2">
-                    <span className="font-semibold">Providers</span>
-                    <Badge variant={reviewQ.data.providerStatus?.configured?.pexels ? "default" : "outline"}>Pexels</Badge>
-                    <Badge variant={reviewQ.data.providerStatus?.configured?.pixabay ? "default" : "outline"}>Pixabay</Badge>
-                    <Badge variant={reviewQ.data.providerStatus?.configured?.unsplash ? "default" : "outline"}>Unsplash</Badge>
-                    <span className="text-muted-foreground">{reviewQ.data.providerStatus?.message}</span>
-                  </div>
                   <div className="rounded-md border border-border bg-background p-3 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -2298,7 +2248,6 @@ function ProjectView() {
                       {reviewQ.data.candidates
                         .filter((c: any) => professionalReviewBuckets(c).includes(reviewFilter))
                         .map((c: any) => {
-                          const search = assetSearches[c.id];
                           const previewUrl = c.thumbnail_url ?? c.preview_url ?? c.source_url;
                           const currentApproved = c.review_context?.current_approved_asset;
                           return (
@@ -2508,26 +2457,6 @@ function ProjectView() {
                                           </Button>
                                         </>
                                       )}
-                                      {!isCodexHandoffCandidate(c) && (
-                                        <>
-                                      <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
-                                        onClick={() => searchAssetMut.mutate({ candidateId: c.id, provider: "pexels" })}>
-                                        Search Pexels
-                                      </Button>
-                                      <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
-                                        onClick={() => searchAssetMut.mutate({ candidateId: c.id, provider: "pixabay" })}>
-                                        Search Pixabay
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        disabled={fulfillAssetMut.isPending || !c.auto_pick_safe}
-                                        title={c.auto_pick_safe ? "Use the highest-ranked safe fulfillment result." : "Disabled until a safe, licensed, source-backed candidate is available."}
-                                        onClick={() => fulfillAssetMut.mutate(c.id)}>
-                                        Auto-pick best safe candidate
-                                      </Button>
-                                        </>
-                                      )}
                                       <Button size="sm" variant="outline"
                                         onClick={() => {
                                           setManualUrlCandidate(c);
@@ -2592,34 +2521,6 @@ function ProjectView() {
                                     }}>Replace query</Button>
                                 </div>
                               </div>
-                              {search?.warnings?.length > 0 && (
-                                <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-amber-700">
-                                  {search.warnings.join(" ")}
-                                </div>
-                              )}
-                              {search?.results?.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                  {search.results.map((r: any) => (
-                                    <div key={r.result_id} className="border border-border rounded-md overflow-hidden bg-muted/20">
-                                      {r.thumbnail_url || r.preview_url ? (
-                                        <img src={r.thumbnail_url ?? r.preview_url} alt={r.title} className="w-full h-28 object-cover bg-black/40" />
-                                      ) : null}
-                                      <div className="p-2 space-y-1">
-                                        <div className="flex items-center gap-1">
-                                          <Badge variant="outline" className="text-[10px]">{r.provider}</Badge>
-                                          {r.duration_seconds ? <Badge variant="outline" className="text-[10px]">{r.duration_seconds}s</Badge> : null}
-                                        </div>
-                                        <div className="font-medium line-clamp-2">{r.title}</div>
-                                        <div className="text-muted-foreground line-clamp-2">{r.description ?? r.attribution?.author ?? r.attribution?.provider_url}</div>
-                                        <Button size="sm" className="w-full" disabled={approveSearchMut.isPending}
-                                          onClick={() => approveSearchMut.mutate({ candidateId: c.id, result: r })}>
-                                          Approve selected result
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           );
                         })}
