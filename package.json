@@ -27,6 +27,7 @@
     "repair:phase2fg-safe": "node scripts/phase2fg-apply-safe-repairs.mjs",
     "repair:phase2fg-text-overlay": "node scripts/phase2fg-create-approved-text-overlay.mjs",
     "repair:phase2g-cta": "node scripts/phase2g-replace-cta-asset.mjs",
+    "repair:phase2g-source-safety": "node scripts/phase2g-repair-source-safety.mjs",
     "repair:phase2fg-refresh-urls": "node scripts/phase2fg-refresh-asset-urls.mjs",
     "smoke:phase2fg-ui": "node scripts/phase2fg-ui-smoke.mjs",
     "smoke:phase2fg-render": "node scripts/phase2fg-dispatch-benchmark-render.mjs",

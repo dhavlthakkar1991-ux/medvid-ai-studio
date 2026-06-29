@@ -119,6 +119,39 @@ function normAssetKind(v: unknown): RenderAssetKind {
   }
 }
 
+function normalizedLicenseStatus(metadata: any): string | null {
+  const raw = String(
+    metadata?.license_status ??
+      metadata?.candidate_data?.license_status ??
+      metadata?.license?.license_status ??
+      metadata?.license?.status ??
+      metadata?.license?.type ??
+      "",
+  );
+  const provider = String(
+    metadata?.provider ??
+      metadata?.license?.provider ??
+      metadata?.candidate_data?.provider ??
+      "",
+  ).toLowerCase();
+  if (/^(pexels|pixabay)_license$/i.test(raw) || ["pexels", "pixabay"].includes(provider)) {
+    return "known_open";
+  }
+  return raw || null;
+}
+
+function normalizedUsageRecommendation(metadata: any, licenseStatus: string | null): string | null {
+  const raw =
+    metadata?.usage_recommendation ??
+    metadata?.candidate_data?.usage_recommendation ??
+    metadata?.license?.usage_recommendation ??
+    null;
+  if (raw) return raw;
+  return licenseStatus && ["known_open", "public_domain", "attribution_required"].includes(licenseStatus)
+    ? "safe_to_use"
+    : null;
+}
+
 function kindFromMediaHints(asset: any, sourceUrl?: string | null): RenderAssetKind {
   const upload = asset?.metadata?.upload && typeof asset.metadata.upload === "object" ? asset.metadata.upload : {};
   const contentType = String(asset?.mime_type ?? asset?.content_type ?? upload.content_type ?? "").toLowerCase();
@@ -506,6 +539,7 @@ function pushAsset(a: RenderAsset) {
       rawTaxonomy === "CLINICAL_IMAGE" && (sourceClass === "internal_template" || sourceClass === "internal_svg_library")
         ? "MEDICAL_ILLUSTRATION"
         : rawTaxonomy;
+    const licenseStatus = normalizedLicenseStatus(metadata);
     return {
       medical_asset_taxonomy: normalizedTaxonomy,
       medical_source_class: normalizedSourceClass,
@@ -514,18 +548,8 @@ function pushAsset(a: RenderAsset) {
       approved_at: asset?.reviewed_at ?? metadata.approved_at ?? metadata.candidate_data?.approved_at ?? null,
       approval_reason: asset?.review_note ?? metadata.approval_reason ?? metadata.candidate_data?.approval_reason ?? null,
       source_domain: metadata.source_domain ?? metadata.candidate_data?.source_domain ?? null,
-      license_status:
-        metadata.license_status ??
-        metadata.candidate_data?.license_status ??
-        metadata.license?.license_status ??
-        metadata.license?.status ??
-        metadata.license?.type ??
-        null,
-      usage_recommendation:
-        metadata.usage_recommendation ??
-        metadata.candidate_data?.usage_recommendation ??
-        metadata.license?.usage_recommendation ??
-        null,
+      license_status: licenseStatus,
+      usage_recommendation: normalizedUsageRecommendation(metadata, licenseStatus),
       overall_asset_score:
         metadata.overall_asset_score ??
         metadata.candidate_data?.worker_score?.overall_asset_score ??

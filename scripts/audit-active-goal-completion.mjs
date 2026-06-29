@@ -617,9 +617,9 @@ const pendingPhaseBacklog = [
     id: "render_quality_next",
     label: "Next render-quality phase",
     status: "evidence_generated_needs_review",
-    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the target; npm.cmd run verify:phase2g-render-quality generates frame/contact-sheet evidence and currently reports NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES. The 01:21 oral-exam classification is repaired, warning-patches are evaluated at 00:48, and the 01:39 CTA now passes automated quality checks.",
+    evidence: "Latest benchmark MP4 is ffprobe-valid and persisted; docs/phase-2g-render-quality-acceptance.md defines the target; npm.cmd run verify:phase2g-render-quality generates frame/contact-sheet evidence and currently reports NEEDS_HUMAN_REVIEW_OR_SMALL_FIXES. The 01:21 oral-exam classification is repaired, warning-patches are evaluated at 00:48, the 01:39 CTA now passes automated quality checks, 00:20 Pexels license metadata is normalized, and the 01:21 Pexels clinical-use source-safety issue is replaced with an approved Studio-owned workflow visual.",
     entry_criteria: "Use the Phase 2G report before changing renderer or layout behavior.",
-    next_action: "Review the Phase 2G contact sheet and fix only the remaining concrete failed scenes: 00:20 license/source safety, clinical human-review gates, and 01:21 Pexels/source-safety review.",
+    next_action: "Review the Phase 2G contact sheet and resolve only the remaining clinical/anatomy human-review gates at 00:36, 00:48, 00:59, and 01:21.",
     verification: "Re-run npm.cmd run verify:phase2g-render-quality; require technical checks green, all scenes pass or have explicit human-approved clinical review, Studio persistence, ffprobe, and output URL evidence.",
   },
   {

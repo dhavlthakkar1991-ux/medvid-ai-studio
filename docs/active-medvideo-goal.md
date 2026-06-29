@@ -117,6 +117,7 @@ The active-goal coordination layer now has a browser-inclusive audited suite and
 - Repaired Phase 2G concept classification so the 82-89s specialist-consultation b-roll is treated as `oral_examination` rather than a doctor lower-third, while early-detection cards keep their `early_detection` classification.
 - Repaired Phase 2G warning-patches classification so plural `white patches` / `red patches` are recognized as `leukoplakia_erythroplakia`; warning-patches are now evaluated at 00:48 because the approved transcript starts that narration at 47.684s.
 - Replaced the low-detail 01:39 placeholder CTA with a Studio-owned professional awareness close card and rerendered the benchmark; the CTA scene now passes automated Phase 2G quality checks.
+- Repaired the remaining automated source-safety failures: contextual 00:20 Pexels tobacco b-roll now carries explicit Pexels license metadata, and the 01:21 oral-exam slot now uses the existing approved Studio-owned oral exam/biopsy workflow visual instead of restricted clinical-use Pexels b-roll.
 - Added the scene-centric Review Assets workspace.
 - Added scene-level multi-asset approval and layout repair metadata flow.
 - Collapsed raw/debug candidate lists by default.
