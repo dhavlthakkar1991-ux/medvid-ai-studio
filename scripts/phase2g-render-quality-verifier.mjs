@@ -292,7 +292,7 @@ function plainObject(value) {
 function licenseStatusForAsset(asset) {
   const metadata = plainObject(asset?.metadata);
   const original = plainObject(metadata.original_candidate_data);
-  return String(
+  const raw = String(
     asset?.license_status ??
     metadata.license_status ??
     plainObject(metadata.license).license_status ??
@@ -300,6 +300,10 @@ function licenseStatusForAsset(asset) {
     plainObject(original.license).type ??
     "unknown",
   );
+  const provider = String(metadata.provider ?? plainObject(metadata.license).provider ?? original.provider ?? "").toLowerCase();
+  return /^(pexels|pixabay)_license$/i.test(raw) || ["pexels", "pixabay"].includes(provider)
+    ? "known_open"
+    : raw;
 }
 
 function scoreScene({ target, requirementMatch, overlayMatch, asset, frame, downloadedAsset, debugReady }) {

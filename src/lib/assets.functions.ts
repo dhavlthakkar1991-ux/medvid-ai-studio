@@ -487,18 +487,24 @@ function candidateOverallScore(candidate: any): number {
 function licenseInfo(candidate: any): { license_status: string; usage_recommendation: string } {
   const data = plainObject(candidate?.candidate_data);
   const license = plainObject(data.license ?? data.metadata?.license);
+  const rawStatus = String(
+    data.license_status ??
+      license.license_status ??
+      license.status ??
+      license.type ??
+      "unknown",
+  );
+  const provider = String(data.provider ?? license.provider ?? "").toLowerCase();
+  const normalizedStatus =
+    /^(pexels|pixabay)_license$/i.test(rawStatus) || ["pexels", "pixabay"].includes(provider)
+      ? "known_open"
+      : rawStatus;
   return {
-    license_status: String(
-      data.license_status ??
-        license.license_status ??
-        license.status ??
-        license.type ??
-        "unknown",
-    ),
+    license_status: normalizedStatus,
     usage_recommendation: String(
       data.usage_recommendation ??
         license.usage_recommendation ??
-        (["known_open", "public_domain"].includes(String(license.status ?? license.type)) ? "safe_to_use" : "review_required"),
+        (["known_open", "public_domain", "attribution_required"].includes(normalizedStatus) ? "safe_to_use" : "review_required"),
     ),
   };
 }
