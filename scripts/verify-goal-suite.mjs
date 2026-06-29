@@ -47,6 +47,11 @@ const steps = [
     requiresWorkerServer: true,
   },
   {
+    name: "phase2g_clinical_review_packet",
+    command: `${npmCommand} run review:phase2g-clinical`,
+    timeoutMs: 180_000,
+  },
+  {
     name: "worker_typecheck",
     command: `${npmCommand} run typecheck`,
     cwd: WORKER_REPO_DIR,
