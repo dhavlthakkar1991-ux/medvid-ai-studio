@@ -128,8 +128,29 @@ const trackLabel = (n: unknown) => {
   return TRACK_LABELS[v] ?? `Track ${Number.isFinite(v) ? v : "?"}`;
 };
 
+function isCodexHandoffCandidate(c: any) {
+  const data = c?.candidate_data && typeof c.candidate_data === "object" ? c.candidate_data : {};
+  const meta = data.metadata && typeof data.metadata === "object" ? data.metadata : {};
+  return Boolean(
+    c?.provider === "codex_creative_handoff" ||
+      data.provider === "codex_creative_handoff" ||
+      data.codex_creative_workflow ||
+      meta.codex_creative_workflow ||
+      data.codex_tool ||
+      meta.codex_tool,
+  );
+}
+
+function codexToolLabel(c: any) {
+  const data = c?.candidate_data && typeof c.candidate_data === "object" ? c.candidate_data : {};
+  const meta = data.metadata && typeof data.metadata === "object" ? data.metadata : {};
+  const tool = String(data.codex_tool ?? meta.codex_tool ?? data.generation_provider ?? meta.generation_provider ?? "codex").replace(/^codex_/, "");
+  return tool === "hyperframes" ? "HyperFrames" : tool === "imagegen" ? "ImageGen" : "Codex";
+}
+
 function assetReadinessLabel(c: any) {
   if (c.candidate_data?.asset_status === "missing_required" || c.candidate_data?.selected_asset_status === "missing_required") return "Missing required";
+  if (isCodexHandoffCandidate(c) && !c.has_usable_url) return "Codex brief";
   if (c.render_classification === "REAL_RENDERABLE_MEDIA" || c.has_usable_url) return "Renderable";
   if (String(c.status ?? "").includes("placeholder")) return "Placeholder only";
   if (String(c.status ?? "") === "needs_asset") return "Needs asset";
@@ -138,6 +159,7 @@ function assetReadinessLabel(c: any) {
 
 function assetReadinessVariant(c: any): "default" | "secondary" | "outline" | "destructive" {
   if (c.candidate_data?.asset_status === "missing_required" || c.candidate_data?.selected_asset_status === "missing_required") return "destructive";
+  if (isCodexHandoffCandidate(c) && !c.has_usable_url) return "outline";
   if (c.render_classification === "REAL_RENDERABLE_MEDIA" || c.has_usable_url) return "default";
   if (String(c.status ?? "") === "needs_asset") return "destructive";
   return "secondary";
@@ -155,6 +177,7 @@ function reviewBucket(c: any) {
 function professionalReviewBuckets(c: any): string[] {
   const buckets = [reviewBucket(c)];
   const status = String(c.status ?? "");
+  if (isCodexHandoffCandidate(c)) buckets.push("Codex Briefs");
   if (status === "pending" || status === "searched") buckets.push("Needs Review");
   if (c.confidence_tier === "A") buckets.push("High Confidence");
   if (c.is_clinical) buckets.push("Clinical Images");
@@ -211,7 +234,7 @@ async function probeUploadMedia(file: File): Promise<{ width?: number; height?: 
         video.src = url;
       });
     }
-    if (file.type.startsWith("image/") || /\.(png|jpe?g|webp|svg)$/i.test(file.name)) {
+    if ((file.type.startsWith("image/") && file.type !== "image/svg+xml") || /\.(png|jpe?g|webp)$/i.test(file.name)) {
       return await new Promise((resolve, reject) => {
         const image = new Image();
         const timer = window.setTimeout(() => reject(new Error("Image probe timed out")), 15_000);
@@ -558,6 +581,9 @@ function ProjectView() {
   const uploadAssetFile = async (candidateId: string, file: File) => {
     setUploadingCandidateId(candidateId);
     try {
+      if (file.type === "image/svg+xml" || /\.svg$/i.test(file.name)) {
+        throw new Error("SVG uploads are disabled for the primary Codex asset workflow. Upload PNG, WebP, JPG, or MP4 instead.");
+      }
       const media: { width?: number; height?: number; duration_seconds?: number } = await probeUploadMedia(file).catch(() => ({}));
       const { path, token } = await createAssetUploadUrlFn({
         data: { candidateId, filename: file.name, contentType: file.type || undefined },
@@ -1787,7 +1813,7 @@ function ProjectView() {
                                               {req.primary_candidate_id && uploadingCandidateId === req.primary_candidate_id ? "Uploading..." : "Upload / Replace"}
                                               <input
                                                 type="file"
-                                                accept=".png,.jpg,.jpeg,.webp,.svg,.mp4,.mov,image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/quicktime"
+                                                accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
                                                 className="hidden"
                                                 disabled={uploadingCandidateId === req.primary_candidate_id}
                                                 onChange={(e) => {
@@ -1877,19 +1903,27 @@ function ProjectView() {
                                               {(() => {
                                                 const data = c.candidate_data ?? {};
                                                 const meta = data.metadata ?? {};
+                                                const isCodexBrief = isCodexHandoffCandidate(c);
                                                 const generationPrompt = data.generation_prompt ?? meta.generation_prompt;
-                                                const generationProvider = data.generation_provider ?? meta.generation_provider ?? c.provider;
+                                                const generationProvider = data.generation_provider ?? meta.generation_provider ?? (isCodexBrief ? codexToolLabel(c) : c.provider);
                                                 const downloadUrl = c.source_url ?? c.preview_url ?? c.thumbnail_url;
-                                                if (!generationPrompt && !String(generationProvider ?? "").includes("hyperframes")) return null;
+                                                if (!generationPrompt && !isCodexBrief && !String(generationProvider ?? "").includes("hyperframes")) return null;
                                                 return (
                                                   <div className="rounded border border-border bg-background/80 p-2 space-y-1">
                                                     <div className="flex flex-wrap items-center gap-1">
-                                                      <Badge variant="default" className="text-[10px]">Generated Asset</Badge>
+                                                      <Badge variant={isCodexBrief && !c.has_usable_url ? "outline" : "default"} className="text-[10px]">
+                                                        {isCodexBrief && !c.has_usable_url ? "Codex Brief" : "Generated Asset"}
+                                                      </Badge>
                                                       <Badge variant="outline" className="text-[10px]">{generationProvider ?? "ai"}</Badge>
                                                     </div>
                                                     {generationPrompt && (
                                                       <div className="text-muted-foreground line-clamp-3" title={generationPrompt}>
                                                         Prompt: {generationPrompt}
+                                                      </div>
+                                                    )}
+                                                    {isCodexBrief && !c.has_usable_url && (
+                                                      <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px] text-amber-700">
+                                                        Generate this in Codex {codexToolLabel(c)}, then upload the PNG/WebP/MP4 result or paste a media URL before approval.
                                                       </div>
                                                     )}
                                                     <div className="flex flex-wrap gap-1">
@@ -1898,7 +1932,7 @@ function ProjectView() {
                                                           event.preventDefault();
                                                           generateAssetWithWorkerMut.mutate({ candidateId: c.id, promptOverride: generationPrompt, forceGeneration: true });
                                                         }}>
-                                                        Regenerate
+                                                        {isCodexBrief && !c.has_usable_url ? "Generate New Brief" : "Regenerate"}
                                                       </Button>
                                                       <Button size="sm" variant="outline"
                                                         onClick={(event) => {
@@ -1939,12 +1973,16 @@ function ProjectView() {
                                                           Download
                                                         </a>
                                                       )}
-                                                      <Button size="sm" variant="default" disabled={reviewMut.isPending}
+                                                      <Button
+                                                        size="sm"
+                                                        variant="default"
+                                                        disabled={reviewMut.isPending || (isCodexBrief && !c.has_usable_url)}
+                                                        title={isCodexBrief && !c.has_usable_url ? "Upload the generated asset or paste a media URL before approving this Codex brief." : undefined}
                                                         onClick={(event) => {
                                                           event.preventDefault();
                                                           reviewMut.mutate({ candidateId: c.id, action: "accept", note: "Approved generated asset from Review Assets." });
                                                         }}>
-                                                        Approve
+                                                        {isCodexBrief && !c.has_usable_url ? "Upload result first" : "Approve"}
                                                       </Button>
                                                     </div>
                                                   </div>
@@ -2182,7 +2220,7 @@ function ProjectView() {
                                 {todo.primary_candidate_id && uploadingCandidateId === todo.primary_candidate_id ? "Uploading..." : "Upload / Replace"}
                                 <input
                                   type="file"
-                                  accept=".png,.jpg,.jpeg,.webp,.svg,.mp4,.mov,image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/quicktime"
+                                  accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
                                   className="hidden"
                                   disabled={!todo.primary_candidate_id || uploadingCandidateId === todo.primary_candidate_id}
                                   onChange={(e) => {
@@ -2251,6 +2289,7 @@ function ProjectView() {
                     <TabsList className="flex flex-wrap h-auto">
                       {[
                         "Needs Review",
+                        "Codex Briefs",
                         "Approved",
                         "Rejected",
                         "High Confidence",
@@ -2410,6 +2449,47 @@ function ProjectView() {
                                       )}
                                     </div>
                                   )}
+                                  {isCodexHandoffCandidate(c) && (
+                                    <div className="mt-2 rounded border border-border bg-muted/20 p-2 text-[11px] space-y-2">
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <Badge variant="outline" className="text-[10px]">Codex Brief</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{codexToolLabel(c)}</Badge>
+                                        <Badge variant={c.has_usable_url ? "default" : "secondary"} className="text-[10px]">
+                                          {c.has_usable_url ? "media attached" : "needs generated media"}
+                                        </Badge>
+                                      </div>
+                                      <div className="text-muted-foreground line-clamp-3" title={c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? ""}>
+                                        {c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? "No Codex prompt stored."}
+                                      </div>
+                                      <div className="flex flex-wrap gap-1">
+                                        <Button size="sm" variant="outline"
+                                          onClick={async () => {
+                                            await navigator.clipboard.writeText(c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? "");
+                                            toast.success("Codex prompt copied");
+                                          }}>
+                                          Copy Prompt
+                                        </Button>
+                                        <Button size="sm" variant="outline"
+                                          onClick={() => {
+                                            setAssetPromptTodo({
+                                              ...c,
+                                              visual_intent: c.title ?? c.search_query ?? "Codex asset brief",
+                                              prompt_for_ai_generation: c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? "",
+                                              external_generation_prompt: c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? "",
+                                              negative_prompt: c.candidate_data?.negative_prompt ?? c.candidate_data?.metadata?.negative_prompt,
+                                              start_time: c.start_time ?? c.candidate_data?.start_time ?? c.candidate_data?.metadata?.start_time,
+                                              end_time: c.end_time ?? c.candidate_data?.end_time ?? c.candidate_data?.metadata?.end_time,
+                                              required_asset_type: c.normalized_asset_type ?? c.asset_type,
+                                              layout_name: c.candidate_data?.layout_name ?? c.candidate_data?.metadata?.layout_name,
+                                              narration_excerpt: c.candidate_data?.narration_excerpt ?? c.candidate_data?.metadata?.narration_excerpt,
+                                              primary_candidate_id: c.id,
+                                            });
+                                          }}>
+                                          Edit Prompt
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
                                     </div>
                                   </div>
                                 </div>
@@ -2433,6 +2513,37 @@ function ProjectView() {
                                     </>
                                   ) : (
                                     <>
+                                      {isCodexHandoffCandidate(c) && (
+                                        <>
+                                          <Button size="sm" variant="outline"
+                                            onClick={async () => {
+                                              await navigator.clipboard.writeText(c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? c.search_query ?? "");
+                                              toast.success("Codex prompt copied");
+                                            }}>
+                                            Copy Codex Prompt
+                                          </Button>
+                                          <Button size="sm" variant="outline"
+                                            onClick={() => {
+                                              setAssetPromptTodo({
+                                                ...c,
+                                                visual_intent: c.title ?? c.search_query ?? "Codex asset brief",
+                                                prompt_for_ai_generation: c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? c.search_query ?? "",
+                                                external_generation_prompt: c.candidate_data?.generation_prompt ?? c.candidate_data?.metadata?.generation_prompt ?? c.search_query ?? "",
+                                                negative_prompt: c.candidate_data?.negative_prompt ?? c.candidate_data?.metadata?.negative_prompt,
+                                                start_time: c.start_time ?? c.candidate_data?.start_time ?? c.candidate_data?.metadata?.start_time,
+                                                end_time: c.end_time ?? c.candidate_data?.end_time ?? c.candidate_data?.metadata?.end_time,
+                                                required_asset_type: c.normalized_asset_type ?? c.asset_type,
+                                                layout_name: c.candidate_data?.layout_name ?? c.candidate_data?.metadata?.layout_name,
+                                                narration_excerpt: c.candidate_data?.narration_excerpt ?? c.candidate_data?.metadata?.narration_excerpt,
+                                                primary_candidate_id: c.id,
+                                              });
+                                            }}>
+                                            Edit Prompt
+                                          </Button>
+                                        </>
+                                      )}
+                                      {!isCodexHandoffCandidate(c) && (
+                                        <>
                                       <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
                                         onClick={() => searchAssetMut.mutate({ candidateId: c.id, provider: "pexels" })}>
                                         Search Pexels
@@ -2455,6 +2566,8 @@ function ProjectView() {
                                         onClick={() => fulfillAssetMut.mutate(c.id)}>
                                         Auto-pick best safe candidate
                                       </Button>
+                                        </>
+                                      )}
                                       <Button size="sm" variant="outline"
                                         onClick={() => {
                                           setManualUrlCandidate(c);
@@ -2480,7 +2593,7 @@ function ProjectView() {
                                       : currentApproved || c.has_usable_url ? "Upload / Replace" : "Upload Manually"}
                                     <input
                                       type="file"
-                                      accept=".png,.jpg,.jpeg,.webp,.svg,.mp4,.mov,image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/quicktime"
+                                      accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
                                       className="hidden"
                                       disabled={uploadingCandidateId === c.id}
                                       onChange={(e) => {
@@ -2498,8 +2611,13 @@ function ProjectView() {
                                     <Button size="sm" variant="outline" disabled={reviewMut.isPending}
                                       onClick={() => reviewMut.mutate({ candidateId: c.id, action: "unlock" })}>Unlock</Button>
                                   ) : (
-                                    <Button size="sm" variant="outline" disabled={reviewMut.isPending}
-                                      onClick={() => reviewMut.mutate({ candidateId: c.id, action: "lock" })}>Lock</Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={reviewMut.isPending || (isCodexHandoffCandidate(c) && !c.has_usable_url)}
+                                      title={isCodexHandoffCandidate(c) && !c.has_usable_url ? "Upload generated media before locking this Codex brief." : undefined}
+                                      onClick={() => reviewMut.mutate({ candidateId: c.id, action: "lock" })}
+                                    >Lock</Button>
                                   )}
                                   <Button size="sm" variant="outline" disabled={reviewMut.isPending}
                                     onClick={() => reviewMut.mutate({ candidateId: c.id, action: "reject" })}>Reject / skip</Button>
@@ -3417,7 +3535,7 @@ function ProjectView() {
               Upload generated result
               <input
                 type="file"
-                accept=".png,.jpg,.jpeg,.webp,.svg,.mp4,.mov,image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/quicktime"
+                accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
                 className="hidden"
                 disabled={!assetPromptTodo}
                 onChange={(e) => {

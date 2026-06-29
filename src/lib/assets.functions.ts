@@ -215,6 +215,19 @@ function hasUsableMediaUrl(candidate: any) {
   return Boolean(media.url || media.preview_url || media.thumbnail_url);
 }
 
+function isCodexHandoffCandidate(candidate: any) {
+  const data = plainObject(candidate?.candidate_data);
+  const metadata = plainObject(data.metadata);
+  return Boolean(
+    candidate?.provider === "codex_creative_handoff" ||
+      data.provider === "codex_creative_handoff" ||
+      data.codex_creative_workflow ||
+      metadata.codex_creative_workflow ||
+      data.codex_tool ||
+      metadata.codex_tool,
+  );
+}
+
 function renderClassification(candidate: any) {
   return hasUsableMediaUrl(candidate) ? "REAL_RENDERABLE_MEDIA" : "PLACEHOLDER_PLAN";
 }
@@ -389,12 +402,19 @@ function compactReviewCandidateData(value: unknown): Record<string, any> {
     source_domain: data.source_domain ?? null,
     provider: data.provider ?? null,
     source_type: data.source_type ?? null,
+    codex_creative_workflow: data.codex_creative_workflow ?? metadata.codex_creative_workflow ?? null,
+    codex_tool: data.codex_tool ?? metadata.codex_tool ?? null,
     generation_prompt: data.generation_prompt ?? metadata.generation_prompt ?? null,
     generation_provider: data.generation_provider ?? metadata.generation_provider ?? data.provider ?? null,
     generation_model: data.generation_model ?? metadata.generation_model ?? null,
     generation_cost: data.generation_cost ?? metadata.generation_cost ?? null,
     generation_time_ms: data.generation_time_ms ?? metadata.generation_time_ms ?? null,
     result_url: data.result_url ?? metadata.result_url ?? null,
+    render_ready: data.render_ready ?? metadata.render_ready ?? null,
+    no_worker_search: data.no_worker_search ?? metadata.no_worker_search ?? null,
+    no_worker_svg: data.no_worker_svg ?? metadata.no_worker_svg ?? null,
+    no_worker_ffmpeg: data.no_worker_ffmpeg ?? metadata.no_worker_ffmpeg ?? null,
+    required_action: data.required_action ?? metadata.required_action ?? null,
     medical_source_class: data.medical_source_class ?? null,
     medical_asset_taxonomy: data.medical_asset_taxonomy ?? data.taxonomy ?? null,
     taxonomy: data.taxonomy ?? data.medical_asset_taxonomy ?? null,
@@ -412,6 +432,8 @@ function compactReviewCandidateData(value: unknown): Record<string, any> {
       license,
       medical_source_class: metadata.medical_source_class ?? null,
       classification: metadata.classification ?? null,
+      codex_creative_workflow: metadata.codex_creative_workflow ?? data.codex_creative_workflow ?? null,
+      codex_tool: metadata.codex_tool ?? data.codex_tool ?? null,
       generation_prompt: metadata.generation_prompt ?? data.generation_prompt ?? null,
       generation_provider: metadata.generation_provider ?? data.generation_provider ?? data.provider ?? null,
       generation_model: metadata.generation_model ?? data.generation_model ?? null,
@@ -625,9 +647,26 @@ function workerAssetMediaFields(asset: any) {
   };
 }
 
+function isCodexHandoffWorkerAsset(asset: any) {
+  const metadata = asset?.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
+  return Boolean(
+    asset?.provider === "codex_creative_handoff" ||
+      metadata.codex_creative_workflow ||
+      metadata.codex_tool,
+  );
+}
+
 function candidateInsertFromWorkerAsset(projectId: string, asset: any, priority: number) {
   const media = workerAssetMediaFields(asset);
   const intent = asset?.intent && typeof asset.intent === "object" ? asset.intent : {};
+  const metadata = asset?.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
+  const isCodexHandoff = isCodexHandoffWorkerAsset(asset);
+  const generationPrompt = firstString(asset?.generation_prompt, metadata.generation_prompt, asset?.description);
+  const generationProvider = firstString(
+    metadata.generation_provider,
+    metadata.codex_tool ? `codex_${metadata.codex_tool}` : null,
+    asset?.provider,
+  );
   return {
     project_id: projectId,
     scene_id: firstString(intent.source_scene_id, intent.scene_id),
@@ -642,7 +681,7 @@ function candidateInsertFromWorkerAsset(projectId: string, asset: any, priority:
       ) ?? "AI worker fulfilled asset",
     priority,
     provider: asset?.provider ?? "ai_worker",
-    status: "searched",
+    status: isCodexHandoff ? "pending" : "searched",
     title: asset?.title ?? intent.expected_visual ?? null,
     description: asset?.description ?? intent.original_instruction ?? null,
     thumbnail_url: media.thumbnail_url,
@@ -662,6 +701,17 @@ function candidateInsertFromWorkerAsset(projectId: string, asset: any, priority:
       medical_asset_taxonomy: asset?.metadata?.medical_asset_taxonomy ?? asset?.taxonomy ?? null,
       medical_source_class: asset?.metadata?.medical_source_class ?? asset?.source_type ?? null,
       source_type: asset?.source_type ?? null,
+      codex_creative_workflow: Boolean(isCodexHandoff),
+      codex_tool: metadata.codex_tool ?? null,
+      generation_prompt: generationPrompt,
+      generation_provider: generationProvider,
+      render_ready: Boolean(media.url),
+      no_worker_search: metadata.no_worker_search ?? null,
+      no_worker_svg: metadata.no_worker_svg ?? null,
+      no_worker_ffmpeg: metadata.no_worker_ffmpeg ?? null,
+      required_action: isCodexHandoff
+        ? "Generate this asset with Codex ImageGen or HyperFrames, then upload the result or paste a media URL before approval."
+        : null,
       url: media.url,
       source_url: media.url,
       media_url: media.url,
@@ -2484,6 +2534,14 @@ export async function reviewAssetCandidateWithClient(
       confidence_tier: confidenceTier(cand).tier,
       source_url: mediaForAudit.url ?? mediaForAudit.preview_url ?? mediaForAudit.thumbnail_url ?? null,
     });
+
+    if (
+      (data.action === "accept" || data.action === "replace" || data.action === "lock") &&
+      isCodexHandoffCandidate(cand) &&
+      !hasUsableMediaUrl(cand)
+    ) {
+      throw new Error("Codex asset brief is prompt-only. Generate the asset in Codex, then upload the result or paste a media URL before approving.");
+    }
 
     if (data.action === "reject") {
       nextStatus = "rejected";
