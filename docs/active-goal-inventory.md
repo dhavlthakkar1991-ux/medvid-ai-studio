@@ -78,6 +78,7 @@ These files are part of the active-goal coordination layer:
 - `scripts/audit-active-goal-package.mjs`
 - `scripts/audit-cleanup-pr-package.mjs`
 - `scripts/phase2g-render-quality-verifier.mjs`
+- `scripts/phase2g-clinical-review-packet.mjs`
 - `package.json` scripts:
   - `audit:active-goal`
   - `audit:active-goal-worktree`
@@ -92,6 +93,7 @@ These files are part of the active-goal coordination layer:
   - `verify:phase2fg`
   - `verify:phase2fg-render-latest`
   - `verify:phase2g-render-quality`
+  - `review:phase2g-clinical`
   - `smoke:phase2fg-ui`
   - `smoke:scene-review`
 - `audit:active-goal` verifies the expected active-goal npm scripts are still registered.
