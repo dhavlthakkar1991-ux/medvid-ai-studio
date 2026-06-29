@@ -226,7 +226,7 @@ The active-goal coordination layer now has a browser-inclusive audited suite and
   - `taxonomy_pending=false`
   - artifact: `data/review-artifacts/active-goal-readiness.json`
 - Latest self-hosting audit evidence:
-  - `data/review-artifacts/self-hosting/self-hosting-audit.json`: `ready=true`, failures `[]`, warning `legacy_lovable_auth_integration_present` only. The warning is non-blocking because `src/integrations/lovable/index.ts` exists but no app route imports it.
+  - `data/review-artifacts/self-hosting/self-hosting-audit.json`: `ready=true`, failures `[]`, warnings `[]`. The unused generated Lovable Cloud auth integration and `@lovable.dev/cloud-auth-js` package were removed; optional Lovable AI gateway support remains explicit provider configuration only.
   - The transcription provider copy was cleaned up for self-hosted users: missing Lovable key now says to set `LOVABLE_API_KEY` or switch to Gemini/OpenAI/Groq, and quota exhaustion now recommends configured self-hosted providers before optional Lovable gateway.
 - Worker status warning audit: `worker_status` is only the `/health` probe result from `verify:active-goal` with a 5s timeout. Current run reports `worker_status=ok`, HTTP 200, `mode=real-layout-aware`, and `secret_configured=true`; no fulfillment/search/scoring/render blocker remains from that previous warning.
 - Latest Phase 2F-G evidence:

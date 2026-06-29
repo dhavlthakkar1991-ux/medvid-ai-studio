@@ -51,7 +51,7 @@ export const aiModifyTaskOutput = createServerFn({ method: "POST" })
     if (!prev) throw new Error(`No existing ${task} output to modify. Generate it first.`);
 
     const overrides = (settings?.model_overrides as Record<string, string>) ?? {};
-    const provider = ((settings?.default_llm_provider as any) ?? "lovable");
+    const provider = ((settings?.default_llm_provider as any) ?? "gemini");
     const budget = !!settings?.budget_mode;
     const model = budget ? BUDGET_MODEL : (overrides[task] || TASK_DEFAULT_MODELS[task]);
     const userKeys = (settings?.provider_keys as Record<string, string>) ?? {};

@@ -159,7 +159,7 @@ export async function runLayoutDecisionsForProject(
       const { data: t } = await supabase.from("specialty_templates").select("*").eq("id", (project as any).specialty_template_id).maybeSingle();
       tpl = t;
     }
-    const provider = (((settings?.default_llm_provider as LLMProviderId) ?? "lovable"));
+    const provider = (((settings?.default_llm_provider as LLMProviderId) ?? "gemini"));
     const budget = !!settings?.budget_mode;
     const overrides = (settings?.model_overrides as Record<string, string>) ?? {};
     const model = budget ? BUDGET_MODEL : (overrides.editorial_decisions || TASK_DEFAULT_MODELS.editorial_decisions);

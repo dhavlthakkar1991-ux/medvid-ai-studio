@@ -10,7 +10,6 @@ export default defineConfig({
   vite: {
     optimizeDeps: {
       include: [
-        "@lovable.dev/cloud-auth-js",
         "@radix-ui/react-label",
         "@radix-ui/react-select",
         "@radix-ui/react-slot",
