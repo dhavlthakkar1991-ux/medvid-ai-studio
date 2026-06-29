@@ -693,23 +693,6 @@ if (RUN_COMPLETION_AUDIT && report.ready) {
 }
 
 if (RUN_COMPLETION_AUDIT && report.ready) {
-  const cleanupPackageResult = await runStep({
-    name: "cleanup_pr_package_audit",
-    command: `${npmCommand} run audit:cleanup-pr-package`,
-    timeoutMs: 60_000,
-    env: {
-      GOAL_SUITE_CLEANUP_POST_CHECK: "1",
-    },
-  });
-  report.post_checks.push(cleanupPackageResult);
-  report.ready = report.ready && cleanupPackageResult.status === "passed";
-  const postCleanupPackageFinishedAt = new Date();
-  report.finished_at = postCleanupPackageFinishedAt.toISOString();
-  report.duration_ms = postCleanupPackageFinishedAt.getTime() - startedAt.getTime();
-  await writeJsonAtomic(OUT_PATH, report);
-}
-
-if (RUN_COMPLETION_AUDIT && report.ready) {
   const auditResult = await runStep({
     name: "active_goal_completion_audit",
     command: `${npmCommand} run audit:active-goal`,
@@ -723,6 +706,23 @@ if (RUN_COMPLETION_AUDIT && report.ready) {
   const postAuditFinishedAt = new Date();
   report.finished_at = postAuditFinishedAt.toISOString();
   report.duration_ms = postAuditFinishedAt.getTime() - startedAt.getTime();
+  await writeJsonAtomic(OUT_PATH, report);
+}
+
+if (RUN_COMPLETION_AUDIT && report.ready) {
+  const cleanupPackageResult = await runStep({
+    name: "cleanup_pr_package_audit",
+    command: `${npmCommand} run audit:cleanup-pr-package`,
+    timeoutMs: 60_000,
+    env: {
+      GOAL_SUITE_CLEANUP_POST_CHECK: "1",
+    },
+  });
+  report.post_checks.push(cleanupPackageResult);
+  report.ready = report.ready && cleanupPackageResult.status === "passed";
+  const postCleanupPackageFinishedAt = new Date();
+  report.finished_at = postCleanupPackageFinishedAt.toISOString();
+  report.duration_ms = postCleanupPackageFinishedAt.getTime() - startedAt.getTime();
   await writeJsonAtomic(OUT_PATH, report);
 }
 
