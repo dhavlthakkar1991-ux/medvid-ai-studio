@@ -30,6 +30,8 @@
     "repair:phase2g-cta": "node scripts/phase2g-replace-cta-asset.mjs",
     "repair:phase2g-source-safety": "node scripts/phase2g-repair-source-safety.mjs",
     "repair:phase2fg-refresh-urls": "node scripts/phase2fg-refresh-asset-urls.mjs",
+    "codex:asset-pack:export": "node scripts/codex-asset-pack-export.mjs",
+    "codex:asset-pack:import": "node scripts/codex-asset-pack-import.mjs",
     "smoke:phase2fg-ui": "node scripts/phase2fg-ui-smoke.mjs",
     "smoke:phase2fg-render": "node scripts/phase2fg-dispatch-benchmark-render.mjs",
     "verify:phase2fg-render-latest": "node -e \"process.env.PHASE2FG_VERIFY_LATEST_ONLY='1'; import('./scripts/phase2fg-dispatch-benchmark-render.mjs')\"",
