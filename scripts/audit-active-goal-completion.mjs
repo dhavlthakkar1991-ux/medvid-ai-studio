@@ -86,6 +86,7 @@ const expectedPackageScripts = {
   "verify:phase2fg-render-latest": "PHASE2FG_VERIFY_LATEST_ONLY",
   "verify:phase2g-render-quality": "node scripts/phase2g-render-quality-verifier.mjs",
   "review:phase2g-clinical": "node scripts/phase2g-clinical-review-packet.mjs",
+  "review:phase2g-final": "node scripts/phase2g-final-acceptance.mjs",
   "smoke:phase2fg-ui": "node scripts/phase2fg-ui-smoke.mjs",
   "smoke:scene-review": "node scripts/scene-review-smoke.mjs",
 };
@@ -100,6 +101,7 @@ const suiteFreshnessFiles = [
   path.join("scripts", "audit-cleanup-pr-package.mjs"),
   path.join("scripts", "phase2g-render-quality-verifier.mjs"),
   path.join("scripts", "phase2g-clinical-review-packet.mjs"),
+  path.join("scripts", "phase2g-final-acceptance.mjs"),
   path.join("docs", "active-medvideo-goal.md"),
   path.join("docs", "active-goal-inventory.md"),
 ];
