@@ -24,6 +24,7 @@
     "verify:phase2fg": "node scripts/phase2fg-verify-workflow.mjs",
     "verify:phase2g-render-quality": "node scripts/phase2g-render-quality-verifier.mjs",
     "review:phase2g-clinical": "node scripts/phase2g-clinical-review-packet.mjs",
+    "review:phase2g-final": "node scripts/phase2g-final-acceptance.mjs",
     "inventory:phase2fg-blockers": "node scripts/phase2fg-blocker-inventory.mjs",
     "repair:phase2fg-safe": "node scripts/phase2fg-apply-safe-repairs.mjs",
     "repair:phase2fg-text-overlay": "node scripts/phase2fg-create-approved-text-overlay.mjs",

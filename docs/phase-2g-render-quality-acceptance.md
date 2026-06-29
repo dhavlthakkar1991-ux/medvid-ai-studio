@@ -99,6 +99,12 @@ Required artifacts:
 - `studio_persistence_check.json`
 - `worker_debug_artifact_check.json`
 - `ffprobe.json`
+- `clinical_human_review/clinical_human_review_packet.json`
+- `clinical_human_review/clinical_human_review_packet.md`
+- `clinical_human_review/medical_safety_review.md`
+- `clinical_human_review/human_review_prompt.md`
+- `clinical_human_review/human_approval.json` after human medical/design review
+- `phase2g_final_acceptance.json` after final acceptance checking
 
 The JSON report must include, per target scene:
 
@@ -162,4 +168,6 @@ Do not start these until Phase 2G evidence shows the specific need:
 
 ## Recommended Next Action
 
-Implement a Phase 2G verifier that reads the latest completed render, extracts the target frames, writes the evidence artifacts listed above, and records honest pass/fail scores. Only after that verifier identifies concrete visual failures should renderer or asset-fulfillment code change.
+Run `npm.cmd run verify:phase2g-render-quality`, then `npm.cmd run review:phase2g-clinical`. If clinical/anatomy scenes require approval, a human medical/design reviewer should copy `clinical_human_review/human_approval.template.json` to `clinical_human_review/human_approval.json`, fill reviewer details and per-scene decisions, and then run `npm.cmd run review:phase2g-final`.
+
+`review:phase2g-final` must not approve scenes automatically. It only verifies that technical checks pass, the clinical review packet contains the four expected scenes, the extracted frames exist, and a human approval file explicitly approves `00:36`, `00:48`, `00:59`, and `01:21` against the current render job/provider job.
