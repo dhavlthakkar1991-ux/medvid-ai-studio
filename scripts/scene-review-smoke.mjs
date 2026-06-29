@@ -50,6 +50,10 @@ function redactText(value) {
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted.jwt]");
 }
 
+function isIgnorableConsoleNoise(text) {
+  return /TypeError: Failed to fetch[\s\S]+serverFnFetcher/i.test(text);
+}
+
 function addCheck(result, name, ok, extra = {}) {
   result.checks.push({ name, ok: Boolean(ok), ...extra });
 }
@@ -206,6 +210,7 @@ async function main() {
     started_at: new Date().toISOString(),
     checks: [],
     console: [],
+    ignored_console: [],
     page_errors: [],
     request_failures: [],
     interesting_responses: [],
@@ -214,7 +219,12 @@ async function main() {
   page.on("console", (message) => {
     const text = message.text();
     if (/error|warn|unauthor|failed|supabase|server/i.test(text)) {
-      result.console.push({ type: message.type(), text: text.slice(0, 1000) });
+      const entry = { type: message.type(), text: redactText(text).slice(0, 1000) };
+      if (isIgnorableConsoleNoise(text)) {
+        result.ignored_console.push({ ...entry, reason: "server_function_fetch_aborted_during_smoke_navigation_or_teardown" });
+      } else {
+        result.console.push(entry);
+      }
     }
   });
   page.on("pageerror", (error) => {

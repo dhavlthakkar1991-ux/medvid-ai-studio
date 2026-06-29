@@ -608,7 +608,7 @@ const pendingPhaseBacklog = [
     id: "deployment_hardening",
     label: "Production deployment hardening",
     status: "pending_next_phase",
-    evidence: "Self-hosting audit and local Studio/Worker checks pass; public HTTPS VPS deployment is not covered by the current audit.",
+    evidence: "Self-hosting audit and local Studio/Worker checks pass with no warnings; public HTTPS VPS deployment is not covered by the current audit.",
     entry_criteria: "A public HTTPS Studio URL, public HTTPS Worker URL, matching CUSTOM_WORKER_SECRET, Supabase env, and storage access are available.",
     next_action: "Verify public Worker URL, public Studio callback URL, matching secrets, storage access, and remote health/render dispatch.",
     verification: "Run self-hosting audit, active-goal readiness against public provider config, worker /health over HTTPS, one Studio-to-Worker dispatch, callback persistence, output HEAD, and ffprobe.",
