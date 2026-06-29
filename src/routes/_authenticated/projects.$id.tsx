@@ -23,7 +23,6 @@ import {
   createAssetUploadUrl,
   approveUploadedAsset,
   approveManualAssetUrl,
-  fulfillProjectAssetsWithWorker,
   approveSceneAssetCandidates,
   reconcileSceneManifestCoverage,
 } from "@/lib/assets.functions";
@@ -148,6 +147,10 @@ function codexToolLabel(c: any) {
   return tool === "hyperframes" ? "HyperFrames" : tool === "imagegen" ? "ImageGen" : "Codex";
 }
 
+function codexAssetPackExportCommand(projectId: string) {
+  return `npm run codex:asset-pack:export -- --project-id ${projectId}`;
+}
+
 function assetReadinessLabel(c: any) {
   if (c.candidate_data?.asset_status === "missing_required" || c.candidate_data?.selected_asset_status === "missing_required") return "Missing required";
   if (isCodexHandoffCandidate(c) && !c.has_usable_url) return "Codex brief";
@@ -189,11 +192,6 @@ function professionalReviewBuckets(c: any): string[] {
   if (["known_open", "public_domain", "attribution_required"].includes(String(c.license_status))) buckets.push("Open License");
   if (!c.license_status || String(c.license_status) === "unknown") buckets.push("Unknown License");
   return Array.from(new Set(buckets));
-}
-
-function canGenerateInternalGraphic(c: any) {
-  const t = String(c.asset_type ?? "").toLowerCase();
-  return t.includes("infographic") || t.includes("diagram") || t.includes("overlay") || t.includes("cta");
 }
 
 function mediaKindForCandidate(c: any) {
@@ -288,7 +286,6 @@ function ProjectView() {
   const createAssetUploadUrlFn = useServerFn(createAssetUploadUrl);
   const approveUploadedAssetFn = useServerFn(approveUploadedAsset);
   const approveManualAssetUrlFn = useServerFn(approveManualAssetUrl);
-  const fulfillProjectAssetsWithWorkerFn = useServerFn(fulfillProjectAssetsWithWorker);
   const approveSceneAssetCandidatesFn = useServerFn(approveSceneAssetCandidates);
   const reconcileSceneManifestCoverageFn = useServerFn(reconcileSceneManifestCoverage);
   const updateTranscriptFn = useServerFn(updateTranscript);
@@ -447,42 +444,6 @@ function ProjectView() {
       });
     },
     onError: (e: any) => toast.error(e?.message ?? "Artifact export failed"),
-  });
-  const fulfillProjectAssetsMut = useMutation({
-    mutationFn: () => fulfillProjectAssetsWithWorkerFn({ data: { projectId: id } }),
-    onSuccess: (res: any) => {
-      toast.success(`AI worker stored ${res?.inserted ?? 0} candidate(s)`, {
-        description: `${res?.autoApproved ?? 0} auto-approved, ${res?.needsReview ?? 0} need review, ${res?.rejected ?? 0} rejected`,
-      });
-      qc.invalidateQueries({ queryKey: ["asset-review", id] });
-      qc.invalidateQueries({ queryKey: ["readiness", id] });
-      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
-      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
-      qc.invalidateQueries({ queryKey: ["render-readiness", id] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "AI worker asset fulfillment failed"),
-  });
-  const generateAssetWithWorkerMut = useMutation({
-    mutationFn: (v: { candidateId: string; promptOverride?: string; forceGeneration?: boolean }) =>
-      fulfillProjectAssetsWithWorkerFn({
-        data: {
-          projectId: id,
-          candidateId: v.candidateId,
-          promptOverride: v.promptOverride,
-          forceGeneration: v.forceGeneration ?? true,
-        },
-      }),
-    onSuccess: (res: any) => {
-      toast.success(`Generated ${res?.inserted ?? 0} review candidate(s)`, {
-        description: `${res?.needsReview ?? 0} need review, ${res?.autoApproved ?? 0} auto-approved`,
-      });
-      qc.invalidateQueries({ queryKey: ["asset-review", id] });
-      qc.invalidateQueries({ queryKey: ["readiness", id] });
-      qc.invalidateQueries({ queryKey: ["project-canonical", id] });
-      qc.invalidateQueries({ queryKey: ["timeline-composer", id] });
-      qc.invalidateQueries({ queryKey: ["render-readiness", id] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "AI asset generation failed"),
   });
   const fulfillAssetMut = useMutation({
     mutationFn: (candidateId: string) => fulfillAssetFn({ data: { candidateId } }),
@@ -1600,20 +1561,29 @@ function ProjectView() {
                       c.usage_recommendation === "do_not_use" ||
                       ["restricted", "unsafe"].includes(String(c.license_status))),
                 ).length;
+                const codexBriefs = (reviewQ.data?.candidates ?? []).filter(
+                  (c: any) => isCodexHandoffCandidate(c) && !c.has_usable_url,
+                ).length;
                 const placeholderPending = pending - renderablePending;
                 return (
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline" className="text-[10px]">{renderablePending} renderable</Badge>
                     <Badge variant="secondary" className="text-[10px]">{placeholderPending} placeholders</Badge>
+                    <Badge variant="outline" className="text-[10px]">{codexBriefs} Codex briefs</Badge>
                     <Badge variant="outline" className="text-[10px]">{highConfidence} bulk safe</Badge>
                     <Badge variant="destructive" className="text-[10px]">{lowConfidence} low confidence</Badge>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={fulfillProjectAssetsMut.isPending}
-                      onClick={() => fulfillProjectAssetsMut.mutate()}
+                      disabled={codexBriefs === 0}
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(codexAssetPackExportCommand(id));
+                        toast.success("Codex asset-pack export command copied", {
+                          description: "Generate assets in Codex, then import the completed asset pack.",
+                        });
+                      }}
                     >
-                      {fulfillProjectAssetsMut.isPending ? "Fulfilling..." : "Fulfill Assets with AI Worker"}
+                      Copy Codex asset-pack command
                     </Button>
                     <Button
                       size="sm"
@@ -1677,6 +1647,9 @@ function ProjectView() {
                 <p className="text-sm text-muted-foreground">No asset review requirements found.</p>
               ) : (
                 <div className="space-y-3">
+                  <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 text-xs text-sky-800">
+                    Primary asset creation uses the Codex asset-pack flow: export prompts, generate PNG/WebP/JPG/MP4 assets with Codex ImageGen or HyperFrames, then upload or paste the completed result for approval.
+                  </div>
                   <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex flex-wrap items-center gap-2">
                     <span className="font-semibold">Providers</span>
                     <Badge variant={reviewQ.data.providerStatus?.configured?.pexels ? "default" : "outline"}>Pexels</Badge>
@@ -1772,17 +1745,21 @@ function ProjectView() {
                                       </div>
                                       <div className="text-muted-foreground line-clamp-2">{req.prompt ?? req.failure_reason ?? "No prompt mapped"}</div>
                                       <div className="flex flex-wrap gap-1">
-                                        <Button size="sm" variant="outline" disabled={generateAssetWithWorkerMut.isPending}
-                                          onClick={() => req.primary_candidate_id && generateAssetWithWorkerMut.mutate({
-                                            candidateId: req.primary_candidate_id,
-                                            promptOverride: req.external_generation_prompt ?? req.prompt,
-                                            forceGeneration: true,
-                                          })}>
-                                          {generateAssetWithWorkerMut.isPending ? "Generating..." : "Generate with AI"}
+                                        <Button size="sm" variant="outline"
+                                          onClick={async () => {
+                                            await navigator.clipboard.writeText(req.external_generation_prompt ?? req.prompt ?? "");
+                                            toast.success("Codex generation prompt copied");
+                                          }}>
+                                          Copy Codex prompt
                                         </Button>
-                                        <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
-                                          onClick={() => req.primary_candidate_id && searchAssetMut.mutate({ candidateId: req.primary_candidate_id, provider: "any" })}>
-                                          Search providers
+                                        <Button size="sm" variant="outline" disabled={!req.primary_candidate_id}
+                                          onClick={() => req.primary_candidate_id && setManualUrlCandidate({
+                                            id: req.primary_candidate_id,
+                                            title: req.suggested_type,
+                                            search_query: req.prompt,
+                                            asset_type: req.suggested_type,
+                                          })}>
+                                          Attach generated result
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={() => {
                                           setAssetPromptTodo({
@@ -1800,12 +1777,6 @@ function ProjectView() {
                                           });
                                         }}>
                                           Show prompt
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={async () => {
-                                          await navigator.clipboard.writeText(req.external_generation_prompt ?? req.prompt ?? "");
-                                          toast.success("Requirement prompt copied");
-                                        }}>
-                                          Copy prompt
                                         </Button>
                                         {req.primary_candidate_id && (
                                           <>
@@ -1927,12 +1898,13 @@ function ProjectView() {
                                                       </div>
                                                     )}
                                                     <div className="flex flex-wrap gap-1">
-                                                      <Button size="sm" variant="outline" disabled={generateAssetWithWorkerMut.isPending}
-                                                        onClick={(event) => {
+                                                      <Button size="sm" variant="outline"
+                                                        onClick={async (event) => {
                                                           event.preventDefault();
-                                                          generateAssetWithWorkerMut.mutate({ candidateId: c.id, promptOverride: generationPrompt, forceGeneration: true });
+                                                          await navigator.clipboard.writeText(generationPrompt ?? c.search_query ?? c.title ?? "");
+                                                          toast.success("Codex generation prompt copied");
                                                         }}>
-                                                        {isCodexBrief && !c.has_usable_url ? "Generate New Brief" : "Regenerate"}
+                                                        Copy Prompt
                                                       </Button>
                                                       <Button size="sm" variant="outline"
                                                         onClick={(event) => {
@@ -1953,16 +1925,17 @@ function ProjectView() {
                                                         }}>
                                                         Edit Prompt
                                                       </Button>
-                                                      <Button size="sm" variant="outline" disabled={generateAssetWithWorkerMut.isPending}
+                                                      <Button size="sm" variant="outline"
                                                         onClick={(event) => {
                                                           event.preventDefault();
-                                                          generateAssetWithWorkerMut.mutate({
-                                                            candidateId: c.id,
-                                                            promptOverride: `${generationPrompt ?? c.search_query ?? c.title ?? "medical visual"} Create a distinct alternative composition.`,
-                                                            forceGeneration: true,
+                                                          setManualUrlCandidate({
+                                                            id: c.id,
+                                                            title: c.title ?? c.search_query ?? "Codex generated asset",
+                                                            search_query: c.search_query ?? generationPrompt,
+                                                            asset_type: c.asset_type,
                                                           });
                                                         }}>
-                                                        Generate Alternative
+                                                        Attach Result
                                                       </Button>
                                                       {downloadUrl && (
                                                         <a className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent"
@@ -2064,17 +2037,13 @@ function ProjectView() {
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-2">
-                                <Button size="sm" variant="outline" disabled={(scene.missingRequirements ?? []).length === 0 || generateAssetWithWorkerMut.isPending}
-                                  onClick={() => {
+                                <Button size="sm" variant="outline" disabled={(scene.missingRequirements ?? []).length === 0}
+                                  onClick={async () => {
                                     const firstReq = (scene.missingRequirements ?? [])[0];
-                                    const first = firstReq?.primary_candidate_id;
-                                    if (first) generateAssetWithWorkerMut.mutate({
-                                      candidateId: first,
-                                      promptOverride: firstReq?.external_generation_prompt ?? firstReq?.prompt,
-                                      forceGeneration: true,
-                                    });
+                                    await navigator.clipboard.writeText(firstReq?.external_generation_prompt ?? firstReq?.prompt ?? "");
+                                    toast.success("First missing Codex prompt copied");
                                   }}>
-                                  {generateAssetWithWorkerMut.isPending ? "Generating..." : "Generate missing for scene"}
+                                  Copy first missing prompt
                                 </Button>
                                 <Button size="sm" variant="default" disabled={selectedCount === 0 || approveSceneMut.isPending}
                                   onClick={() => approveSceneMut.mutate({ projectId: id, sceneId: scene.sceneId, sceneIndex: scene.sceneIndex, candidateIds: selected })}>
@@ -2199,22 +2168,19 @@ function ProjectView() {
                             </div>
                             <div className="text-muted-foreground line-clamp-2">{todo.failure_reason}</div>
                             <div className="flex flex-wrap gap-1">
-                              <Button size="sm" variant="outline" disabled={searchAssetMut.isPending || !todo.primary_candidate_id}
-                                onClick={() => todo.primary_candidate_id && searchAssetMut.mutate({ candidateId: todo.primary_candidate_id, provider: "any" })}>
-                                Search providers
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => setAssetPromptTodo(todo)}>
-                                Generate with AI
+                              <Button size="sm" variant="outline"
+                                onClick={async () => {
+                                  await navigator.clipboard.writeText(todo.external_generation_prompt ?? todo.prompt_for_ai_generation ?? todo.visual_intent ?? "");
+                                  toast.success("Codex generation prompt copied");
+                                }}>
+                                Copy Codex prompt
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => setAssetPromptTodo(todo)}>
                                 Show prompt
                               </Button>
-                              <Button size="sm" variant="outline"
-                                onClick={async () => {
-                                  await navigator.clipboard.writeText(todo.external_generation_prompt ?? todo.prompt_for_ai_generation ?? "");
-                                  toast.success("Generation prompt copied");
-                                }}>
-                                Copy prompt
+                              <Button size="sm" variant="outline" disabled={!todo.primary_candidate_id}
+                                onClick={() => todo.primary_candidate_id && setManualUrlCandidate({ id: todo.primary_candidate_id, title: todo.visual_intent, search_query: todo.visual_intent, asset_type: todo.required_asset_type })}>
+                                Attach result
                               </Button>
                               <label className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-accent">
                                 {todo.primary_candidate_id && uploadingCandidateId === todo.primary_candidate_id ? "Uploading..." : "Upload / Replace"}
@@ -2552,12 +2518,6 @@ function ProjectView() {
                                         onClick={() => searchAssetMut.mutate({ candidateId: c.id, provider: "pixabay" })}>
                                         Search Pixabay
                                       </Button>
-                                      {canGenerateInternalGraphic(c) && (
-                                        <Button size="sm" variant="outline" disabled={searchAssetMut.isPending}
-                                          onClick={() => searchAssetMut.mutate({ candidateId: c.id, provider: "internal" })}>
-                                          Generate Internal Graphic
-                                        </Button>
-                                      )}
                                       <Button
                                         size="sm"
                                         variant="secondary"
@@ -3444,9 +3404,9 @@ function ProjectView() {
       }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Generate asset for this requirement</DialogTitle>
+            <DialogTitle>Codex asset prompt</DialogTitle>
             <DialogDescription>
-              Use this exact prompt with an external image tool, or generate/search a single reviewed asset for this requirement. Studio remains the approval gate.
+              Use this exact prompt with Codex ImageGen for raster images or HyperFrames for b-roll/video. Then upload the generated PNG/WebP/JPG/MP4 or paste its URL for Studio approval.
             </DialogDescription>
           </DialogHeader>
           {assetPromptTodo && (
@@ -3506,30 +3466,24 @@ function ProjectView() {
               disabled={!assetPromptTodo}
               onClick={async () => {
                 await navigator.clipboard.writeText(assetPromptDraft);
-                toast.success("Generation prompt copied");
+                toast.success("Codex generation prompt copied");
               }}
             >
-              Copy prompt
+              Copy Codex prompt
             </Button>
             <Button
-              disabled={!assetPromptTodo?.primary_candidate_id || !assetPromptDraft.trim() || generateAssetWithWorkerMut.isPending}
+              disabled={!assetPromptTodo?.primary_candidate_id}
               onClick={() => {
                 if (!assetPromptTodo?.primary_candidate_id) return;
-                generateAssetWithWorkerMut.mutate({
-                  candidateId: assetPromptTodo.primary_candidate_id,
-                  promptOverride: assetPromptDraft.trim(),
-                  forceGeneration: true,
+                setManualUrlCandidate({
+                  id: assetPromptTodo.primary_candidate_id,
+                  title: assetPromptTodo.visual_intent,
+                  search_query: assetPromptTodo.visual_intent,
+                  asset_type: assetPromptTodo.required_asset_type,
                 });
               }}
             >
-              {generateAssetWithWorkerMut.isPending ? "Generating..." : "Generate with Edited Prompt"}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!assetPromptTodo || searchAssetMut.isPending}
-              onClick={() => assetPromptTodo && searchAssetMut.mutate({ candidateId: assetPromptTodo.primary_candidate_id, provider: "internal" })}
-            >
-              Generate internal graphic
+              Attach generated result
             </Button>
             <label className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium cursor-pointer hover:bg-accent">
               Upload generated result
