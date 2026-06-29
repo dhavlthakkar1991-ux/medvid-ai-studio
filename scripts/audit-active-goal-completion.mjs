@@ -426,9 +426,13 @@ const checks = [
     file: files.goalSuite,
     post_check_status: packageManifestPostCheck?.status ?? null,
   }),
-  check("cleanup_pr_package_audit_post_check_recorded", cleanupPackageAuditPostCheck?.status === "passed", {
+  check("cleanup_pr_package_audit_post_check_recorded", RUNNING_AS_SUITE_POST_CHECK || cleanupPackageAuditPostCheck?.status === "passed", {
     file: files.goalSuite,
     post_check_status: cleanupPackageAuditPostCheck?.status ?? null,
+    running_as_suite_post_check: RUNNING_AS_SUITE_POST_CHECK,
+    visibility_note: RUNNING_AS_SUITE_POST_CHECK
+      ? "The suite can run this audit before appending the cleanup package post-check; the standalone audit enforces the recorded cleanup post-check."
+      : "Standalone audit expects the latest audited suite artifact to contain a passed cleanup_pr_package_audit post-check.",
   }),
   check("active_goal_package_scripts_registered", missingPackageScripts.length === 0, {
     file: files.packageJson,

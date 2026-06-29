@@ -153,9 +153,14 @@ const evidenceStagePaths = explicitStagePaths.filter((file) => isVolatileGenerat
 const manifestPaths = uniqueSorted([...stableStagePaths, ...evidenceStagePaths]);
 const broadParentDirectories = Array.from(
   new Set(
-    (packagePlan.warnings ?? [])
-      .flatMap((row) => String(row.warning ?? "").match(/Untracked parent ([^ ]+)/)?.[1] ?? [])
-      .filter(Boolean),
+    [
+      "data/",
+      "docs/",
+      "scripts/",
+      ...(packagePlan.warnings ?? [])
+        .flatMap((row) => String(row.warning ?? "").match(/Untracked parent ([^ ]+)/)?.[1] ?? [])
+        .filter(Boolean),
+    ],
   ),
 ).sort();
 
