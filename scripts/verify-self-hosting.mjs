@@ -148,7 +148,6 @@ async function main() {
     "OPENAI_API_KEY",
     "GROQ_API_KEY",
     "OPENROUTER_API_KEY",
-    "PEXELS_API_KEY",
   ];
   const missingEnvExample = requiredEnvKeys.filter((key) => !envExample.includes(`${key}=`));
   addCheck(result, "env_example_documents_self_hosting_keys", missingEnvExample.length === 0, {
