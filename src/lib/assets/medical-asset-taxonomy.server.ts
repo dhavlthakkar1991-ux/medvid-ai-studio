@@ -5,9 +5,7 @@ export type MedicalAssetTaxonomy =
   | "INFOGRAPHIC_CARD";
 
 export type MedicalAssetSourceClass =
-  | "stock_contextual"
-  | "internal_svg_library"
-  | "internal_template"
+  | "codex_generated_asset"
   | "manual_upload"
   | "manual_url"
   | "curated_library"
@@ -106,7 +104,7 @@ export function classifyMedicalAssetRequest(args: {
       taxonomy: "CLINICAL_IMAGE",
       allowedProviders: ["manual_upload", "manual_url", "curated_library"],
       status: "needs_curated_asset",
-      reason: "Disease-specific clinical imagery must be manually curated or owned; generic stock search is blocked.",
+      reason: "Disease-specific clinical imagery must be manually curated or owned before approval.",
     };
   }
 
@@ -152,19 +150,15 @@ export function sourceClassForAsset(asset: any): MedicalAssetSourceClass {
   if (source.includes("manual_upload") || source === "upload") return "manual_upload";
   if (source.includes("manual_url") || source === "manual") return "manual_url";
   if (source.includes("curated")) return "curated_library";
-  if (source.includes("internal") || source.includes("generated")) {
-    const generator = String(metadata.attribution?.generator ?? metadata.generator ?? "").toLowerCase();
-    return generator.includes("template") ? "internal_template" : "internal_svg_library";
-  }
-  if (source.includes("pexels") || source.includes("pixabay") || source.includes("unsplash")) return "stock_contextual";
+  if (source.includes("codex") || source.includes("generated") || source.includes("internal")) return "codex_generated_asset";
   return "manual_url";
 }
 
 export function isSourceAllowedForTaxonomy(taxonomy: MedicalAssetTaxonomy, sourceClass: MedicalAssetSourceClass) {
-  if (taxonomy === "CONTEXTUAL_BROLL") return ["stock_contextual", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
-  if (taxonomy === "MEDICAL_ILLUSTRATION") return ["manual_upload", "manual_url", "curated_library"].includes(sourceClass);
+  if (taxonomy === "CONTEXTUAL_BROLL") return ["codex_generated_asset", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
+  if (taxonomy === "MEDICAL_ILLUSTRATION") return ["codex_generated_asset", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
   if (taxonomy === "CLINICAL_IMAGE") return ["manual_upload", "manual_url", "curated_library"].includes(sourceClass);
-  if (taxonomy === "INFOGRAPHIC_CARD") return ["manual_upload", "manual_url", "curated_library"].includes(sourceClass);
+  if (taxonomy === "INFOGRAPHIC_CARD") return ["codex_generated_asset", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
   return false;
 }
 
@@ -173,8 +167,10 @@ export function qualityForTaxonomy(taxonomy: MedicalAssetTaxonomy, sourceClass: 
   if (taxonomy === "CLINICAL_IMAGE" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "A+" as const, score: 96, reason: "Manually supplied clinical image" };
   if (taxonomy === "INFOGRAPHIC_CARD" && sourceClass === "curated_library") return { grade: "A" as const, score: 94, reason: "Curated medical infographic" };
   if (taxonomy === "INFOGRAPHIC_CARD" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "A" as const, score: 92, reason: "Manually supplied medical infographic" };
+  if (taxonomy === "INFOGRAPHIC_CARD" && sourceClass === "codex_generated_asset") return { grade: "A" as const, score: 92, reason: "Codex-generated medical infographic approved as final media" };
   if (taxonomy === "MEDICAL_ILLUSTRATION" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "A" as const, score: 92, reason: "Manually supplied medical illustration" };
-  if (taxonomy === "CONTEXTUAL_BROLL" && sourceClass === "stock_contextual") return { grade: "B" as const, score: 74, reason: "Contextual stock b-roll" };
+  if (taxonomy === "MEDICAL_ILLUSTRATION" && sourceClass === "codex_generated_asset") return { grade: "A" as const, score: 92, reason: "Codex-generated medical illustration approved as final media" };
+  if (taxonomy === "CONTEXTUAL_BROLL" && sourceClass === "codex_generated_asset") return { grade: "B" as const, score: 84, reason: "Codex/HyperFrames-generated contextual b-roll approved as final media" };
   if (taxonomy === "CONTEXTUAL_BROLL" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "B" as const, score: 78, reason: "Manually supplied contextual media" };
   if (!isSourceAllowedForTaxonomy(taxonomy, sourceClass)) return { grade: "F" as const, score: 0, reason: "Wrong source type for medical taxonomy" };
   return { grade: "C" as const, score: 58, reason: "Renderable but weakly classified visual" };

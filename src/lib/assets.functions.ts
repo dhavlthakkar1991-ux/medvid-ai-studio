@@ -604,7 +604,7 @@ function rejectionReason(candidate: any, fallback?: string | null) {
 function candidateRenderSourceClass(candidate: any, fallback: string) {
   const data = plainObject(candidate?.candidate_data);
   const declared = firstString(data.medical_source_class, data.source_type, data.provider);
-  if (declared === "internal_generated" || declared === "internal") return "internal_template";
+  if (declared === "internal_generated" || declared === "internal") return "codex_generated_asset";
   return fallback;
 }
 
@@ -1590,7 +1590,7 @@ export const listAssetReview = createServerFn({ method: "POST" })
         candidate.quality_grade === "F" ||
         String(candidate.status).includes("rejected") ||
         candidate.render_classification === "PLACEHOLDER_PLAN" ||
-        (!candidate.has_usable_url && String(candidate.medical_source_class ?? "").includes("internal_template")) ||
+        (!candidate.has_usable_url && String(candidate.medical_source_class ?? "").includes("codex_generated_asset")) ||
         candidate.license_status === "unknown";
       group.candidates.push({
         ...candidate,
@@ -3670,7 +3670,8 @@ export async function exportAssetReviewArtifactsForProject(sb: any, projectId: s
         hasLinkedAssetUrl &&
         status !== "missing_required" &&
         data.classification !== "PLACEHOLDER_DO_NOT_RENDER_BY_DEFAULT" &&
-        !(["CLINICAL_IMAGE", "MEDICAL_ILLUSTRATION"].includes(String(taxonomy)) && ["internal_template", "internal_svg_library", "placeholder"].includes(String(sourceClass))) &&
+        !(String(taxonomy) === "CLINICAL_IMAGE" && ["codex_generated_asset", "placeholder"].includes(String(sourceClass))) &&
+        !(String(taxonomy) === "MEDICAL_ILLUSTRATION" && String(sourceClass) === "placeholder") &&
         !professionalRisk.blocks;
       return {
         candidate_id: candidate.id,

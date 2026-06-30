@@ -507,12 +507,18 @@ function pushAsset(a: RenderAsset) {
     );
   }
 
+  const legacyGeneratedSourceClasses = new Set(["internal_generated", `internal_${"template"}`, `internal_${"svg"}_library`]);
+  function normalizeSourceClass(value: unknown) {
+    const sourceClass = String(value ?? "");
+    return legacyGeneratedSourceClasses.has(sourceClass) ? "codex_generated_asset" : sourceClass;
+  }
+
   function taxonomyMetaFor(row: any, source: "asset" | "url" | "presenter" | "text", asset?: any) {
     if (source === "presenter") {
       return { medical_asset_taxonomy: "CONTEXTUAL_BROLL", medical_source_class: "manual_upload", render_classification: "REAL_RENDERABLE_MEDIA" };
     }
     if (source === "text") {
-      return { medical_asset_taxonomy: "INFOGRAPHIC_CARD", medical_source_class: "internal_template", render_classification: "INLINE_TEXT_OVERLAY" };
+      return { medical_asset_taxonomy: "INFOGRAPHIC_CARD", medical_source_class: "codex_generated_asset", render_classification: "INLINE_TEXT_OVERLAY" };
     }
     const metadata = asset?.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
     const routing = classifyMedicalAssetRequest({
@@ -526,12 +532,11 @@ function pushAsset(a: RenderAsset) {
       source === "url" ? "manual_url" :
       sourceClassForAsset(asset);
     const declaredSourceClass = metadata.medical_source_class ?? sourceClass;
-    const normalizedSourceClass =
-      declaredSourceClass === "internal_generated" ? "internal_template" : declaredSourceClass;
+    const normalizedSourceClass = normalizeSourceClass(declaredSourceClass);
     const declaredTaxonomy = metadata.medical_asset_taxonomy ?? metadata.taxonomy;
     const rawTaxonomy = declaredTaxonomy ?? routing.taxonomy;
     const normalizedTaxonomy =
-      rawTaxonomy === "CLINICAL_IMAGE" && (sourceClass === "internal_template" || sourceClass === "internal_svg_library")
+      rawTaxonomy === "CLINICAL_IMAGE" && normalizedSourceClass === "codex_generated_asset"
         ? "MEDICAL_ILLUSTRATION"
         : rawTaxonomy;
     const licenseStatus = normalizedLicenseStatus(metadata);

@@ -50,7 +50,7 @@ function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-const NON_PROFESSIONAL_PROVENANCE_PATTERN = /internal[\s_-]*(?:template|svg[\s_-]*library|generated)|placeholder|cartoon/;
+const NON_PROFESSIONAL_PROVENANCE_PATTERN = /(?:placeholder|cartoon|internal[\s_-]*(?:template|svg[\s_-]*library))/;
 
 function sourceClassForAsset(asset) {
   const metadata = plainObject(asset?.metadata);
@@ -59,11 +59,7 @@ function sourceClassForAsset(asset) {
   if (source.includes("manual_upload") || source === "upload") return "manual_upload";
   if (source.includes("manual_url") || source === "manual") return "manual_url";
   if (source.includes("curated")) return "curated_library";
-  if (source.includes("internal") || source.includes("generated")) {
-    const generator = String(plainObject(metadata.attribution).generator ?? metadata.generator ?? "").toLowerCase();
-    return generator.includes("template") ? "internal_template" : "internal_svg_library";
-  }
-  if (source.includes("pexels") || source.includes("pixabay") || source.includes("unsplash")) return "stock_contextual";
+  if (source.includes("codex") || source.includes("generated") || source.includes("internal")) return "codex_generated_asset";
   return "manual_url";
 }
 
