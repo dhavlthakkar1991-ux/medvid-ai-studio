@@ -26,7 +26,6 @@ import {
 import { getProjectTimeline, recomposeTimeline, aiFixTimelineIssues, addCtaToTimeline } from "@/lib/timeline.functions";
 import { createRenderJob, getRenderStatus, cancelRenderJob, listRenderOutputs, validateRenderReadiness } from "@/lib/render-jobs.functions";
 import { getProviderJobForRender } from "@/lib/render-providers.functions";
-import { compileProjectGraphics } from "@/lib/graphics/graphics.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -265,7 +264,6 @@ function ProjectView() {
   const rebuildFn = useServerFn(rebuildRenderManifest);
   const validateFn = useServerFn(validateTimeline);
   const exportManifestFn = useServerFn(exportRenderManifestJson);
-  const compileGraphicsFn = useServerFn(compileProjectGraphics);
   const regenEditorialFn = useServerFn(regenerateEditorialDecisions);
   const regenLayoutFn = useServerFn(regenerateLayoutDecisions);
   const healthFn = useServerFn(getPipelineHealth);
@@ -1343,20 +1341,6 @@ function ProjectView() {
               >
                 <RefreshCw className="h-3 w-3 mr-1" />Rebuild
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    const r = await compileGraphicsFn({ data: { projectId: id } });
-                    qc.invalidateQueries({ queryKey: ["project-canonical", id] });
-                    qc.invalidateQueries({ queryKey: ["preview-canonical", id] });
-                    toast.success(`Compiled ${r.compiled}/${r.graphicActions} graphics (V${r.manifestVersion}, ${r.virtualItemsRemaining} virtual left)`);
-                  } catch (e: any) { toast.error(e?.message ?? "Failed"); }
-                }}
-              >
-                Compile Graphics
-              </Button>
               <AiToolPrompt
                 projectId={id}
                 task="editorial_decisions"
@@ -1417,30 +1401,6 @@ function ProjectView() {
               )}
             </CardContent>
           </Card>
-          {canonQ.data?.compiledGraphics && canonQ.data.compiledGraphics.length > 0 && (
-            <Card className="mt-3">
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Compiled Graphics
-                  <Badge variant="outline" className="ml-2">{canonQ.data.compiledGraphics.length} assets</Badge>
-                  <Badge variant="outline" className="ml-1">Manifest V6</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {canonQ.data.compiledGraphics.map((g: any) => (
-                    <div key={g.id} className="border border-border rounded overflow-hidden bg-muted/30">
-                      <img src={g.thumbnail_url ?? g.preview_url} alt={g.template_name} className="w-full h-32 object-contain bg-black/40" />
-                      <div className="p-2 text-xs">
-                        <div className="font-semibold truncate">{g.graphic_type}</div>
-                        <div className="text-muted-foreground truncate">{g.template_name}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         <TabsContent value="assets">
@@ -2218,33 +2178,17 @@ function ProjectView() {
                         "Needs Asset",
                         "Render Ready",
                         "Placeholder Plans",
-                        "Compiled Graphics",
                       ].map((bucket) => (
                         <TabsTrigger key={bucket} value={bucket}>
                           {bucket}
                           <Badge variant="outline" className="ml-1 text-[10px]">
-                            {bucket === "Compiled Graphics"
-                              ? (canonQ.data?.compiledGraphics?.length ?? 0)
-                              : reviewQ.data.candidates.filter((c: any) => professionalReviewBuckets(c).includes(bucket)).length}
+                            {reviewQ.data.candidates.filter((c: any) => professionalReviewBuckets(c).includes(bucket)).length}
                           </Badge>
                         </TabsTrigger>
                       ))}
                     </TabsList>
                   </Tabs>
-                  {reviewFilter === "Compiled Graphics" ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-h-[65vh] overflow-auto">
-                      {(canonQ.data?.compiledGraphics ?? []).map((g: any) => (
-                        <div key={g.id} className="border border-border rounded-md overflow-hidden bg-muted/30">
-                          <img src={g.thumbnail_url ?? g.preview_url} alt={g.template_name} className="w-full h-36 object-contain bg-black/50" />
-                          <div className="p-2 text-xs">
-                            <div className="font-semibold">{g.graphic_type}</div>
-                            <div className="text-muted-foreground">{g.template_name}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-[65vh] overflow-auto">
+                  <div className="space-y-2 max-h-[65vh] overflow-auto">
                       {reviewQ.data.candidates
                         .filter((c: any) => professionalReviewBuckets(c).includes(reviewFilter))
                         .map((c: any) => {
@@ -2525,7 +2469,6 @@ function ProjectView() {
                           );
                         })}
                     </div>
-                  )}
                       </>
                     )}
                 </div>

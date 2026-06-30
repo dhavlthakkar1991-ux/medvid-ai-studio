@@ -1,6 +1,6 @@
 // Server-only: graphic action handoff guard.
 //
-// The primary creative workflow no longer compiles Studio graphic actions into
+// The primary creative workflow no longer turns Studio graphic actions into
 // SVG/data-url substitutes. Graphic actions remain editorial intent until a
 // Codex ImageGen/HyperFrames asset pack result, manual upload, manual URL, or
 // curated library asset is approved and mapped to the timeline.
@@ -22,9 +22,9 @@ export function isGraphicAction(t: string | null | undefined): t is GraphicActio
 }
 
 const CODEX_GRAPHIC_MESSAGE =
-  "SVG graphic compilation is disabled in the primary workflow. Generate a Codex asset-pack raster/video result and approve it before render.";
+  "SVG graphic generation is disabled in the primary workflow. Generate a Codex asset-pack raster/video result and approve it before render.";
 
-export async function compileGraphicsForProject(supabase: Sb, projectId: string) {
+export async function clearLegacyCompiledGraphicsForProject(supabase: Sb, projectId: string) {
   const { data: editActions } = await supabase
     .from("edit_actions")
     .select("id, action_type")
@@ -77,7 +77,7 @@ export async function compileGraphicsForProject(supabase: Sb, projectId: string)
     .is("compiled_graphic_id", null);
 
   return {
-    compiled: 0,
+    clearedLegacyGraphics: true,
     graphicActions: graphicEAs.length,
     virtualItemsRemaining: virtualCount ?? 0,
     manifestVersion: 6,
