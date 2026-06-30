@@ -6,7 +6,7 @@ import { z } from "zod";
  * Render Job Orchestration API.
  *
  * This module defines the *contracts* for queuing, advancing and reading
- * render jobs. A real FFmpeg engine can later replace `advanceMockRender`
+ * render jobs. Provider implementations handle the real worker lifecycle
  * without changing any other call site.
  *
  *  createRenderJob()        → enqueue a render

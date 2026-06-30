@@ -35,6 +35,12 @@ export interface RenderValidationReport {
   };
 }
 
+function isSvgSourceUrl(value: string | null | undefined) {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith("data:image/svg+xml") || /\.svg(?:[?#].*)?$/.test(normalized);
+}
+
 export function validateRenderSpec(spec: RenderSpec): RenderValidationReport {
   const issues: RenderValidationIssue[] = [];
   const assetIds = new Set(spec.assets.map((a) => a.id));
@@ -61,6 +67,14 @@ export function validateRenderSpec(spec: RenderSpec): RenderValidationReport {
     if (!inlineOk && !a.source_url) {
       missingUrl++;
       issues.push({ level: "error", code: "missing_asset_url", message: `Asset ${a.id} (${a.kind}) has no source_url`, ref: a.id });
+    }
+    if (isSvgSourceUrl(a.source_url)) {
+      issues.push({
+        level: "error",
+        code: "svg_asset_not_supported",
+        message: `Asset ${a.id} uses an SVG source. Generate or upload a PNG, WebP, JPG, or MP4 asset for the primary workflow.`,
+        ref: a.id,
+      });
     }
     const meta = a.meta ?? {};
     const classification = String(meta.render_classification ?? "");
@@ -204,7 +218,7 @@ export function buildWorkerHandoff(spec: RenderSpec, validation: RenderValidatio
     version: 1,
     spec_version: spec.spec_version,
     project_id: spec.project_id,
-    target_runtime: "ffmpeg-node-docker",
+    target_runtime: "hyperframes-or-remotion",
     repo_hint: "medvideo-render-worker",
     canvas: spec.canvas,
     tracks: spec.tracks,
@@ -222,8 +236,8 @@ export function buildWorkerHandoff(spec: RenderSpec, validation: RenderValidatio
     instructions: [
       "Resolve each asset by id from asset_manifest.json (fetch source_url).",
       "Compose tracks in z_index order. Use canvas.{width,height,fps,duration_seconds}.",
-      "Apply per-item layout + transitions. Burn captions from spec.captions.",
-      "Encode to H.264/AAC mp4 unless overridden.",
+      "Apply per-item layout, text, captions, and transitions from RenderSpec.",
+      "Render the final MP4 through the worker's HyperFrames/Remotion primary workflow.",
     ],
   };
 }

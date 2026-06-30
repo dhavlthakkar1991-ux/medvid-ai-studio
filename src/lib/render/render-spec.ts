@@ -2,7 +2,7 @@
  * Internal Canonical Render Specification (RenderSpec v1).
  *
  * Manifest V6 is the editorial/timeline source of truth. Providers (Creatomate,
- * Shotstack, custom FFmpeg workers, ...) each speak a different dialect. To
+ * Shotstack, custom workers, ...) each speak a different dialect. To
  * keep provider-specific logic out of upstream systems, every render flows
  * through this canonical shape:
  *

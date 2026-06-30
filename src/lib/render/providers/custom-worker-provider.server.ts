@@ -1,12 +1,16 @@
 import { createHmac } from "crypto";
 import { ProviderNotConfiguredError, type CreateRenderArgs, type ProviderJobHandle, type ProviderStatusReport, type RenderProvider } from "./types";
-import { specToFfmpegGraph } from "../transformers/ffmpeg-transformer";
+import { specToWorkerCompatGraph } from "../transformers/worker-compat-transformer";
 
 /**
  * CustomWorkerProvider
  *
- *   RenderSpec → FFmpegGraph → POST {worker_url}/render → external worker
+ *   RenderSpec → POST {worker_url}/render → external worker
  *   external worker → POST /api/public/render-callback → render_provider_jobs
+ *
+ * The request still includes the historical `ffmpeg_graph` field for payload
+ * compatibility. Primary workers should consume `spec` directly and render via
+ * the HyperFrames/Remotion workflow.
  *
  * Configuration keys (stored on render_providers.configuration):
  *   - worker_url            string  (required unless simulate_worker)
@@ -86,7 +90,7 @@ export const customWorkerProvider: RenderProvider = {
   async createRender(args: CreateRenderArgs): Promise<ProviderJobHandle> {
     const cfg = getConfig(args.configuration ?? {});
     const resolution = args.renderType === "full" ? "1920x1080" : "1280x720";
-    const graph = specToFfmpegGraph(args.spec);
+    const graph = specToWorkerCompatGraph(args.spec);
 
     if (cfg.simulate) {
       const providerJobId = `${SIM_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

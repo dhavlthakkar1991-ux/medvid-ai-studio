@@ -168,7 +168,7 @@ function kindFromMediaHints(asset: any, sourceUrl?: string | null): RenderAssetK
       upload.path ??
       "",
   ).toLowerCase();
-  if (/\.(png|jpe?g|webp|gif|svg)(\?|#|$)/.test(urlOrName)) return "image";
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/.test(urlOrName)) return "image";
   if (/\.(mp4|mov|m4v|webm|avi|mkv)(\?|#|$)/.test(urlOrName)) return "video";
   if (/\.(mp3|wav|m4a|aac|ogg)(\?|#|$)/.test(urlOrName)) return "audio";
 

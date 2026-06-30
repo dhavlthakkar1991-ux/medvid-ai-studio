@@ -1,6 +1,6 @@
 // Server-only: build the canonical render_manifest from scenes + storyboard_items + broll_items.
-// Render Manifest V2: each row also carries asset_id and transition so the future
-// FFmpeg renderer can consume render_manifest as its sole input contract.
+// Render Manifest rows carry asset_id and transition data so the custom worker
+// can consume RenderSpec as its primary input contract.
 
 type SupabaseLike = any;
 

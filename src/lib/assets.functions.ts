@@ -4080,8 +4080,8 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     if (totalCand > 0 && renderableAssetCount === 0 && compiledGraphicCount === 0)
       blockerActions.push({
         id: "assets",
-        message: "No renderable media or compiled graphics available yet",
-        fix: { kind: "approve_assets", label: "Approve renderable only" },
+        message: "No approved raster/video media available yet",
+        fix: { kind: "approve_assets", label: "Approve renderable media" },
       });
     if ((ti.count ?? 0) === 0)
       blockerActions.push({
