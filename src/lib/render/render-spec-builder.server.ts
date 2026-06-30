@@ -2,7 +2,7 @@
  * Manifest V6 → RenderSpec transformer.
  *
  * Reads the project's authoritative editorial sources (render_manifest,
- * timeline_items/tracks, assets, compiled_graphics, projects) and emits a
+ * timeline_items/tracks, assets, projects) and emits a
  * provider-agnostic RenderSpec. This is the ONLY place that knows how to
  * read Manifest V6. Provider transformers consume the RenderSpec only.
  */
@@ -13,7 +13,6 @@ import {
   type RenderAsset,
   type RenderAssetKind,
   type RenderCaption,
-  type RenderGraphic,
   type RenderItem,
   type RenderLayout,
   type RenderSpec,
@@ -168,7 +167,7 @@ function kindFromMediaHints(asset: any, sourceUrl?: string | null): RenderAssetK
       upload.path ??
       "",
   ).toLowerCase();
-  if (/\.(png|jpe?g|webp|gif|svg)(\?|#|$)/.test(urlOrName)) return "image";
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/.test(urlOrName)) return "image";
   if (/\.(mp4|mov|m4v|webm|avi|mkv)(\?|#|$)/.test(urlOrName)) return "video";
   if (/\.(mp3|wav|m4a|aac|ogg)(\?|#|$)/.test(urlOrName)) return "audio";
 
@@ -419,7 +418,6 @@ export async function buildRenderSpec(
     { data: project },
     { data: manifestRows },
     { data: assetRows },
-    { data: compiledGraphics },
     { data: tracks },
     { data: timelineItems },
   ] = await Promise.all([
@@ -434,7 +432,6 @@ export async function buildRenderSpec(
       .eq("project_id", projectId)
       .order("render_order", { ascending: true }),
     sb.from("assets").select("*").eq("project_id", projectId),
-    sb.from("compiled_graphics").select("*").eq("project_id", projectId),
     sb
       .from("timeline_tracks")
       .select("*")
@@ -448,7 +445,6 @@ export async function buildRenderSpec(
   ]);
 
   const assetById = new Map<string, any>((assetRows ?? []).map((a: any) => [a.id, a]));
-  const cgById = new Map<string, any>((compiledGraphics ?? []).map((g: any) => [g.id, g]));
 
   // Canvas
   const canvasBase = quality === "preview" ? DEFAULT_CANVAS_PREVIEW : DEFAULT_CANVAS_FULL;
@@ -511,12 +507,18 @@ function pushAsset(a: RenderAsset) {
     );
   }
 
-  function taxonomyMetaFor(row: any, source: "asset" | "graphic" | "url" | "presenter" | "text", asset?: any) {
+  const legacyGeneratedSourceClasses = new Set(["internal_generated", `internal_${"template"}`, `internal_${"svg"}_library`]);
+  function normalizeSourceClass(value: unknown) {
+    const sourceClass = String(value ?? "");
+    return legacyGeneratedSourceClasses.has(sourceClass) ? "codex_generated_asset" : sourceClass;
+  }
+
+  function taxonomyMetaFor(row: any, source: "asset" | "url" | "presenter" | "text", asset?: any) {
     if (source === "presenter") {
       return { medical_asset_taxonomy: "CONTEXTUAL_BROLL", medical_source_class: "manual_upload", render_classification: "REAL_RENDERABLE_MEDIA" };
     }
     if (source === "text") {
-      return { medical_asset_taxonomy: "INFOGRAPHIC_CARD", medical_source_class: "internal_template", render_classification: "INLINE_TEXT_OVERLAY" };
+      return { medical_asset_taxonomy: "INFOGRAPHIC_CARD", medical_source_class: "codex_generated_asset", render_classification: "INLINE_TEXT_OVERLAY" };
     }
     const metadata = asset?.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
     const routing = classifyMedicalAssetRequest({
@@ -527,16 +529,14 @@ function pushAsset(a: RenderAsset) {
       description: asset?.description ?? row?.description,
     });
     const sourceClass =
-      source === "graphic" ? "internal_template" :
       source === "url" ? "manual_url" :
       sourceClassForAsset(asset);
     const declaredSourceClass = metadata.medical_source_class ?? sourceClass;
-    const normalizedSourceClass =
-      declaredSourceClass === "internal_generated" ? "internal_template" : declaredSourceClass;
+    const normalizedSourceClass = normalizeSourceClass(declaredSourceClass);
     const declaredTaxonomy = metadata.medical_asset_taxonomy ?? metadata.taxonomy;
     const rawTaxonomy = declaredTaxonomy ?? routing.taxonomy;
     const normalizedTaxonomy =
-      rawTaxonomy === "CLINICAL_IMAGE" && (sourceClass === "internal_template" || sourceClass === "internal_svg_library")
+      rawTaxonomy === "CLINICAL_IMAGE" && normalizedSourceClass === "codex_generated_asset"
         ? "MEDICAL_ILLUSTRATION"
         : rawTaxonomy;
     const licenseStatus = normalizedLicenseStatus(metadata);
@@ -560,33 +560,18 @@ function pushAsset(a: RenderAsset) {
       medical_relevance_score: metadata.candidate_data?.worker_score?.medical_relevance_score ?? null,
       routing_status:
         rawTaxonomy === "CLINICAL_IMAGE" && normalizedTaxonomy === "MEDICAL_ILLUSTRATION"
-          ? "internal_template_available"
+          ? "codex_asset_pack_required"
           : metadata.routing_status ?? (declaredTaxonomy ? "metadata_declared" : routing.status),
       routing_reason:
         rawTaxonomy === "CLINICAL_IMAGE" && normalizedTaxonomy === "MEDICAL_ILLUSTRATION"
-          ? "Internal generated disease visual is treated as a patient-education medical illustration, not a clinical photo."
+          ? "Internal generated disease visual is not final clinical media; provide a Codex/manual raster asset for approval."
           : metadata.routing_reason ?? (declaredTaxonomy ? "Using reviewed asset taxonomy metadata." : routing.reason),
       render_classification:
-        source === "graphic" ? "COMPILED_GRAPHIC" :
         source === "url" ? "REAL_RENDERABLE_MEDIA" :
         metadata.classification ?? "REAL_RENDERABLE_MEDIA",
       quality_grade: metadata.quality_grade ?? metadata.attribution?.quality_grade ?? null,
       quality_score: metadata.quality_score ?? null,
     };
-  }
-
-  function pushGraphicAsset(graphicId: string, row?: any) {
-    const g = cgById.get(graphicId);
-    pushAsset({
-      id: `graphic:${graphicId}`,
-      kind: "graphic",
-      source_url: g?.preview_url ?? g?.thumbnail_url ?? null,
-      inline:
-        g?.template_name || g?.graphic_type
-          ? { style: { template: g.template_name ?? g.graphic_type } }
-          : undefined,
-      meta: taxonomyMetaFor(row ?? g, "graphic", g),
-    });
   }
 
   const presenterAssetId = "source:presenter";
@@ -602,14 +587,10 @@ function pushAsset(a: RenderAsset) {
     });
   }
 
-  // Graphics
-  const specGraphics: RenderGraphic[] = (compiledGraphics ?? []).map((g: any) => ({
-    id: String(g.id),
-    compiled_graphic_id: String(g.id),
-    template: g.template_name ?? g.graphic_type ?? null,
-    preview_url: g.preview_url ?? g.thumbnail_url ?? null,
-    payload: (g.specification ?? g.payload ?? {}) as Record<string, unknown>,
-  }));
+  // Graphic actions are represented as timeline/text intent until Codex
+  // ImageGen/HyperFrames, manual upload, manual URL, or curated-library assets
+  // are approved. The primary RenderSpec no longer emits compiled SVG graphics.
+  const specGraphics: RenderSpec["graphics"] = [];
 
   // Items + captions
   const items: RenderItem[] = [];
@@ -635,7 +616,9 @@ function pushAsset(a: RenderAsset) {
       continue;
     }
 
-    // Resolve asset id (real asset OR compiled graphic).
+    // Resolve asset id from real approved media, presenter source, loose URL,
+    // or inline text intent. Compiled SVG graphics are intentionally ignored in
+    // the primary workflow.
     let assetId: string | null = null;
     let rawAssetId: string | null = row.asset_id ?? null;
     let assetKind: RenderAssetKind | null = null;
@@ -662,12 +645,6 @@ function pushAsset(a: RenderAsset) {
         intrinsic_height: a.height ?? undefined,
         meta: taxonomyMetaFor(row, "asset", a),
       });
-    } else if (row.compiled_graphic_id && cgById.has(row.compiled_graphic_id)) {
-      assetId = `graphic:${row.compiled_graphic_id}`;
-      rawAssetId = row.compiled_graphic_id;
-      assetKind = "graphic";
-      assetType = rowAssetType ?? "graphic";
-      pushGraphicAsset(String(row.compiled_graphic_id), row);
     } else if (row.asset_url) {
       // Loose URL (b-roll / stock) — synthesize a stable asset id.
       assetId = `url:${row.id}`;
@@ -790,7 +767,6 @@ function pushAsset(a: RenderAsset) {
     const tiActionType = firstString(ti.action_type, ti.original_action_type, tiMeta.action_type, tiMeta.original_action_type, ti.asset_type);
     if (
       !ti.asset_id &&
-      !ti.compiled_graphic_id &&
       ti.asset_type !== "presenter_video" &&
       !(tiActionType && (isTextAction(tiActionType) || tiActionType.includes("cta")))
     ) continue;
@@ -824,12 +800,6 @@ function pushAsset(a: RenderAsset) {
         intrinsic_height: a.height ?? undefined,
         meta: taxonomyMetaFor(ti, "asset", a),
       });
-    } else if (ti.compiled_graphic_id && cgById.has(ti.compiled_graphic_id)) {
-      assetId = `graphic:${ti.compiled_graphic_id}`;
-      rawAssetId = ti.compiled_graphic_id;
-      assetKind = "graphic";
-      assetType = tiAssetType ?? "graphic";
-      pushGraphicAsset(String(ti.compiled_graphic_id), ti);
     } else if (tiActionType && (isTextAction(tiActionType) || tiActionType.includes("cta"))) {
       assetId = `text:${ti.id}`;
       assetKind = tiActionType.includes("cta") ? "cta" : "text";

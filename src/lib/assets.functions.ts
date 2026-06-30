@@ -215,6 +215,19 @@ function hasUsableMediaUrl(candidate: any) {
   return Boolean(media.url || media.preview_url || media.thumbnail_url);
 }
 
+function isCodexHandoffCandidate(candidate: any) {
+  const data = plainObject(candidate?.candidate_data);
+  const metadata = plainObject(data.metadata);
+  return Boolean(
+    candidate?.provider === "codex_creative_handoff" ||
+      data.provider === "codex_creative_handoff" ||
+      data.codex_creative_workflow ||
+      metadata.codex_creative_workflow ||
+      data.codex_tool ||
+      metadata.codex_tool,
+  );
+}
+
 function renderClassification(candidate: any) {
   return hasUsableMediaUrl(candidate) ? "REAL_RENDERABLE_MEDIA" : "PLACEHOLDER_PLAN";
 }
@@ -389,12 +402,19 @@ function compactReviewCandidateData(value: unknown): Record<string, any> {
     source_domain: data.source_domain ?? null,
     provider: data.provider ?? null,
     source_type: data.source_type ?? null,
+    codex_creative_workflow: data.codex_creative_workflow ?? metadata.codex_creative_workflow ?? null,
+    codex_tool: data.codex_tool ?? metadata.codex_tool ?? null,
     generation_prompt: data.generation_prompt ?? metadata.generation_prompt ?? null,
     generation_provider: data.generation_provider ?? metadata.generation_provider ?? data.provider ?? null,
     generation_model: data.generation_model ?? metadata.generation_model ?? null,
     generation_cost: data.generation_cost ?? metadata.generation_cost ?? null,
     generation_time_ms: data.generation_time_ms ?? metadata.generation_time_ms ?? null,
     result_url: data.result_url ?? metadata.result_url ?? null,
+    render_ready: data.render_ready ?? metadata.render_ready ?? null,
+    no_worker_search: data.no_worker_search ?? metadata.no_worker_search ?? null,
+    no_worker_svg: data.no_worker_svg ?? metadata.no_worker_svg ?? null,
+    no_worker_ffmpeg: data.no_worker_ffmpeg ?? metadata.no_worker_ffmpeg ?? null,
+    required_action: data.required_action ?? metadata.required_action ?? null,
     medical_source_class: data.medical_source_class ?? null,
     medical_asset_taxonomy: data.medical_asset_taxonomy ?? data.taxonomy ?? null,
     taxonomy: data.taxonomy ?? data.medical_asset_taxonomy ?? null,
@@ -412,6 +432,8 @@ function compactReviewCandidateData(value: unknown): Record<string, any> {
       license,
       medical_source_class: metadata.medical_source_class ?? null,
       classification: metadata.classification ?? null,
+      codex_creative_workflow: metadata.codex_creative_workflow ?? data.codex_creative_workflow ?? null,
+      codex_tool: metadata.codex_tool ?? data.codex_tool ?? null,
       generation_prompt: metadata.generation_prompt ?? data.generation_prompt ?? null,
       generation_provider: metadata.generation_provider ?? data.generation_provider ?? data.provider ?? null,
       generation_model: metadata.generation_model ?? data.generation_model ?? null,
@@ -582,7 +604,7 @@ function rejectionReason(candidate: any, fallback?: string | null) {
 function candidateRenderSourceClass(candidate: any, fallback: string) {
   const data = plainObject(candidate?.candidate_data);
   const declared = firstString(data.medical_source_class, data.source_type, data.provider);
-  if (declared === "internal_generated" || declared === "internal") return "internal_template";
+  if (declared === "internal_generated" || declared === "internal") return "codex_generated_asset";
   return fallback;
 }
 
@@ -625,9 +647,26 @@ function workerAssetMediaFields(asset: any) {
   };
 }
 
+function isCodexHandoffWorkerAsset(asset: any) {
+  const metadata = asset?.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
+  return Boolean(
+    asset?.provider === "codex_creative_handoff" ||
+      metadata.codex_creative_workflow ||
+      metadata.codex_tool,
+  );
+}
+
 function candidateInsertFromWorkerAsset(projectId: string, asset: any, priority: number) {
   const media = workerAssetMediaFields(asset);
   const intent = asset?.intent && typeof asset.intent === "object" ? asset.intent : {};
+  const metadata = asset?.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
+  const isCodexHandoff = isCodexHandoffWorkerAsset(asset);
+  const generationPrompt = firstString(asset?.generation_prompt, metadata.generation_prompt, asset?.description);
+  const generationProvider = firstString(
+    metadata.generation_provider,
+    metadata.codex_tool ? `codex_${metadata.codex_tool}` : null,
+    asset?.provider,
+  );
   return {
     project_id: projectId,
     scene_id: firstString(intent.source_scene_id, intent.scene_id),
@@ -642,7 +681,7 @@ function candidateInsertFromWorkerAsset(projectId: string, asset: any, priority:
       ) ?? "AI worker fulfilled asset",
     priority,
     provider: asset?.provider ?? "ai_worker",
-    status: "searched",
+    status: isCodexHandoff ? "pending" : "searched",
     title: asset?.title ?? intent.expected_visual ?? null,
     description: asset?.description ?? intent.original_instruction ?? null,
     thumbnail_url: media.thumbnail_url,
@@ -662,6 +701,17 @@ function candidateInsertFromWorkerAsset(projectId: string, asset: any, priority:
       medical_asset_taxonomy: asset?.metadata?.medical_asset_taxonomy ?? asset?.taxonomy ?? null,
       medical_source_class: asset?.metadata?.medical_source_class ?? asset?.source_type ?? null,
       source_type: asset?.source_type ?? null,
+      codex_creative_workflow: Boolean(isCodexHandoff),
+      codex_tool: metadata.codex_tool ?? null,
+      generation_prompt: generationPrompt,
+      generation_provider: generationProvider,
+      render_ready: Boolean(media.url),
+      no_worker_search: metadata.no_worker_search ?? null,
+      no_worker_svg: metadata.no_worker_svg ?? null,
+      no_worker_ffmpeg: metadata.no_worker_ffmpeg ?? null,
+      required_action: isCodexHandoff
+        ? "Generate this asset with Codex ImageGen or HyperFrames, then upload the result or paste a media URL before approval."
+        : null,
       url: media.url,
       source_url: media.url,
       media_url: media.url,
@@ -786,11 +836,9 @@ export const fulfillProjectAssetsWithWorker = createServerFn({ method: "POST" })
           }
         : null,
       provider_config: {
-        pexels_configured: Boolean(process.env.PEXELS_API_KEY),
-        pexels_api_key: process.env.PEXELS_API_KEY ?? null,
-        pixabay_configured: Boolean(process.env.PIXABAY_API_KEY),
-        pixabay_api_key: process.env.PIXABAY_API_KEY ?? null,
-        heygen_hyperframes_enabled: process.env.HEYGEN_HYPERFRAMES_DISABLED !== "true",
+        creative_workflow_mode: "codex_handoff",
+        worker_search_enabled: false,
+        worker_generation_enabled: false,
       },
     };
     const body = JSON.stringify(packagePayload);
@@ -1542,7 +1590,7 @@ export const listAssetReview = createServerFn({ method: "POST" })
         candidate.quality_grade === "F" ||
         String(candidate.status).includes("rejected") ||
         candidate.render_classification === "PLACEHOLDER_PLAN" ||
-        (!candidate.has_usable_url && String(candidate.medical_source_class ?? "").includes("internal_template")) ||
+        (!candidate.has_usable_url && String(candidate.medical_source_class ?? "").includes("codex_generated_asset")) ||
         candidate.license_status === "unknown";
       group.candidates.push({
         ...candidate,
@@ -1988,23 +2036,16 @@ export const listAssetReview = createServerFn({ method: "POST" })
     const reviewPayload = {
       providerStatus: (() => {
         try {
-          const configured = {
-            pexels: Boolean(process.env.PEXELS_API_KEY),
-            pixabay: Boolean(process.env.PIXABAY_API_KEY),
-            unsplash: Boolean(process.env.UNSPLASH_ACCESS_KEY),
-          };
           return {
-            configured,
-            anyConfigured: Object.values(configured).some(Boolean),
-            message: Object.values(configured).some(Boolean)
-              ? "Asset provider configured"
-              : "No asset provider configured. Add Pexels/Pixabay key or upload assets manually.",
+            configured: { codex_asset_pack: true },
+            anyConfigured: false,
+            message: "Primary asset creation now uses Codex asset-pack prompts plus manual upload or URL approval.",
           };
         } catch {
           return {
-            configured: { pexels: false, pixabay: false, unsplash: false },
+            configured: { codex_asset_pack: true },
             anyConfigured: false,
-            message: "No asset provider configured. Add Pexels/Pixabay key or upload assets manually.",
+            message: "Primary asset creation now uses Codex asset-pack prompts plus manual upload or URL approval.",
           };
         }
       })(),
@@ -2041,29 +2082,6 @@ const SceneManifestRepairInput = z.object({
   sceneIndex: z.number().nullable().optional(),
 });
 
-const FulfillInput = z.object({ candidateId: z.string() });
-const SearchAssetInput = z.object({
-  candidateId: z.string(),
-  provider: z.enum(["any", "pexels", "pixabay", "unsplash", "internal"]).default("any"),
-});
-const FulfillmentResultInput = z.object({
-  provider: z.string(),
-  result_id: z.string(),
-  title: z.string(),
-  description: z.string().nullable().optional(),
-  source_url: z.string(),
-  preview_url: z.string().nullable().optional(),
-  thumbnail_url: z.string().nullable().optional(),
-  width: z.number().nullable().optional(),
-  height: z.number().nullable().optional(),
-  duration_seconds: z.number().nullable().optional(),
-  attribution: z.record(z.string(), z.unknown()).optional(),
-  license: z.record(z.string(), z.unknown()).optional(),
-});
-const ApproveFulfillmentInput = z.object({
-  candidateId: z.string(),
-  result: FulfillmentResultInput,
-});
 const AssetUploadUrlInput = z.object({
   candidateId: z.string(),
   filename: z.string(),
@@ -2102,17 +2120,6 @@ const ApproveManualUrlInput = z.object({
   sensitivity_level: z.enum(["safe", "mild clinical", "graphic"]).optional(),
   provenance_notes: z.string().optional(),
 });
-
-function candidateContext(candidate: any) {
-  const data = candidate?.candidate_data && typeof candidate.candidate_data === "object" ? candidate.candidate_data : {};
-  return {
-    title: candidate?.title ?? null,
-    description: candidate?.description ?? null,
-    search_query: candidate?.search_query ?? null,
-    asset_type: candidate?.asset_type ?? null,
-    ...data,
-  };
-}
 
 async function rebuildProjectRenderContracts(sb: any, projectId: string) {
   try {
@@ -2484,6 +2491,14 @@ export async function reviewAssetCandidateWithClient(
       confidence_tier: confidenceTier(cand).tier,
       source_url: mediaForAudit.url ?? mediaForAudit.preview_url ?? mediaForAudit.thumbnail_url ?? null,
     });
+
+    if (
+      (data.action === "accept" || data.action === "replace" || data.action === "lock") &&
+      isCodexHandoffCandidate(cand) &&
+      !hasUsableMediaUrl(cand)
+    ) {
+      throw new Error("Codex asset brief is prompt-only. Generate the asset in Codex, then upload the result or paste a media URL before approving.");
+    }
 
     if (data.action === "reject") {
       nextStatus = "rejected";
@@ -3008,100 +3023,6 @@ export const approveSceneAssetCandidates = createServerFn({ method: "POST" })
           })
         : null;
     return { ok: failed.length === 0, approved, failed, layoutRepair, reconcile, multiAssetManifest };
-  });
-
-export const fulfillAssetCandidate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => FulfillInput.parse(i))
-  .handler(async ({ context, data }) => {
-    const sb = context.supabase;
-    const { fulfillmentStatus, searchFulfillmentAsset } = await import("./assets/fulfillment.server");
-    const status = fulfillmentStatus();
-    if (!status.configured) return { ok: false as const, reason: status.message, providerStatus: status };
-    const { data: cand, error } = await sb.from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) return { ok: false as const, reason: "Candidate not found", providerStatus: status };
-    const query = firstString(cand.search_query, cand.title, cand.description);
-    if (!query) return { ok: false as const, reason: "Candidate has no search query", providerStatus: status };
-    const found = await searchFulfillmentAsset(cand.asset_type, query);
-    if (!found) {
-      await sb.from("asset_candidates").update({ status: "searched", review_note: "No provider result found for this candidate." }).eq("id", cand.id);
-      return { ok: false as const, reason: "No provider result found", providerStatus: status };
-    }
-    const asset = await persistFulfilledAsset(sb, {
-      candidate: cand,
-      userId: context.userId,
-      provider: found.provider,
-      title: found.title || cand.title || query.slice(0, 80),
-      description: found.description ?? cand.description ?? null,
-      source_url: found.source_url,
-      preview_url: found.preview_url,
-      thumbnail_url: found.thumbnail_url,
-      duration_seconds: found.duration_seconds,
-      width: found.width,
-      height: found.height,
-      search_query: query,
-      metadata: { fulfillment: found.attribution, license: found.license, result_id: found.result_id },
-      review_note: "Fulfilled from configured asset provider.",
-    });
-    return { ok: true as const, assetId: asset.id, provider: found.provider };
-  });
-
-export const searchAssetCandidate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => SearchAssetInput.parse(i))
-  .handler(async ({ context, data }) => {
-    const sb = context.supabase;
-    const { searchFulfillmentAssets } = await import("./assets/fulfillment.server");
-    const { data: cand, error } = await sb.from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) return { ok: false as const, reason: "Candidate not found", results: [], warnings: [] };
-    const query = firstString(cand.search_query, cand.title, cand.description);
-    if (!query) return { ok: false as const, reason: "Candidate has no search query", results: [], warnings: [] };
-    const out = await searchFulfillmentAssets({
-      assetType: cand.asset_type,
-      query,
-      provider: data.provider,
-      perPage: 8,
-      context: candidateContext(cand),
-    });
-    return {
-      ok: out.results.length > 0,
-      candidate: JSON.parse(JSON.stringify(cand)),
-      query,
-      status: JSON.parse(JSON.stringify(out.status)),
-      results: JSON.parse(JSON.stringify(out.results)),
-      warnings: out.warnings ?? [],
-    };
-  });
-
-export const approveAssetSearchResult = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ApproveFulfillmentInput.parse(i))
-  .handler(async ({ context, data }) => {
-    const sb = context.supabase;
-    const { data: cand, error } = await sb.from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) return { ok: false as const, reason: "Candidate not found" };
-    const result = data.result;
-    const asset = await persistFulfilledAsset(sb, {
-      candidate: cand,
-      userId: context.userId,
-      provider: result.provider,
-      title: result.title || cand.title || cand.search_query?.slice(0, 80) || "Fulfilled asset",
-      description: result.description ?? cand.description ?? null,
-      source_url: result.source_url,
-      preview_url: result.preview_url ?? result.source_url,
-      thumbnail_url: result.thumbnail_url ?? result.preview_url ?? result.source_url,
-      duration_seconds: result.duration_seconds ?? null,
-      width: result.width ?? null,
-      height: result.height ?? null,
-      search_query: cand.search_query,
-      metadata: {
-        fulfillment: result.attribution ?? {},
-        license: result.license ?? {},
-        result_id: result.result_id,
-      },
-      review_note: `Approved selected ${result.provider} result.`,
-    });
-    return { ok: true as const, assetId: asset.id };
   });
 
 export const createAssetUploadUrl = createServerFn({ method: "POST" })
@@ -3749,7 +3670,8 @@ export async function exportAssetReviewArtifactsForProject(sb: any, projectId: s
         hasLinkedAssetUrl &&
         status !== "missing_required" &&
         data.classification !== "PLACEHOLDER_DO_NOT_RENDER_BY_DEFAULT" &&
-        !(["CLINICAL_IMAGE", "MEDICAL_ILLUSTRATION"].includes(String(taxonomy)) && ["internal_template", "internal_svg_library", "placeholder"].includes(String(sourceClass))) &&
+        !(String(taxonomy) === "CLINICAL_IMAGE" && ["codex_generated_asset", "placeholder"].includes(String(sourceClass))) &&
+        !(String(taxonomy) === "MEDICAL_ILLUSTRATION" && String(sourceClass) === "placeholder") &&
         !professionalRisk.blocks;
       return {
         candidate_id: candidate.id,
@@ -3972,7 +3894,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
     const pid = data.projectId;
-    const [tx, sp, sb_, ed, ld, ac, rm, ti, assetRows, graphicsRows] = await Promise.all([
+    const [tx, sp, sb_, ed, ld, ac, rm, ti, assetRows] = await Promise.all([
       sb
         .from("transcripts")
         .select("project_id", { count: "exact", head: true })
@@ -4000,7 +3922,6 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       sb.from("render_manifest").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("timeline_items").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("assets").select("*").eq("project_id", pid),
-      sb.from("compiled_graphics").select("*").eq("project_id", pid),
     ]);
     const totalCand = ac.data?.length ?? 0;
     const approvedCand = (ac.data ?? []).filter(
@@ -4012,14 +3933,14 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const placeholderAssetCount = ((assetRows.data ?? []) as any[]).filter(
       (a) => ["approved_placeholder", "needs_asset", "placeholder_plan"].includes(String(a.status)) || a.metadata?.classification === "PLACEHOLDER_PLAN",
     ).length;
-    const compiledGraphicCount = graphicsRows.data?.length ?? 0;
+    const compiledGraphicCount = 0;
     const assetsScore = totalCand === 0
       ? 0
-      : Math.min(1, (renderableAssetCount + compiledGraphicCount) / Math.max(1, totalCand));
+      : Math.min(1, renderableAssetCount / Math.max(1, totalCand));
     const [{ data: manifestRows }, { data: sceneRows }] = await Promise.all([
       sb
         .from("render_manifest")
-        .select("id, scene_id, asset_id, asset_type, asset_source, compiled_graphic_id, status, timeline_start, timeline_end")
+        .select("id, scene_id, asset_id, asset_type, asset_source, status, timeline_start, timeline_end")
         .eq("project_id", pid),
       sb.from("scenes").select("id, scene_number, title").eq("project_id", pid),
     ]);
@@ -4036,16 +3957,16 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     }, {});
     const manifest = (manifestRows ?? []) as any[];
     const scenes = (sceneRows ?? []) as any[];
-    const renderableVisualRows = manifest.filter((r) => r.asset_id || r.compiled_graphic_id || String(r.asset_source ?? "") === "compiled_graphic");
+    const renderableVisualRows = manifest.filter((r) => r.asset_id);
     const visualCoverageScore = manifest.length > 0 ? renderableVisualRows.length / manifest.length : 0;
-    const infographicRows = manifest.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram") || r.compiled_graphic_id);
-    const richGraphics = ((graphicsRows.data ?? []) as any[]).filter((g) => {
-      const spec = g.spec && typeof g.spec === "object" ? g.spec : {};
-      return Boolean(spec.editorial_realization?.template_kind && spec.editorial_realization?.quality_grade);
+    const infographicRows = manifest.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram"));
+    const infographicAssets = renderableAssets.filter((a) => {
+      const type = String(a.asset_type ?? "").toLowerCase();
+      return type.includes("infographic") || type.includes("diagram") || type.includes("illustration") || type.includes("image");
     });
     const infographicQualityScore = infographicRows.length === 0
-      ? (compiledGraphicCount > 0 ? 0.8 : 0.4)
-      : Math.min(1, richGraphics.length / Math.max(1, infographicRows.length));
+      ? 0.4
+      : Math.min(1, infographicAssets.length / Math.max(1, infographicRows.length));
     const clinicalEvidenceAssets = renderableAssets.filter((a) => {
       const type = String(a.asset_type ?? "").toLowerCase();
       const source = String(a.source_type ?? a.source ?? "").toLowerCase();
@@ -4070,8 +3991,8 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const assetCoverage = Math.round(visualCoverageScore * 100);
     const sceneReadiness = scenes.map((scene: any) => {
       const rows = manifest.filter((r) => r.scene_id === scene.id);
-      const covered = rows.filter((r) => r.asset_id || r.compiled_graphic_id || String(r.asset_source ?? "") === "compiled_graphic").length;
-      const graphicRows = rows.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram") || r.compiled_graphic_id);
+      const covered = rows.filter((r) => r.asset_id).length;
+      const graphicRows = rows.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram"));
       const score = rows.length === 0 ? 0 : Math.round(((covered / rows.length) * 0.65 + (graphicRows.length > 0 ? 0.35 : 0.15)) * 100);
       return {
         scene_id: scene.id,
@@ -4156,11 +4077,11 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
         message: "Editorial decisions missing",
         fix: { kind: "task", task: "editorial_decisions", label: "Generate editorial" },
       });
-    if (totalCand > 0 && renderableAssetCount === 0 && compiledGraphicCount === 0)
+    if (totalCand > 0 && renderableAssetCount === 0)
       blockerActions.push({
         id: "assets",
-        message: "No renderable media or compiled graphics available yet",
-        fix: { kind: "approve_assets", label: "Approve renderable only" },
+        message: "No approved raster/video media available yet",
+        fix: { kind: "approve_assets", label: "Approve renderable media" },
       });
     if ((ti.count ?? 0) === 0)
       blockerActions.push({

@@ -50,7 +50,7 @@ function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-const NON_PROFESSIONAL_PROVENANCE_PATTERN = /internal[\s_-]*(?:template|svg[\s_-]*library|generated)|placeholder|cartoon/;
+const NON_PROFESSIONAL_PROVENANCE_PATTERN = /(?:placeholder|cartoon|internal[\s_-]*(?:template|svg[\s_-]*library))/;
 
 function sourceClassForAsset(asset) {
   const metadata = plainObject(asset?.metadata);
@@ -59,11 +59,7 @@ function sourceClassForAsset(asset) {
   if (source.includes("manual_upload") || source === "upload") return "manual_upload";
   if (source.includes("manual_url") || source === "manual") return "manual_url";
   if (source.includes("curated")) return "curated_library";
-  if (source.includes("internal") || source.includes("generated")) {
-    const generator = String(plainObject(metadata.attribution).generator ?? metadata.generator ?? "").toLowerCase();
-    return generator.includes("template") ? "internal_template" : "internal_svg_library";
-  }
-  if (source.includes("pexels") || source.includes("pixabay") || source.includes("unsplash")) return "stock_contextual";
+  if (source.includes("codex") || source.includes("generated") || source.includes("internal")) return "codex_generated_asset";
   return "manual_url";
 }
 
@@ -187,13 +183,6 @@ function normalizedAssetType(value, text = "") {
   if (source.includes("callout")) return "callout";
   if (source.includes("infographic") || source.includes("workflow") || source.includes("prevalence") || source.includes("risk")) return "infographic";
   return "infographic";
-}
-
-function isInlineRenderableGraphicRow(row, requiredType) {
-  const signature = textSignature(row.asset_type, row.asset_source, row.action_type, row.layout_name);
-  const type = String(requiredType ?? "");
-  if (["lower_third", "text_overlay", "callout", "cta_branding", "end_card"].includes(type)) return true;
-  return /compiled graphic|show lower third|show text overlay|show callout|show cta|kinetic typography|highlight keyword|full screen cta/.test(signature);
 }
 
 function parseSupabaseStorageUrl(value) {
@@ -440,7 +429,6 @@ if (renderSpecResult.spec?.assets) {
 function expectedSpecAssetId(row) {
   if (row?.asset_type === "presenter_video") return "source:presenter";
   if (row?.asset_id) return `asset:${row.asset_id}`;
-  if (row?.compiled_graphic_id) return `graphic:${row.compiled_graphic_id}`;
   if (row?.asset_url) return `url:${row.id}`;
   return null;
 }
@@ -504,17 +492,8 @@ for (const row of manifest) {
   const presenterResolved = requiredType === "presenter_video" && Boolean(projectRes.data.video_path) && Boolean(renderSpecResult.spec?.assets?.some((candidate) => candidate.id === "source:presenter" && candidate.source_url));
   const specItem = specItemForRequirement(row, tItem, start, end);
   const specAsset = specItem?.asset_id ? specAssetsById.get(String(specItem.asset_id)) : null;
-  const inlineGraphicResolved = Boolean(
-    row.compiled_graphic_id &&
-    specItem &&
-    String(specItem.asset_id) === `graphic:${row.compiled_graphic_id}` &&
-    specAsset &&
-    isInlineRenderableGraphicRow(row, requiredType) &&
-    (specAsset.source_url || specAsset.inline || specAsset.kind === "graphic"),
-  );
   const validApproved = Boolean(
     presenterResolved ||
-    inlineGraphicResolved ||
     (explicitAsset && approvedStatus && hasUsableUrl && !conceptMismatch && !visibleConceptMismatch && !professionalRisk.blocks),
   );
   const status =
@@ -536,7 +515,6 @@ for (const row of manifest) {
       return { status: "wrong_layout", reason: `Manifest layout ${row.layout_name} differs from timeline layout ${tItem.layout}.` };
     }
     if (presenterResolved) return { status: "renderspec_ok", reason: "Presenter is supplied by project.video_path and RenderSpec source:presenter." };
-    if (inlineGraphicResolved) return { status: "renderspec_ok", reason: "Inline compiled graphic is present in RenderSpec and renderable by the worker." };
     if (!row.asset_id) return { status: "missing_asset", reason: "Manifest does not point to an approved asset." };
     if (!validApproved) return { status: "wrong_asset_mapped", reason: visibleConceptMismatch ? `Mapped asset visible content is ${visibleAssetConcept?.label}, not ${concept.label}.` : conceptMismatch ? `Mapped asset is ${assetConcept?.label}, not ${concept.label}.` : notRenderableReason };
     if (!specItem) return { status: "missing_from_renderspec", reason: "No RenderSpec item found for this manifest row." };
@@ -562,7 +540,7 @@ for (const row of manifest) {
     current_status: status,
     blocking_reason: validApproved ? null : timelineFit.reason,
     suggested_resolution: validApproved ? null : "Upload/replace with a licensed, source-backed asset matching this exact requirement.",
-    matched_approved_asset_id: presenterResolved ? "source:presenter" : inlineGraphicResolved ? `graphic:${row.compiled_graphic_id}` : validApproved ? asset?.id ?? null : null,
+    matched_approved_asset_id: presenterResolved ? "source:presenter" : validApproved ? asset?.id ?? null : null,
     source_url_probe: sourceUrlProbe,
     existing_approved_asset: presenterResolved ? {
       id: "source:presenter",
@@ -570,13 +548,6 @@ for (const row of manifest) {
       asset_type: "presenter_video",
       source_url: "[signed at RenderSpec build time]",
       concept_key: "presenter_video",
-    } : inlineGraphicResolved ? {
-      id: `graphic:${row.compiled_graphic_id}`,
-      title: row.asset_query ?? row.action_type ?? "Compiled graphic",
-      asset_type: row.asset_type,
-      source_url_present: Boolean(specAsset?.source_url || specAsset?.inline),
-      source_url_redacted: specAsset?.source_url ? redactUrl(specAsset.source_url) : "[inline RenderSpec graphic]",
-      concept_key: concept.key,
     } : validApproved && asset ? {
       id: asset.id,
       title: asset.title,

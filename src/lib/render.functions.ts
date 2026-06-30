@@ -21,7 +21,7 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       console.warn("edit_actions backfill failed", e);
     }
 
-    const [scenes, storyboard, broll, manifest, segments, candidates, assets, instructions, editActions, layouts, transitions, layoutDecisions, project, compiledGraphics] = await Promise.all([
+    const [scenes, storyboard, broll, manifest, segments, candidates, assets, instructions, editActions, layouts, transitions, layoutDecisions, project] = await Promise.all([
       sb.from("scenes").select("*").eq("project_id", data.projectId).order("scene_number", { ascending: true }),
       sb.from("storyboard_items").select("*").eq("project_id", data.projectId).order("item_index", { ascending: true }),
       sb.from("broll_items").select("*").eq("project_id", data.projectId).order("item_index", { ascending: true }),
@@ -35,7 +35,6 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       sb.from("transition_templates").select("id, name"),
       sb.from("layout_decisions").select("*").eq("project_id", data.projectId),
       sb.from("projects").select("duration_seconds").eq("id", data.projectId).maybeSingle(),
-      sb.from("compiled_graphics").select("*").eq("project_id", data.projectId),
     ]);
     return {
       scenes: scenes.data ?? [],
@@ -51,7 +50,7 @@ export const getCanonicalProject = createServerFn({ method: "POST" })
       transitionTemplates: transitions.data ?? [],
       layoutDecisions: layoutDecisions.data ?? [],
       projectDuration: Number((project.data as any)?.duration_seconds) || 0,
-      compiledGraphics: compiledGraphics.data ?? [],
+      compiledGraphics: [],
     };
   });
 

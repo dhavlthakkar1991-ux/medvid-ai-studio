@@ -275,7 +275,6 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
         "manifest_v6.json": strToU8(JSON.stringify(pkg.jsonFiles["manifest_v6.json"], null, 2)),
         "timeline.json": strToU8(JSON.stringify(pkg.jsonFiles["timeline.json"], null, 2)),
         "assets.json": strToU8(JSON.stringify(pkg.jsonFiles["assets.json"], null, 2)),
-        "compiled_graphics.json": strToU8(JSON.stringify(pkg.jsonFiles["compiled_graphics.json"], null, 2)),
         "README.txt": strToU8(
           [
             "MedVideo Render Debug Package",
@@ -286,15 +285,14 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
             " - render_spec.json       Canonical RenderSpec v1 (provider-agnostic)",
             " - render_validation.json Pre-flight validation report",
             " - asset_manifest.json    Resolved asset list (urls, mime, durations)",
-            " - graphics_manifest.json Compiled overlay/lower-third graphics",
+            " - graphics_manifest.json Review-gated graphics intent",
             " - worker_handoff.json    Worker payload + canvas + tracks + items",
             " - manifest_v6.json       Manifest V6 rows (editorial source of truth)",
             " - timeline.json          Composed timeline tracks + items",
             " - assets.json            All project assets",
-            " - compiled_graphics.json Compiled overlay/lower-third graphics",
             " - captions.srt           Burned-caption source",
             "",
-            "Hand directly to medvideo-render-worker (FFmpeg / Node / Docker).",
+            "Hand directly to medvideo-render-worker with the approved RenderSpec and asset manifests.",
           ].join("\n"),
         ),
       };
@@ -356,8 +354,8 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
             <Wrench className="h-4 w-4" /> Render debug package
           </CardTitle>
           <CardDescription>
-            Slim ZIP containing RenderSpec + Manifest V6 + timeline + assets + compiled graphics + captions —
-            everything an external FFmpeg / Node / Docker render worker needs to reproduce the render.
+            Slim ZIP containing RenderSpec + Manifest V6 + timeline + assets + graphics intent + captions —
+            plus the worker handoff needed to reproduce the render.
           </CardDescription>
         </CardHeader>
         <CardContent>

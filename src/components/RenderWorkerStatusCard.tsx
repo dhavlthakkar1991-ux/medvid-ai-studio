@@ -23,7 +23,7 @@ export function RenderWorkerStatusCard() {
           )}
         </CardTitle>
         <CardDescription>
-          External FFmpeg / Docker worker (medvideo-render-worker). Actual video rendering happens off-platform.
+          External custom worker (medvideo-render-worker). Actual video rendering happens off-platform.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">

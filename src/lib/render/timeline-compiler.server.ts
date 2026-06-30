@@ -1,7 +1,7 @@
 // Server-only: deterministic timeline compiler.
 // Reads canonical scenes + storyboard_items + broll_items + scene_assets
-// and writes timeline_instructions. This is the contract the future
-// FFmpeg renderer will consume; storyboard JSON is never parsed there.
+// and writes timeline_instructions. RenderSpec builders consume these rows;
+// storyboard JSON is never parsed by the worker.
 
 type SupabaseLike = any;
 

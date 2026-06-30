@@ -76,7 +76,7 @@ function RenderProvidersPage() {
                   {p.provider_type === "mock"
                     ? "Simulated lifecycle. No external service. Always available for testing."
                     : p.provider_type === "custom_worker"
-                    ? "Send FFmpeg jobs to your own worker. Set worker_url, callback_url, and CUSTOM_WORKER_SECRET, or simulate_worker=true for testing."
+                    ? "Send RenderSpec jobs to your own worker. Set worker_url, callback_url, and CUSTOM_WORKER_SECRET, or simulate_worker=true for testing."
                     : `Stub provider — implement the integration before enabling.`}
                 </p>
               </div>
