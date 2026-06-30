@@ -15,8 +15,8 @@ export type MedicalAssetSourceClass =
 
 export type MedicalAssetRouting = {
   taxonomy: MedicalAssetTaxonomy;
-  allowedProviders: Array<"pexels" | "pixabay" | "manual_upload" | "manual_url" | "internal">;
-  status: "stock_search_allowed" | "internal_template_available" | "needs_manual_upload" | "needs_curated_asset";
+  allowedProviders: Array<"codex_imagegen" | "codex_hyperframes" | "manual_upload" | "manual_url" | "curated_library">;
+  status: "codex_asset_pack_required" | "needs_manual_upload" | "needs_curated_asset";
   reason: string;
 };
 
@@ -104,7 +104,7 @@ export function classifyMedicalAssetRequest(args: {
   ) {
     return {
       taxonomy: "CLINICAL_IMAGE",
-      allowedProviders: ["manual_upload", "manual_url"],
+      allowedProviders: ["manual_upload", "manual_url", "curated_library"],
       status: "needs_curated_asset",
       reason: "Disease-specific clinical imagery must be manually curated or owned; generic stock search is blocked.",
     };
@@ -113,35 +113,35 @@ export function classifyMedicalAssetRequest(args: {
   if (assetType.includes("infographic") || actionType.includes("infographic") || actionType.includes("cta") || hasAny(value, INFOGRAPHIC_TERMS)) {
     return {
       taxonomy: "INFOGRAPHIC_CARD",
-      allowedProviders: ["internal", "manual_upload", "manual_url"],
-      status: "internal_template_available",
-      reason: "Educational infographic/card visuals may use internal medical templates or reviewed manual assets.",
+      allowedProviders: ["codex_imagegen", "manual_upload", "manual_url", "curated_library"],
+      status: "codex_asset_pack_required",
+      reason: "Educational infographic/card visuals should be generated from the Codex asset-pack prompt, then uploaded or approved as final media.",
     };
   }
 
   if (assetType.includes("diagram") || assetType.includes("illustration") || actionType.includes("medical_diagram") || hasAny(value, DISEASE_VISUAL_TERMS)) {
     return {
       taxonomy: "MEDICAL_ILLUSTRATION",
-      allowedProviders: ["internal", "manual_upload", "manual_url"],
-      status: "internal_template_available",
-      reason: "Disease-specific teaching visuals use the internal medical illustration library or curated manual assets.",
+      allowedProviders: ["codex_imagegen", "manual_upload", "manual_url", "curated_library"],
+      status: "codex_asset_pack_required",
+      reason: "Disease-specific teaching visuals should be generated from the Codex asset-pack prompt or supplied as curated/manual media.",
     };
   }
 
   if (assetType.includes("broll") || assetType.includes("video") || actionType.includes("broll") || hasAny(value, CONTEXTUAL_TERMS)) {
     return {
       taxonomy: "CONTEXTUAL_BROLL",
-      allowedProviders: ["pexels", "pixabay", "manual_upload", "manual_url"],
-      status: "stock_search_allowed",
-      reason: "Contextual lifestyle or clinical-environment b-roll may use stock providers.",
+      allowedProviders: ["codex_hyperframes", "manual_upload", "manual_url", "curated_library"],
+      status: "codex_asset_pack_required",
+      reason: "Contextual b-roll should be generated through the Codex/HyperFrames asset-pack path or supplied manually.",
     };
   }
 
   return {
     taxonomy: "INFOGRAPHIC_CARD",
-    allowedProviders: ["internal", "manual_upload", "manual_url"],
-    status: "internal_template_available",
-    reason: "Unclear medical education asset defaults to an internal infographic or reviewed manual asset instead of generic stock.",
+    allowedProviders: ["codex_imagegen", "manual_upload", "manual_url", "curated_library"],
+    status: "codex_asset_pack_required",
+    reason: "Unclear medical education assets default to Codex asset-pack generation or reviewed manual media.",
   };
 }
 
@@ -162,9 +162,9 @@ export function sourceClassForAsset(asset: any): MedicalAssetSourceClass {
 
 export function isSourceAllowedForTaxonomy(taxonomy: MedicalAssetTaxonomy, sourceClass: MedicalAssetSourceClass) {
   if (taxonomy === "CONTEXTUAL_BROLL") return ["stock_contextual", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
-  if (taxonomy === "MEDICAL_ILLUSTRATION") return ["internal_svg_library", "internal_template", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
+  if (taxonomy === "MEDICAL_ILLUSTRATION") return ["manual_upload", "manual_url", "curated_library"].includes(sourceClass);
   if (taxonomy === "CLINICAL_IMAGE") return ["manual_upload", "manual_url", "curated_library"].includes(sourceClass);
-  if (taxonomy === "INFOGRAPHIC_CARD") return ["internal_template", "internal_svg_library", "manual_upload", "manual_url", "curated_library"].includes(sourceClass);
+  if (taxonomy === "INFOGRAPHIC_CARD") return ["manual_upload", "manual_url", "curated_library"].includes(sourceClass);
   return false;
 }
 
@@ -174,8 +174,6 @@ export function qualityForTaxonomy(taxonomy: MedicalAssetTaxonomy, sourceClass: 
   if (taxonomy === "INFOGRAPHIC_CARD" && sourceClass === "curated_library") return { grade: "A" as const, score: 94, reason: "Curated medical infographic" };
   if (taxonomy === "INFOGRAPHIC_CARD" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "A" as const, score: 92, reason: "Manually supplied medical infographic" };
   if (taxonomy === "MEDICAL_ILLUSTRATION" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "A" as const, score: 92, reason: "Manually supplied medical illustration" };
-  if (taxonomy === "MEDICAL_ILLUSTRATION" && (sourceClass === "internal_svg_library" || sourceClass === "internal_template")) return { grade: "A" as const, score: 92, reason: "Internal medical illustration" };
-  if (taxonomy === "INFOGRAPHIC_CARD" && (sourceClass === "internal_template" || sourceClass === "internal_svg_library")) return { grade: "A-" as const, score: 86, reason: "Rich medical infographic" };
   if (taxonomy === "CONTEXTUAL_BROLL" && sourceClass === "stock_contextual") return { grade: "B" as const, score: 74, reason: "Contextual stock b-roll" };
   if (taxonomy === "CONTEXTUAL_BROLL" && (sourceClass === "manual_upload" || sourceClass === "manual_url")) return { grade: "B" as const, score: 78, reason: "Manually supplied contextual media" };
   if (!isSourceAllowedForTaxonomy(taxonomy, sourceClass)) return { grade: "F" as const, score: 0, reason: "Wrong source type for medical taxonomy" };

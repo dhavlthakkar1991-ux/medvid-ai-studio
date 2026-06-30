@@ -560,11 +560,11 @@ function pushAsset(a: RenderAsset) {
       medical_relevance_score: metadata.candidate_data?.worker_score?.medical_relevance_score ?? null,
       routing_status:
         rawTaxonomy === "CLINICAL_IMAGE" && normalizedTaxonomy === "MEDICAL_ILLUSTRATION"
-          ? "internal_template_available"
+          ? "codex_asset_pack_required"
           : metadata.routing_status ?? (declaredTaxonomy ? "metadata_declared" : routing.status),
       routing_reason:
         rawTaxonomy === "CLINICAL_IMAGE" && normalizedTaxonomy === "MEDICAL_ILLUSTRATION"
-          ? "Internal generated disease visual is treated as a patient-education medical illustration, not a clinical photo."
+          ? "Internal generated disease visual is not final clinical media; provide a Codex/manual raster asset for approval."
           : metadata.routing_reason ?? (declaredTaxonomy ? "Using reviewed asset taxonomy metadata." : routing.reason),
       render_classification:
         source === "graphic" ? "COMPILED_GRAPHIC" :

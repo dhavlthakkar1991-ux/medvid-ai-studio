@@ -2274,7 +2274,7 @@ function ProjectView() {
                                       <Badge variant="outline" className="text-[10px]">{c.medical_asset_taxonomy}</Badge>
                                     )}
                                     {c.routing_status && (
-                                      <Badge variant={c.routing_status === "stock_search_allowed" || c.routing_status === "internal_template_available" ? "secondary" : "destructive"} className="text-[10px]">
+                                      <Badge variant={c.routing_status === "codex_asset_pack_required" ? "secondary" : c.routing_status === "needs_curated_asset" ? "destructive" : "outline"} className="text-[10px]">
                                         {c.routing_status}
                                       </Badge>
                                     )}

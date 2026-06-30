@@ -836,11 +836,9 @@ export const fulfillProjectAssetsWithWorker = createServerFn({ method: "POST" })
           }
         : null,
       provider_config: {
-        pexels_configured: Boolean(process.env.PEXELS_API_KEY),
-        pexels_api_key: process.env.PEXELS_API_KEY ?? null,
-        pixabay_configured: Boolean(process.env.PIXABAY_API_KEY),
-        pixabay_api_key: process.env.PIXABAY_API_KEY ?? null,
-        heygen_hyperframes_enabled: process.env.HEYGEN_HYPERFRAMES_DISABLED !== "true",
+        creative_workflow_mode: "codex_handoff",
+        worker_search_enabled: false,
+        worker_generation_enabled: false,
       },
     };
     const body = JSON.stringify(packagePayload);
@@ -2038,23 +2036,16 @@ export const listAssetReview = createServerFn({ method: "POST" })
     const reviewPayload = {
       providerStatus: (() => {
         try {
-          const configured = {
-            pexels: Boolean(process.env.PEXELS_API_KEY),
-            pixabay: Boolean(process.env.PIXABAY_API_KEY),
-            unsplash: Boolean(process.env.UNSPLASH_ACCESS_KEY),
-          };
           return {
-            configured,
-            anyConfigured: Object.values(configured).some(Boolean),
-            message: Object.values(configured).some(Boolean)
-              ? "Asset provider configured"
-              : "No asset provider configured. Add Pexels/Pixabay key or upload assets manually.",
+            configured: { codex_asset_pack: true },
+            anyConfigured: false,
+            message: "Primary asset creation now uses Codex asset-pack prompts plus manual upload or URL approval.",
           };
         } catch {
           return {
-            configured: { pexels: false, pixabay: false, unsplash: false },
+            configured: { codex_asset_pack: true },
             anyConfigured: false,
-            message: "No asset provider configured. Add Pexels/Pixabay key or upload assets manually.",
+            message: "Primary asset creation now uses Codex asset-pack prompts plus manual upload or URL approval.",
           };
         }
       })(),
@@ -2091,29 +2082,6 @@ const SceneManifestRepairInput = z.object({
   sceneIndex: z.number().nullable().optional(),
 });
 
-const FulfillInput = z.object({ candidateId: z.string() });
-const SearchAssetInput = z.object({
-  candidateId: z.string(),
-  provider: z.enum(["any", "pexels", "pixabay", "unsplash", "internal"]).default("any"),
-});
-const FulfillmentResultInput = z.object({
-  provider: z.string(),
-  result_id: z.string(),
-  title: z.string(),
-  description: z.string().nullable().optional(),
-  source_url: z.string(),
-  preview_url: z.string().nullable().optional(),
-  thumbnail_url: z.string().nullable().optional(),
-  width: z.number().nullable().optional(),
-  height: z.number().nullable().optional(),
-  duration_seconds: z.number().nullable().optional(),
-  attribution: z.record(z.string(), z.unknown()).optional(),
-  license: z.record(z.string(), z.unknown()).optional(),
-});
-const ApproveFulfillmentInput = z.object({
-  candidateId: z.string(),
-  result: FulfillmentResultInput,
-});
 const AssetUploadUrlInput = z.object({
   candidateId: z.string(),
   filename: z.string(),
@@ -2152,17 +2120,6 @@ const ApproveManualUrlInput = z.object({
   sensitivity_level: z.enum(["safe", "mild clinical", "graphic"]).optional(),
   provenance_notes: z.string().optional(),
 });
-
-function candidateContext(candidate: any) {
-  const data = candidate?.candidate_data && typeof candidate.candidate_data === "object" ? candidate.candidate_data : {};
-  return {
-    title: candidate?.title ?? null,
-    description: candidate?.description ?? null,
-    search_query: candidate?.search_query ?? null,
-    asset_type: candidate?.asset_type ?? null,
-    ...data,
-  };
-}
 
 async function rebuildProjectRenderContracts(sb: any, projectId: string) {
   try {
@@ -3066,100 +3023,6 @@ export const approveSceneAssetCandidates = createServerFn({ method: "POST" })
           })
         : null;
     return { ok: failed.length === 0, approved, failed, layoutRepair, reconcile, multiAssetManifest };
-  });
-
-export const fulfillAssetCandidate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => FulfillInput.parse(i))
-  .handler(async ({ context, data }) => {
-    const sb = context.supabase;
-    const { fulfillmentStatus, searchFulfillmentAsset } = await import("./assets/fulfillment.server");
-    const status = fulfillmentStatus();
-    if (!status.configured) return { ok: false as const, reason: status.message, providerStatus: status };
-    const { data: cand, error } = await sb.from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) return { ok: false as const, reason: "Candidate not found", providerStatus: status };
-    const query = firstString(cand.search_query, cand.title, cand.description);
-    if (!query) return { ok: false as const, reason: "Candidate has no search query", providerStatus: status };
-    const found = await searchFulfillmentAsset(cand.asset_type, query);
-    if (!found) {
-      await sb.from("asset_candidates").update({ status: "searched", review_note: "No provider result found for this candidate." }).eq("id", cand.id);
-      return { ok: false as const, reason: "No provider result found", providerStatus: status };
-    }
-    const asset = await persistFulfilledAsset(sb, {
-      candidate: cand,
-      userId: context.userId,
-      provider: found.provider,
-      title: found.title || cand.title || query.slice(0, 80),
-      description: found.description ?? cand.description ?? null,
-      source_url: found.source_url,
-      preview_url: found.preview_url,
-      thumbnail_url: found.thumbnail_url,
-      duration_seconds: found.duration_seconds,
-      width: found.width,
-      height: found.height,
-      search_query: query,
-      metadata: { fulfillment: found.attribution, license: found.license, result_id: found.result_id },
-      review_note: "Fulfilled from configured asset provider.",
-    });
-    return { ok: true as const, assetId: asset.id, provider: found.provider };
-  });
-
-export const searchAssetCandidate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => SearchAssetInput.parse(i))
-  .handler(async ({ context, data }) => {
-    const sb = context.supabase;
-    const { searchFulfillmentAssets } = await import("./assets/fulfillment.server");
-    const { data: cand, error } = await sb.from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) return { ok: false as const, reason: "Candidate not found", results: [], warnings: [] };
-    const query = firstString(cand.search_query, cand.title, cand.description);
-    if (!query) return { ok: false as const, reason: "Candidate has no search query", results: [], warnings: [] };
-    const out = await searchFulfillmentAssets({
-      assetType: cand.asset_type,
-      query,
-      provider: data.provider,
-      perPage: 8,
-      context: candidateContext(cand),
-    });
-    return {
-      ok: out.results.length > 0,
-      candidate: JSON.parse(JSON.stringify(cand)),
-      query,
-      status: JSON.parse(JSON.stringify(out.status)),
-      results: JSON.parse(JSON.stringify(out.results)),
-      warnings: out.warnings ?? [],
-    };
-  });
-
-export const approveAssetSearchResult = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ApproveFulfillmentInput.parse(i))
-  .handler(async ({ context, data }) => {
-    const sb = context.supabase;
-    const { data: cand, error } = await sb.from("asset_candidates").select("*").eq("id", data.candidateId).maybeSingle();
-    if (error || !cand) return { ok: false as const, reason: "Candidate not found" };
-    const result = data.result;
-    const asset = await persistFulfilledAsset(sb, {
-      candidate: cand,
-      userId: context.userId,
-      provider: result.provider,
-      title: result.title || cand.title || cand.search_query?.slice(0, 80) || "Fulfilled asset",
-      description: result.description ?? cand.description ?? null,
-      source_url: result.source_url,
-      preview_url: result.preview_url ?? result.source_url,
-      thumbnail_url: result.thumbnail_url ?? result.preview_url ?? result.source_url,
-      duration_seconds: result.duration_seconds ?? null,
-      width: result.width ?? null,
-      height: result.height ?? null,
-      search_query: cand.search_query,
-      metadata: {
-        fulfillment: result.attribution ?? {},
-        license: result.license ?? {},
-        result_id: result.result_id,
-      },
-      review_note: `Approved selected ${result.provider} result.`,
-    });
-    return { ok: true as const, assetId: asset.id };
   });
 
 export const createAssetUploadUrl = createServerFn({ method: "POST" })

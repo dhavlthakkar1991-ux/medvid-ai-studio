@@ -1,8 +1,8 @@
 import { ACTION_TO_ASSET_TYPE } from "./asset-linker.server";
 
 // Server-only: convert normalized storyboard_items into asset_candidates.
-// Provider-independent: every candidate row carries `search_query` + `asset_type`
-// that any AssetProvider implementation can consume.
+// Codex handoff-oriented: every candidate row carries the Studio visual intent
+// that the asset-pack export turns into ImageGen/HyperFrames production prompts.
 
 type SupabaseLike = any;
 
@@ -76,7 +76,7 @@ export async function generateAssetCandidatesForProject(
         asset_type,
         search_query: q,
         priority: i + 1,
-        provider: "any",
+        provider: "codex_asset_pack",
         status: "pending",
         title: String(it.visual_type ?? "Storyboard"),
         description: String(it.asset_prompt ?? "").slice(0, 240),
@@ -95,7 +95,7 @@ export async function generateAssetCandidatesForProject(
         asset_type: "broll_video",
         search_query: q,
         priority: i + 1,
-        provider: "any",
+        provider: "codex_asset_pack",
         status: "pending",
         broll_item_id: it.id,
         title: String(it.keyword ?? "B-roll"),
@@ -119,7 +119,7 @@ export async function generateAssetCandidatesForProject(
         asset_type: "infographic",
         search_query: q,
         priority: i + 1,
-        provider: "any",
+        provider: "codex_asset_pack",
         status: "pending",
         infographic_item_id: it.id,
         title: String(it.title ?? "Infographic"),
@@ -141,7 +141,7 @@ export async function generateAssetCandidatesForProject(
       asset_type: at,
       search_query: q.slice(0, 160),
       priority: 1,
-      provider: "any",
+      provider: "codex_asset_pack",
       status: "pending",
       edit_action_id: ea.id,
       title: String(ea.action_type ?? ""),
