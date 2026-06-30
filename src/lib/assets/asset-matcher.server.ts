@@ -39,6 +39,95 @@ function buildQueryVariants(prompt: string, title: string, asset_type: string): 
   return Array.from(variants).slice(0, 3);
 }
 
+function codexToolForAssetType(assetType: string): "imagegen" | "hyperframes" {
+  const type = String(assetType ?? "").toLowerCase();
+  return type.includes("broll") || type.includes("video") ? "hyperframes" : "imagegen";
+}
+
+const DEFAULT_CODEX_NEGATIVE_PROMPT =
+  "No watermark. No SVG or vector-only final asset. No fake medical facts, fake statistics, extra labels, cartoon style, distorted anatomy, unrelated dental stock, or text errors.";
+
+function buildCodexGenerationPrompt(args: {
+  assetType: string;
+  title: string;
+  visualIntent: string;
+  description?: string | null;
+  source: string;
+  actionType?: string | null;
+}) {
+  const tool = codexToolForAssetType(args.assetType);
+  const common = [
+    "Studio is the director. Use only the visual intent and approved project context supplied here.",
+    `Visual intent: ${args.visualIntent || args.title || args.assetType}.`,
+    args.description ? `Scene/context: ${args.description}.` : null,
+    args.actionType ? `Action/layout intent: ${args.actionType}.` : null,
+    "Medical education style: professional, clean, patient-friendly, accurate, restrained.",
+    "Do not invent medical facts, labels, statistics, diagnoses, or warnings beyond the prompt.",
+  ].filter(Boolean);
+
+  if (tool === "hyperframes") {
+    return [
+      "Create a short 16:9 professional medical education b-roll/supporting visual as an MP4 using HyperFrames.",
+      ...common,
+      "Output: 1920x1080 MP4, no watermark, no stock placeholder slate, suitable for use as timed b-roll in the Studio render timeline.",
+    ].join("\n");
+  }
+
+  return [
+    "Use case: scientific-educational",
+    "Asset type: MedVideo Studio raster asset for a 16:9 healthcare education video",
+    `Primary request: ${args.visualIntent || args.title || args.assetType}`,
+    "Style/medium: polished medical education raster image or infographic, not SVG",
+    "Composition/framing: 16:9 layout with safe margins for video overlays",
+    ...common,
+    "Constraints: final output must be PNG, WebP, or JPG; no SVG; no watermark; no fake facts.",
+  ].join("\n");
+}
+
+function codexCandidateData(args: {
+  source: string;
+  assetType: string;
+  title: string;
+  query: string;
+  description?: string | null;
+  visualType?: string | null;
+  actionType?: string | null;
+  storyboardItemId?: string | null;
+  brollItemId?: string | null;
+  infographicItemId?: string | null;
+}) {
+  const tool = codexToolForAssetType(args.assetType);
+  const generationPrompt = buildCodexGenerationPrompt({
+    assetType: args.assetType,
+    title: args.title,
+    visualIntent: args.query,
+    description: args.description,
+    source: args.source,
+    actionType: args.actionType,
+  });
+  return {
+    source: args.source,
+    visual_type: args.visualType ?? null,
+    action_type: args.actionType ?? null,
+    storyboard_item_id: args.storyboardItemId ?? null,
+    broll_item_id: args.brollItemId ?? null,
+    infographic_item_id: args.infographicItemId ?? null,
+    codex_creative_workflow: true,
+    codex_tool: tool,
+    generation_prompt: generationPrompt,
+    negative_prompt: DEFAULT_CODEX_NEGATIVE_PROMPT,
+    render_ready: false,
+    approval_required: true,
+    no_worker_svg: true,
+    no_worker_ffmpeg: true,
+    output_contract: {
+      allowed_formats: tool === "hyperframes" ? ["mp4"] : ["png", "webp", "jpg"],
+      disallowed_formats: ["svg"],
+      preferred_size: tool === "hyperframes" ? "1920x1080 MP4" : "1920x1080 raster image",
+    },
+  };
+}
+
 /** Regenerate asset_candidates for every storyboard item + broll item of a project. */
 export async function generateAssetCandidatesForProject(
   supabase: SupabaseLike,
@@ -80,7 +169,15 @@ export async function generateAssetCandidatesForProject(
         status: "pending",
         title: String(it.visual_type ?? "Storyboard"),
         description: String(it.asset_prompt ?? "").slice(0, 240),
-        candidate_data: { source: "storyboard", visual_type: it.visual_type },
+        candidate_data: codexCandidateData({
+          source: "storyboard",
+          assetType: asset_type,
+          title: String(it.visual_type ?? "Storyboard"),
+          query: q,
+          description: String(it.asset_prompt ?? "").slice(0, 240),
+          visualType: it.visual_type,
+          storyboardItemId: it.id,
+        }),
       });
     });
   }
@@ -100,7 +197,14 @@ export async function generateAssetCandidatesForProject(
         broll_item_id: it.id,
         title: String(it.keyword ?? "B-roll"),
         description: String(it.search_prompt ?? "").slice(0, 240),
-        candidate_data: { source: "broll", broll_item_id: it.id },
+        candidate_data: codexCandidateData({
+          source: "broll",
+          assetType: "broll_video",
+          title: String(it.keyword ?? "B-roll"),
+          query: q,
+          description: String(it.search_prompt ?? "").slice(0, 240),
+          brollItemId: it.id,
+        }),
       });
     });
   }
@@ -124,7 +228,14 @@ export async function generateAssetCandidatesForProject(
         infographic_item_id: it.id,
         title: String(it.title ?? "Infographic"),
         description: String(it.asset_prompt ?? "").slice(0, 240),
-        candidate_data: { source: "infographic", infographic_item_id: it.id },
+        candidate_data: codexCandidateData({
+          source: "infographic",
+          assetType: "infographic",
+          title: String(it.title ?? "Infographic"),
+          query: q,
+          description: String(it.asset_prompt ?? "").slice(0, 240),
+          infographicItemId: it.id,
+        }),
       });
     });
   }
@@ -146,7 +257,14 @@ export async function generateAssetCandidatesForProject(
       edit_action_id: ea.id,
       title: String(ea.action_type ?? ""),
       description: String(ea.reason ?? "").slice(0, 240),
-      candidate_data: { source: "edit_action", action_type: ea.action_type },
+      candidate_data: codexCandidateData({
+        source: "edit_action",
+        assetType: at,
+        title: String(ea.action_type ?? ""),
+        query: q.slice(0, 160),
+        description: String(ea.reason ?? "").slice(0, 240),
+        actionType: ea.action_type,
+      }),
     });
   }
 

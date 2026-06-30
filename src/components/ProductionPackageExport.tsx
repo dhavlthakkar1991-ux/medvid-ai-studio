@@ -275,7 +275,6 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
         "manifest_v6.json": strToU8(JSON.stringify(pkg.jsonFiles["manifest_v6.json"], null, 2)),
         "timeline.json": strToU8(JSON.stringify(pkg.jsonFiles["timeline.json"], null, 2)),
         "assets.json": strToU8(JSON.stringify(pkg.jsonFiles["assets.json"], null, 2)),
-        "compiled_graphics.json": strToU8(JSON.stringify(pkg.jsonFiles["compiled_graphics.json"], null, 2)),
         "README.txt": strToU8(
           [
             "MedVideo Render Debug Package",
@@ -291,7 +290,6 @@ export function ProductionPackageExport({ projectId }: { projectId: string }) {
             " - manifest_v6.json       Manifest V6 rows (editorial source of truth)",
             " - timeline.json          Composed timeline tracks + items",
             " - assets.json            All project assets",
-            " - compiled_graphics.json Legacy graphics intent table export, usually empty in the Codex workflow",
             " - captions.srt           Burned-caption source",
             "",
             "Hand directly to medvideo-render-worker with the approved RenderSpec and asset manifests.",

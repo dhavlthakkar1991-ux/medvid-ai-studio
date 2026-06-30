@@ -72,7 +72,7 @@ export const getProductionPackage = createServerFn({ method: "POST" })
       proj, ctx, tx, vers,
       scenes, storyboard, broll, infographics, thumbnails,
       editActions, layoutDecisions,
-      tracks, items, manifest, compiled, assets,
+      tracks, items, manifest, assets,
     ] = await Promise.all([
       sb.from("projects").select("*").eq("id", projectId).single(),
       sb.from("project_context").select("*").eq("project_id", projectId).maybeSingle(),
@@ -88,7 +88,6 @@ export const getProductionPackage = createServerFn({ method: "POST" })
       sb.from("timeline_tracks").select("*").eq("project_id", projectId).order("track_index", { ascending: true }),
       sb.from("timeline_items").select("*").eq("project_id", projectId).order("start_time", { ascending: true }),
       sb.from("render_manifest").select("*").eq("project_id", projectId).order("render_order", { ascending: true }),
-      sb.from("compiled_graphics").select("*").eq("project_id", projectId),
       sb.from("assets").select("*").eq("project_id", projectId),
     ]);
     if (proj.error) throw new Error(proj.error.message);
@@ -111,7 +110,7 @@ export const getProductionPackage = createServerFn({ method: "POST" })
           "transcript.json", "scene_plan.json", "storyboard.json", "broll.json",
           "infographics.json", "editorial_decisions.json", "layout_decisions.json",
           "timeline.json", "manifest_v6.json", "seo_package.json", "shorts.json",
-          "assets.json", "compiled_graphics.json", "captions.srt",
+          "assets.json", "captions.srt",
           "project_summary.pdf", "timeline.csv",
         ],
       },
@@ -134,7 +133,6 @@ export const getProductionPackage = createServerFn({ method: "POST" })
         project_id: projectId,
         rows: manifest.data ?? [],
       },
-      "compiled_graphics.json": compiled.data ?? [],
       "assets.json": assets.data ?? [],
       "seo_package.json": latest.seo ?? null,
       "shorts.json": latest.shorts ?? null,

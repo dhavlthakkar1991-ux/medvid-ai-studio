@@ -3893,7 +3893,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
     const pid = data.projectId;
-    const [tx, sp, sb_, ed, ld, ac, rm, ti, assetRows, graphicsRows] = await Promise.all([
+    const [tx, sp, sb_, ed, ld, ac, rm, ti, assetRows] = await Promise.all([
       sb
         .from("transcripts")
         .select("project_id", { count: "exact", head: true })
@@ -3921,7 +3921,6 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
       sb.from("render_manifest").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("timeline_items").select("id", { count: "exact", head: true }).eq("project_id", pid),
       sb.from("assets").select("*").eq("project_id", pid),
-      sb.from("compiled_graphics").select("*").eq("project_id", pid),
     ]);
     const totalCand = ac.data?.length ?? 0;
     const approvedCand = (ac.data ?? []).filter(
@@ -3933,14 +3932,14 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const placeholderAssetCount = ((assetRows.data ?? []) as any[]).filter(
       (a) => ["approved_placeholder", "needs_asset", "placeholder_plan"].includes(String(a.status)) || a.metadata?.classification === "PLACEHOLDER_PLAN",
     ).length;
-    const compiledGraphicCount = graphicsRows.data?.length ?? 0;
+    const compiledGraphicCount = 0;
     const assetsScore = totalCand === 0
       ? 0
-      : Math.min(1, (renderableAssetCount + compiledGraphicCount) / Math.max(1, totalCand));
+      : Math.min(1, renderableAssetCount / Math.max(1, totalCand));
     const [{ data: manifestRows }, { data: sceneRows }] = await Promise.all([
       sb
         .from("render_manifest")
-        .select("id, scene_id, asset_id, asset_type, asset_source, compiled_graphic_id, status, timeline_start, timeline_end")
+        .select("id, scene_id, asset_id, asset_type, asset_source, status, timeline_start, timeline_end")
         .eq("project_id", pid),
       sb.from("scenes").select("id, scene_number, title").eq("project_id", pid),
     ]);
@@ -3957,16 +3956,16 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     }, {});
     const manifest = (manifestRows ?? []) as any[];
     const scenes = (sceneRows ?? []) as any[];
-    const renderableVisualRows = manifest.filter((r) => r.asset_id || r.compiled_graphic_id || String(r.asset_source ?? "") === "compiled_graphic");
+    const renderableVisualRows = manifest.filter((r) => r.asset_id);
     const visualCoverageScore = manifest.length > 0 ? renderableVisualRows.length / manifest.length : 0;
-    const infographicRows = manifest.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram") || r.compiled_graphic_id);
-    const richGraphics = ((graphicsRows.data ?? []) as any[]).filter((g) => {
-      const spec = g.spec && typeof g.spec === "object" ? g.spec : {};
-      return Boolean(spec.editorial_realization?.template_kind && spec.editorial_realization?.quality_grade);
+    const infographicRows = manifest.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram"));
+    const infographicAssets = renderableAssets.filter((a) => {
+      const type = String(a.asset_type ?? "").toLowerCase();
+      return type.includes("infographic") || type.includes("diagram") || type.includes("illustration") || type.includes("image");
     });
     const infographicQualityScore = infographicRows.length === 0
-      ? (compiledGraphicCount > 0 ? 0.8 : 0.4)
-      : Math.min(1, richGraphics.length / Math.max(1, infographicRows.length));
+      ? 0.4
+      : Math.min(1, infographicAssets.length / Math.max(1, infographicRows.length));
     const clinicalEvidenceAssets = renderableAssets.filter((a) => {
       const type = String(a.asset_type ?? "").toLowerCase();
       const source = String(a.source_type ?? a.source ?? "").toLowerCase();
@@ -3991,8 +3990,8 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
     const assetCoverage = Math.round(visualCoverageScore * 100);
     const sceneReadiness = scenes.map((scene: any) => {
       const rows = manifest.filter((r) => r.scene_id === scene.id);
-      const covered = rows.filter((r) => r.asset_id || r.compiled_graphic_id || String(r.asset_source ?? "") === "compiled_graphic").length;
-      const graphicRows = rows.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram") || r.compiled_graphic_id);
+      const covered = rows.filter((r) => r.asset_id).length;
+      const graphicRows = rows.filter((r) => String(r.asset_type ?? "").includes("infographic") || String(r.asset_type ?? "").includes("diagram"));
       const score = rows.length === 0 ? 0 : Math.round(((covered / rows.length) * 0.65 + (graphicRows.length > 0 ? 0.35 : 0.15)) * 100);
       return {
         scene_id: scene.id,
@@ -4077,7 +4076,7 @@ export const getProjectReadiness = createServerFn({ method: "POST" })
         message: "Editorial decisions missing",
         fix: { kind: "task", task: "editorial_decisions", label: "Generate editorial" },
       });
-    if (totalCand > 0 && renderableAssetCount === 0 && compiledGraphicCount === 0)
+    if (totalCand > 0 && renderableAssetCount === 0)
       blockerActions.push({
         id: "assets",
         message: "No approved raster/video media available yet",

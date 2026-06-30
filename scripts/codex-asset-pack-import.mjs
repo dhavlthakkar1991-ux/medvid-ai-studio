@@ -65,7 +65,6 @@ function contentTypeFor(filePath, explicit) {
   if (ext === "webp") return "image/webp";
   if (ext === "mp4") return "video/mp4";
   if (ext === "mov") return "video/quicktime";
-  if (ext === "svg") return "image/svg+xml";
   return "application/octet-stream";
 }
 
@@ -144,6 +143,7 @@ function buildAssetMetadata({ row, candidate, source, media, manifest }) {
     codex_creative_workflow: true,
     codex_tool: row.tool ?? data.codex_tool ?? metadata.codex_tool ?? null,
     generation_prompt: row.generation_prompt ?? row.prompt ?? data.generation_prompt ?? metadata.generation_prompt ?? null,
+    negative_prompt: row.negative_prompt ?? data.negative_prompt ?? metadata.negative_prompt ?? null,
     generation_provider: source,
     approval_source: "codex_asset_pack_import",
     approval_status: "approved",
